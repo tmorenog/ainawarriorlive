@@ -41,7 +41,7 @@ export class EventSystem {
 
   preyAbundance(): number {
     const s = this.game.time.season;
-    let a = s === 'spring' ? 1 : s === 'summer' ? 1.1 : s === 'autumn' ? 0.9 : 0.55;
+    let a = s === 'spring' ? 1 : s === 'summer' ? 1.1 : s === 'autumn' ? 0.9 : 0.7;
     if (this.isActive('drought')) a *= 0.45;
     if (this.isActive('shortage')) a *= 0.5;
     if (this.isActive('coldSnap')) a *= 0.7;
@@ -84,7 +84,7 @@ export class EventSystem {
     const w = g.weather;
     const drought = this.isActive('drought');
     const opts: [EventType, number][] = [
-      ['fox', 3], ['fallenTree', w.p.wind > 0.6 ? 3 : 1], ['loner', 1.2], ['npcInfraction', 1.2], ['abandonedKit', 0.3],
+      ['fox', 3], ['fallenTree', w.p.wind > 0.6 ? 3 : 1], ['loner', g.clan.home().length > 26 ? 0.2 : g.clan.home().length < 15 ? 3 : 1.2], ['npcInfraction', 1.2], ['abandonedKit', 0.3],
       ['dog', 0.8], ['rockslide', w.p.rain > 0.5 ? 1.2 : 0.4],
     ];
     if (!majorActive) {

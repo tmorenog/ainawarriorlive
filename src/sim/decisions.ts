@@ -304,7 +304,8 @@ export class DecisionSystem {
       this.push({ id: `loner-${loner.id}`, kind: 'loner', title: `A loner asks to join`, text: `${loner.given}, a ${loner.traits.join(' and ')} ${loner.sex === 'tom' ? 'tom' : 'she-cat'} of about ${Math.round(loner.age)} moons, waits at the entrance asking for shelter.`,
         options: [{ id: 'accept', label: 'Welcome them', hint: 'the kind approve' }, { id: 'refuse', label: 'Send them away', hint: 'the suspicious approve' }] }, apply);
     } else {
-      setTimeout(() => apply(this.leaderPick([{ id: 'accept', weight: (l) => l.pers.kindness + 0.2 }, { id: 'refuse', weight: (l) => (l.traits.includes('suspicious') ? 1 : 0.4) }])), 40000);
+      const big = clan.home().length > 26;
+      setTimeout(() => apply(this.leaderPick([{ id: 'accept', weight: (l) => (big ? 0.1 : 1) * (l.pers.kindness + 0.2) }, { id: 'refuse', weight: (l) => (l.traits.includes('suspicious') ? 1 : 0.4) }])), 40000);
     }
   }
 

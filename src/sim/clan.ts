@@ -245,7 +245,7 @@ export class ClanSim {
     const drought = this.game.events.isActive('drought');
     const cold = this.game.events.isActive('coldSnap') || this.game.weather.temperature < 0;
     for (const c of this.home()) {
-      const drain = (c.stage === 'kit' ? 1.1 : 1.35) * (cold ? 1.35 : 1) * (drought ? 1.2 : 1);
+      const drain = (c.stage === 'kit' ? 0.9 : 1.05) * (cold ? 1.3 : 1) * (drought ? 1.15 : 1);
       c.hunger = clamp(c.hunger - drain, 0, 100);
       // healing and sickness
       if (c.injury > 0) c.injury = Math.max(0, c.injury - (c.role === 'medicine' ? 1.2 : 0.6) - (this.medicine ? 0.4 : 0));
@@ -255,9 +255,24 @@ export class ClanSim {
       }
       const cap = 100 - c.injury * 0.6 - c.sick * 0.4;
       c.maxHealth = Math.max(15, cap);
-      if (c.hunger < 8) c.health -= 1.2;
+      if (c.hunger < 8) c.health -= 0.6;
       else if (!c.isPlayer) c.health = Math.min(c.maxHealth, c.health + 2);
       if (c.health <= 0 && !c.isPlayer) this.kill(c, c.hunger < 8 ? 'starvation' : 'wounds');
+    }
+    // off-screen hunting: warriors and apprentices keep the pile stocked
+    if (hour >= 6 && hour <= 20) {
+      const abundance = this.game.events.preyAbundance();
+      let caught = 0;
+      for (const c of this.home(false)) {
+        if ((c.stage !== 'warrior' && c.stage !== 'apprentice') || c.role === 'medicine' || c.role === 'medicineApprentice') continue;
+        if (c.injury > 50 || c.sick > 50 || c.expectingUntil !== null) continue;
+        const skill = 0.6 + c.skills.hunting / 100;
+        const lazy = c.traits.includes('lazy') ? 0.6 : 1;
+        caught += 0.075 * abundance * skill * lazy * (c.stage === 'apprentice' ? 0.6 : 1);
+      }
+      if (this.game.weather.p.rain > 0.6 || this.game.weather.p.snow > 0.6) caught *= 0.7;
+      if (this.food < this.home().length * 0.6) caught *= 1.6; // hungry clans hunt harder
+      this.addFood(caught);
     }
     // meals at dawn and dusk
     if (hour === 7 || hour === 19) this.mealTime();
@@ -268,6 +283,12 @@ export class ClanSim {
   }
 
   mealTime() {
+    const pl = this.player;
+    if (pl && pl.alive && !pl.exiled && pl.stage === 'kit' && pl.hunger < 70) {
+      pl.hunger = clamp(pl.hunger + 45, 0, 100);
+      this.food = Math.max(0, this.food - 0.5);
+      this.game.notify('Your mother nudges a morsel of fresh-kill toward you. You eat.', 'info');
+    }
     const order = this.home(false).sort((a, b) => this.feedPriority(b) - this.feedPriority(a));
     for (const c of order) {
       if (c.hunger > 62) continue;
@@ -286,7 +307,7 @@ export class ClanSim {
   }
 
   addFood(n: number) {
-    this.food += n;
+    this.food = Math.min(this.food + n, 8 + this.home().length * 2.5); // excess prey spoils
     this.game.camp.setPileCount(this.food);
   }
 
@@ -339,12 +360,22 @@ export class ClanSim {
     else if (c.stage === 'apprentice' && c.age >= 12) {
       const ready = LESSONS.every((l) => c.training[l] >= 1) && LESSONS.reduce((s, l) => s + c.training[l], 0) >= 9;
       if (c.isPlayer) {
-        if (ready && !this.game.objectives.has('assessment')) this.game.training.offerAssessment();
+        if ((ready || c.age >= 18) && !this.game.objectives.has('assessment')) this.game.training.offerAssessment();
         if (c.age >= 20 && !ready) {
           c.reputation -= 2;
           if (simRng.chance(0.3)) this.game.notify('The clan wonders why your training is taking so long.');
         }
       } else if (ready || c.age > 16) this.warriorCeremony(c);
+    } else if (c.isPlayer && c.stage === 'warrior' && c.age >= 80) {
+      if (c.age >= 100 && c.role !== 'leader') this.retire(c);
+      else if (!this.pending.some((p) => p.kind === 'retire') && (Math.floor(c.age) % 6 === 0 || c.age < 81)) {
+        this.game.decisions.push({ id: `retire-${Math.floor(c.age)}`, kind: 'retire', title: 'Your paws grow weary', text: `You have seen ${Math.floor(c.age)} moons. Will you retire to the elders' den${c.role === 'leader' ? ' and hand leadership to your Second' : ''}?`,
+          options: [{ id: 'stay', label: 'Not yet — I still have work to do' }, { id: 'retire', label: 'Retire to the elders\' den' }] }, (opt) => {
+          if (opt !== 'retire') return;
+          if (c.role === 'leader') this.leaderSteppedDown(c, 'retired');
+          this.retire(c);
+        });
+      }
     } else if (c.stage === 'warrior' && want === 'elder' && c.role !== 'leader') {
       if (!c.isPlayer && simRng.chance(0.25 + (c.age - 80) * 0.03)) this.retire(c);
     } else if (c.role === 'leader' && c.age > 100 && !c.isPlayer && simRng.chance(0.2)) this.retire(c);
@@ -535,12 +566,28 @@ export class ClanSim {
   // ------------------------------------------------------------- romance
   private romanceTick() {
     const adults = this.home().filter((c) => c.stage === 'warrior' && c.age >= 14);
+    // off-screen courtship: each single adult warms to a favourite single clanmate
+    for (const a of adults) {
+      if (a.mate || a.isPlayer) continue;
+      let best: Cat | null = null, bs = -1e9;
+      for (const b of adults) {
+        if (b === a || b.mate || b.isPlayer || isFamily(a, b)) continue;
+        const sc = this.opinion(a, b) + compatibility(a, b) * 30 + this.rel(a, b).romance * 0.5 + simRng.range(0, 15);
+        if (sc > bs) { bs = sc; best = b; }
+      }
+      if (!best || this.opinion(a, best) < 10) continue;
+      const k = 4 + compatibility(a, best) * 5;
+      this.rel(a, best).romance = clamp(this.rel(a, best).romance + simRng.range(1, k), 0, 100);
+      this.rel(best, a).romance = clamp(this.rel(best, a).romance + simRng.range(0, k * 0.8), 0, 100);
+      this.adjust(a, best, 2.5);
+      this.adjust(best, a, 2);
+    }
     for (const a of adults) {
       if (a.mate) continue;
       for (const b of adults) {
         if (a === b || b.mate || a.isPlayer || b.isPlayer || isFamily(a, b)) continue;
         const ra = this.rel(a, b), rb = this.rel(b, a);
-        if (ra.romance > 55 && rb.romance > 50 && ra.opinion > 50 && rb.opinion > 45) {
+        if (ra.romance > 45 && rb.romance > 38 && ra.opinion > 35 && rb.opinion > 30) {
           a.mate = b.id;
           b.mate = a.id;
           this.log(`${displayName(a)} and ${displayName(b)} became mates.`, 'clan');
@@ -557,7 +604,7 @@ export class ClanSim {
       if (!m || !m.alive || m.sex !== 'tom') continue;
       const young = c.kits.some((k) => (this.get(k)?.age ?? 99) < 6);
       if (young) continue;
-      let p = 0.06 * (this.game.time.season === 'winter' ? 0.5 : 1) * (size > 28 ? 0.3 : size < 14 ? 1.8 : 1);
+      let p = 0.09 * (this.game.time.season === 'winter' ? 0.5 : 1) * (size > 34 ? 0.03 : size > 29 ? 0.35 : size > 24 ? 0.8 : size < 18 ? 2.2 : 1.3) * (this.food < size * 0.5 ? 0.35 : 1);
       if (c.isPlayer || m.isPlayer) p *= 1.5;
       if (simRng.chance(p)) {
         c.expectingUntil = this.game.time.day + 2;
