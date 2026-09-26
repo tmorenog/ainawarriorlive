@@ -1,0 +1,332 @@
+// Title screen, character creation, pause menu, settings, and the memorial
+// / successor screen that continues the story after a cat dies.
+import type { Game } from '../game';
+import { h, esc } from './ui';
+import { Appearance, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
+import { EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
+import { RNG } from '../core/rng';
+import { CONTROLS_HTML } from './panels';
+import { HOME_CLAN_NAMES } from '../world/territory';
+import { isFamily } from '../sim/social';
+
+export interface Settings {
+  quality: 'low' | 'medium' | 'high';
+  shadows: boolean;
+  volume: number;
+  sensitivity: number;
+  invertY: boolean;
+  dayMinutes: number;
+  showFps: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = { quality: 'medium', shadows: true, volume: 0.8, sensitivity: 1, invertY: false, dayMinutes: 7, showFps: false };
+
+export function loadSettings(): Settings {
+  try {
+    const s = JSON.parse(localStorage.getItem('mistwood-settings') ?? '{}');
+    return { ...DEFAULT_SETTINGS, ...s };
+  } catch { return { ...DEFAULT_SETTINGS }; }
+}
+export function saveSettings(s: Settings) {
+  try { localStorage.setItem('mistwood-settings', JSON.stringify(s)); } catch { /* ignore */ }
+}
+
+export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string }
+
+export class Menus {
+  private screen: HTMLElement | null = null;
+  constructor(private game: Game) {}
+
+  get root() { return this.game.ui.root; }
+
+  clear() {
+    this.screen?.remove();
+    this.screen = null;
+  }
+
+  // ------------------------------------------------------------ title
+  title(hasSave: boolean) {
+    this.clear();
+    const s = h('div', 'screen title-screen', '', this.root);
+    this.screen = s;
+    h('h1', '', 'Mistwood', s);
+    h('div', 'tag', 'a forest clan life — from kit to legend, and beyond', s);
+    const menu = h('div', 'menu', '', s);
+    if (hasSave) {
+      const c = h('button', '', 'Continue your story', menu);
+      c.onclick = () => { this.game.audio.start(); this.game.continueGame(); };
+    }
+    const n = h('button', '', hasSave ? 'Begin a new life' : 'Begin your life', menu);
+    n.onclick = () => {
+      this.game.audio.start();
+      if (hasSave) this.confirm('Start over?', 'Your saved story will be replaced when the new one is saved.', () => this.create());
+      else this.create();
+    };
+    const ctl = h('button', '', 'How to play', menu);
+    ctl.onclick = () => this.help(() => this.title(hasSave));
+    const st = h('button', '', 'Settings', menu);
+    st.onclick = () => this.settings(() => this.title(hasSave));
+    h('div', 'foot', 'An original world. Keyboard & mouse, or touch. Best with sound on. Progress saves automatically in your browser.', s);
+  }
+
+  confirm(title: string, text: string, yes: () => void) {
+    const back = h('div', 'modal-back', '', this.root);
+    const m = h('div', 'modal', `<h2>${esc(title)}</h2><p>${esc(text)}</p>`, back);
+    const y = h('button', 'btn', 'Yes', m);
+    const no = h('button', 'btn dim', 'Cancel', m);
+    y.onclick = () => { back.remove(); yes(); };
+    no.onclick = () => back.remove();
+  }
+
+  help(back: () => void) {
+    this.clear();
+    const s = h('div', 'screen title-screen', '', this.root);
+    this.screen = s;
+    const m = h('div', 'modal', `<h2>How to play</h2>${CONTROLS_HTML}`, s);
+    const b = h('button', 'btn', 'Back', m);
+    b.onclick = back;
+  }
+
+  // ------------------------------------------------------------ creation
+  create(existing?: NewGameSpec) {
+    this.clear();
+    const g = this.game;
+    const rng = new RNG((Math.random() * 1e9) | 0);
+    const spec: NewGameSpec = existing ?? {
+      name: rng.pick(GIVEN_NAMES),
+      sex: rng.chance(0.5) ? 'tom' : 'she',
+      app: randomAppearance(rng),
+      seed: (Math.random() * 1e6) | 0,
+      clanName: rng.pick(HOME_CLAN_NAMES),
+    };
+    let asKit = false;
+    const s = h('div', 'screen create', '', this.root);
+    this.screen = s;
+    const form = h('div', 'form', '', s);
+    const label = h('div', 'preview-label', '', s);
+    const refresh = () => {
+      spec.app.second = spec.app.pattern === 'tortie' || spec.app.pattern === 'calico' || spec.app.pattern === 'colorpoint' || spec.app.pattern === 'smoke'
+        ? secondFor(spec.app.base, spec.app.pattern, rng) : spec.app.second;
+      g.showPreview(spec.app, asKit ? 'kit' : 'warrior');
+      label.innerHTML = `${esc(spec.name)}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
+    };
+    h('h2', '', 'Your cat', form);
+    h('div', '', '<span style="color:var(--ink-dim);font-size:13px">You will be born as a kit in the nursery. This is how you will look when grown.</span>', form);
+
+    const field = (name: string) => { const f = h('div', 'field', `<label>${name}</label>`, form); return h('div', 'row', '', f); };
+    // name
+    const nr = field('Name');
+    const ni = h('input', '', undefined, nr) as HTMLInputElement;
+    ni.type = 'text';
+    ni.maxLength = 14;
+    ni.value = spec.name;
+    ni.oninput = () => { spec.name = ni.value.replace(/[^A-Za-z' -]/g, '').slice(0, 14); refresh(); };
+    ni.onkeydown = (e) => e.stopPropagation();
+    const rn = h('button', 'chip', '🎲', nr);
+    rn.onclick = () => { spec.name = rng.pick(GIVEN_NAMES); ni.value = spec.name; refresh(); };
+    const chips = <T extends string>(name: string, opts: [T, string][], get: () => T, set: (v: T) => void) => {
+      const r = field(name);
+      const els: HTMLElement[] = [];
+      for (const [v, l] of opts) {
+        const b = h('button', `chip ${get() === v ? 'on' : ''}`, l, r);
+        els.push(b);
+        b.onclick = () => { set(v); els.forEach((e) => e.classList.remove('on')); b.classList.add('on'); refresh(); };
+      }
+    };
+    chips<Sex>('Sex', [['tom', 'Tom'], ['she', 'She-cat']], () => spec.sex, (v) => (spec.sex = v));
+    // fur colour
+    const fr = field('Fur colour');
+    const furEls: HTMLElement[] = [];
+    for (const c of FUR_COLORS) {
+      const b = h('div', `sw ${spec.app.base === c.hex ? 'on' : ''}`, '', fr);
+      b.title = c.name;
+      b.style.background = c.hex;
+      furEls.push(b);
+      b.onclick = () => { spec.app.base = c.hex; spec.app.second = secondFor(c.hex, spec.app.pattern, rng); furEls.forEach((e) => e.classList.remove('on')); b.classList.add('on'); refresh(); };
+    }
+    // pattern
+    const pr = field('Pattern');
+    const ps = h('select', '', '', pr) as HTMLSelectElement;
+    for (const p of PATTERNS) { const o = h('option', '', PATTERN_LABEL[p], ps) as HTMLOptionElement; o.value = p; }
+    ps.value = spec.app.pattern;
+    ps.onchange = () => {
+      spec.app.pattern = ps.value as Pattern;
+      spec.app.second = secondFor(spec.app.base, spec.app.pattern, rng);
+      if (spec.app.pattern === 'bicolor' || spec.app.pattern === 'calico') spec.app.white = Math.max(spec.app.white, 0.4);
+      wr.value = String(spec.app.white);
+      refresh();
+    };
+    const wf = field('White markings');
+    const wr = h('input', '', undefined, wf) as HTMLInputElement;
+    wr.type = 'range'; wr.min = '0'; wr.max = '0.8'; wr.step = '0.05';
+    wr.value = String(spec.app.white);
+    wr.oninput = () => { spec.app.white = parseFloat(wr.value); refresh(); };
+    // eyes
+    const er = field('Eye colour');
+    const eyeEls: HTMLElement[] = [];
+    for (const c of EYE_COLORS) {
+      const b = h('div', `sw ${spec.app.eye === c.hex ? 'on' : ''}`, '', er);
+      b.title = c.name;
+      b.style.background = c.hex;
+      eyeEls.push(b);
+      b.onclick = () => { spec.app.eye = c.hex; eyeEls.forEach((e) => e.classList.remove('on')); b.classList.add('on'); refresh(); };
+    }
+    chips<FurLength>('Fur length', [['short', 'Short'], ['medium', 'Medium'], ['long', 'Long']], () => spec.app.fur, (v) => (spec.app.fur = v));
+    chips<BodyType>('Body type', [['slender', 'Slender'], ['average', 'Average'], ['stocky', 'Stocky'], ['large', 'Large']], () => spec.app.body, (v) => (spec.app.body = v));
+    chips<EarShape>('Ears', [['pointed', 'Pointed'], ['rounded', 'Rounded'], ['tufted', 'Tufted'], ['folded', 'Folded']], () => spec.app.ears, (v) => (spec.app.ears = v));
+    chips<TailShape>('Tail', [['long', 'Long'], ['bushy', 'Bushy'], ['short', 'Short'], ['kinked', 'Kinked']], () => spec.app.tail, (v) => (spec.app.tail = v));
+    const kr = field('Preview');
+    const kb = h('button', 'chip', 'Show as kit', kr);
+    kb.onclick = () => { asKit = !asKit; kb.classList.toggle('on', asKit); refresh(); };
+    const rb = h('button', 'chip', '🎲 Randomise look', kr);
+    rb.onclick = () => { spec.app = randomAppearance(rng); this.create(spec); };
+    h('h2', '', 'Your world', form).style.marginTop = '20px';
+    const cr = field('Clan name');
+    const cs = h('select', '', '', cr) as HTMLSelectElement;
+    for (const n of HOME_CLAN_NAMES) { const o = h('option', '', `${n} Clan`, cs) as HTMLOptionElement; o.value = n; }
+    cs.value = spec.clanName;
+    cs.onchange = () => (spec.clanName = cs.value);
+    const sr = field('World seed (same seed = same forest)');
+    const si = h('input', '', undefined, sr) as HTMLInputElement;
+    si.type = 'number';
+    si.value = String(spec.seed);
+    si.style.width = '140px';
+    si.oninput = () => (spec.seed = Math.abs(parseInt(si.value, 10) || 0));
+    si.onkeydown = (e) => e.stopPropagation();
+    const sd = h('button', 'chip', '🎲', sr);
+    sd.onclick = () => { spec.seed = (Math.random() * 1e6) | 0; si.value = String(spec.seed); };
+    const go = h('button', 'go', 'Be born into the clan ➜', form);
+    go.onclick = () => {
+      if (!spec.name.trim()) { ni.focus(); return; }
+      spec.name = spec.name.trim().charAt(0).toUpperCase() + spec.name.trim().slice(1);
+      this.clear();
+      g.newGame(spec);
+    };
+    const back = h('button', 'btn dim', '← Back', form);
+    back.onclick = () => g.toTitle();
+    refresh();
+  }
+
+  // ------------------------------------------------------------ pause
+  pause() {
+    this.clear();
+    const g = this.game;
+    const s = h('div', 'screen title-screen', '', this.root);
+    s.style.background = 'rgba(0,0,0,0.5)';
+    this.screen = s;
+    h('h1', '', 'Paused', s).style.fontSize = '54px';
+    const menu = h('div', 'menu', '', s);
+    const add = (label: string, fn: () => void) => { const b = h('button', '', label, menu); b.onclick = fn; };
+    add('Resume', () => g.resume());
+    add('Journal', () => { g.resume(); g.ui.panels.open('journal'); });
+    add('Map', () => { g.resume(); g.ui.panels.open('map'); });
+    if (g.clan.leader?.isPlayer || g.clan.deputy?.isPlayer) add('Clan council', () => { g.resume(); g.ui.panels.open('leader'); });
+    add('Rest for a moon (pass time)', () => {
+      if (g.combat.playerInCombat) { g.ui.toast('Not while you are in danger!', 'danger'); return; }
+      g.resume();
+      g.passTime(24);
+    });
+    add('Save game', () => { g.save(); g.ui.toast('Game saved.', 'good'); });
+    add('Settings', () => this.settings(() => this.pause()));
+    add('How to play', () => this.help(() => this.pause()));
+    add('Save & quit to title', () => { g.save(); g.toTitle(); });
+  }
+
+  // ------------------------------------------------------------ settings
+  settings(back: () => void) {
+    this.clear();
+    const g = this.game;
+    const st = g.settings;
+    const s = h('div', 'screen title-screen', '', this.root);
+    s.style.background = 'rgba(0,0,0,0.55)';
+    this.screen = s;
+    const m = h('div', 'modal create', '<h2>Settings</h2>', s);
+    m.style.display = 'block';
+    const field = (name: string) => { const f = h('div', 'field', `<label>${name}</label>`, m); return h('div', 'row', '', f); };
+    const chips = <T extends string | boolean | number>(name: string, opts: [T, string][], get: () => T, set: (v: T) => void) => {
+      const r = field(name);
+      const els: HTMLElement[] = [];
+      for (const [v, l] of opts) {
+        const b = h('button', `chip ${get() === v ? 'on' : ''}`, l, r);
+        els.push(b);
+        b.onclick = () => { set(v); els.forEach((e) => e.classList.remove('on')); b.classList.add('on'); g.applySettings(); saveSettings(st); };
+      }
+    };
+    chips('Graphics quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], () => st.quality, (v) => (st.quality = v as Settings['quality']));
+    chips('Shadows', [[true, 'On'], [false, 'Off']], () => st.shadows, (v) => (st.shadows = v as boolean));
+    chips('Length of a day', [[4, '4 min'], [7, '7 min'], [12, '12 min'], [20, '20 min']], () => st.dayMinutes, (v) => (st.dayMinutes = v as number));
+    chips('Invert mouse Y', [[false, 'No'], [true, 'Yes']], () => st.invertY, (v) => (st.invertY = v as boolean));
+    chips('Show FPS', [[false, 'No'], [true, 'Yes']], () => st.showFps, (v) => (st.showFps = v as boolean));
+    const vr = field('Volume');
+    const vi = h('input', '', undefined, vr) as HTMLInputElement;
+    vi.type = 'range'; vi.min = '0'; vi.max = '1'; vi.step = '0.05'; vi.value = String(st.volume);
+    vi.oninput = () => { st.volume = parseFloat(vi.value); g.applySettings(); saveSettings(st); };
+    const sr = field('Mouse sensitivity');
+    const si = h('input', '', undefined, sr) as HTMLInputElement;
+    si.type = 'range'; si.min = '0.3'; si.max = '2.5'; si.step = '0.1'; si.value = String(st.sensitivity);
+    si.oninput = () => { st.sensitivity = parseFloat(si.value); g.applySettings(); saveSettings(st); };
+    const b = h('button', 'btn', 'Back', m);
+    b.onclick = back;
+  }
+
+  // ------------------------------------------------------------ death & succession
+  memorial(dead: Cat, cause: string) {
+    this.clear();
+    const g = this.game;
+    const clan = g.clan;
+    const s = h('div', 'screen memorial', '', this.root);
+    this.screen = s;
+    h('h1', '', `${esc(displayName(dead))} walks the Long Meadow`, s);
+    const kits = dead.kits.map((k) => clan.get(k)).filter((k) => k) as Cat[];
+    const summary = [
+      `${roleLabel({ ...dead, alive: true })} of ${esc(g.territories.homeName)} Clan`,
+      `lived ${Math.floor(dead.age)} moons`,
+      `died of ${esc(cause)}`,
+      dead.mentored ? `mentored ${dead.mentored} apprentice${dead.mentored > 1 ? 's' : ''}` : '',
+      kits.length ? `${kits.length} kit${kits.length > 1 ? 's' : ''}` : '',
+      dead.deeds ? `${dead.deeds} good deeds remembered` : '',
+    ].filter(Boolean).join(' · ');
+    h('div', 'epitaph', summary, s);
+    const mourners = clan.home().filter((c) => (c.relations[dead.id]?.opinion ?? 0) > 40).slice(0, 5).map((c) => displayName(c));
+    if (mourners.length) h('div', 'epitaph', `Mourned by ${esc(mourners.join(', '))}.`, s);
+    const cands = this.successors(dead);
+    const box = h('div', 'succ modal', '', s);
+    if (!cands.length) {
+      h('h2', '', 'No one remains to carry the story', box);
+      h('p', '', 'The clan has scattered. Perhaps a new clan will rise in these woods.', box);
+      const b = h('button', 'btn', 'Begin a new life', box);
+      b.onclick = () => this.create();
+      return;
+    }
+    h('h2', '', 'Continue the story as…', box);
+    h('p', '', 'The forest goes on. Choose who will carry your clan\'s story forward.', box);
+    const cards = h('div', 'cards', '', box);
+    for (const [c, why] of cands) {
+      const card = h('div', 'card', `<div class="cn">${esc(displayName(c))}</div><div class="cr">${esc(roleLabel(c))} · ${Math.floor(c.age)} moons · ${c.traits.join(', ')}</div><div class="cr" style="color:var(--accent)">${esc(why)}</div>`, cards);
+      card.onclick = () => { this.clear(); g.continueAs(c); };
+    }
+  }
+
+  successors(dead: Cat): [Cat, string][] {
+    const clan = this.game.clan;
+    const home = clan.home().filter((c) => !c.isPlayer);
+    const out: [Cat, string][] = [];
+    const seen = new Set<string>();
+    const add = (c: Cat | undefined, why: string) => { if (c && c.alive && !seen.has(c.id) && home.includes(c)) { seen.add(c.id); out.push([c, why]); } };
+    for (const k of dead.kits) add(clan.get(k), 'your kit');
+    add(clan.get(dead.mate), 'your mate');
+    add(clan.get(dead.apprentice), 'your apprentice');
+    for (const c of home) if (isFamily(c, dead)) add(c, 'family');
+    const friends = home.filter((c) => (dead.relations[c.id]?.opinion ?? 0) > 40).sort((a, b) => dead.relations[b.id].opinion - dead.relations[a.id].opinion);
+    for (const c of friends.slice(0, 4)) add(c, 'close friend');
+    for (const c of home.filter((c) => c.stage === 'kit' || c.stage === 'apprentice').slice(0, 3)) add(c, 'a young cat with a whole life ahead');
+    for (const c of home) add(c, 'clanmate');
+    return out.slice(0, 12);
+  }
+
+  loading(text: string) {
+    this.clear();
+    const s = h('div', 'loading', esc(text), this.root);
+    this.screen = s;
+  }
+}
