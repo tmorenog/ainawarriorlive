@@ -1017,6 +1017,8 @@ export class Interactions {
       return;
     }
     pl.herbs[herb]--; pl.updateCarryVisual();
+    const left = pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot;
+    g.ui.toast(`🌿 The ${herb} is used up. (${left} herb${left === 1 ? '' : 's'} left in your jaws)`, 'info');
     // one proper treatment fully heals them
     c.injury = 0;
     c.sick = 0;
