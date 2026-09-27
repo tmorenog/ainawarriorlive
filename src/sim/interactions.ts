@@ -21,6 +21,7 @@ export class Interactions {
   current: Prompt | null = null;
   private lastSpoke = new Map<string, number>();
   private reminisced = new Set<string>();
+  private healedDay = new Map<string, number>();
   private remindedOf = new Set<string>();
   /** Prey the player has dropped on the ground; it can be picked up again. */
   dropped: { kind: PreyKind; mesh: THREE.Mesh; x: number; z: number }[] = [];
@@ -410,7 +411,7 @@ export class Interactions {
     if (c.role === 'medicine' && (g.player.poison > 0 || hurt(pc))) {
       opts.push({ label: 'Ask to be treated', action: () => this.seekHealing(c) });
     }
-    if ((pc.role === 'medicine' || pc.role === 'medicineApprentice') && (hurt(c) || c.stage === 'elder') && c.id !== pc.id) {
+    if ((pc.role === 'medicine' || pc.role === 'medicineApprentice') && (hurt(c) || (c.stage === 'elder' && this.healedDay.get(c.id) !== g.time.day)) && c.id !== pc.id) {
       opts.push({ label: `Treat ${pronoun(c, 'poss')} ${c.sick > c.injury ? 'sickness' : 'wounds'}`, action: () => this.treatCat(a, done) });
     }
     // mates
@@ -1016,15 +1017,16 @@ export class Interactions {
       return;
     }
     pl.herbs[herb]--; pl.updateCarryVisual();
-    const skill = 0.6 + pc.skills.healing / 150 + (herb ? 0.4 : 0);
-    c.injury = Math.max(0, c.injury - 30 * skill);
-    c.sick = Math.max(0, c.sick - 25 * skill);
-    c.health = Math.min(c.maxHealth, c.health + 20 * skill);
+    // one proper treatment fully heals them
+    c.injury = 0;
+    c.sick = 0;
+    c.health = c.maxHealth;
+    this.healedDay.set(c.id, g.time.day);
     pc.skills.healing = Math.min(99, pc.skills.healing + 2);
     pc.reputation = clamp(pc.reputation + 1.5, -100, 100);
     clan.adjust(c, pc, 6, { text: `${pc.given} treated me.`, weight: 2 });
     g.audio.pick();
-    g.ui.dialog({ speaker: c, text: herb ? `You chew the ${herb} into a poultice and press it on. ${a.name} sighs with relief. "That feels much better. Thank you."` : `You press cobweb and moss where it hurts. "Thank you… that helps a little."`, options: [{ label: 'Rest now', action: done }], onClose: done });
+    g.ui.dialog({ speaker: c, text: herb ? `You chew the ${herb} into a poultice and press it on. ${a.name} sighs with relief. "I feel completely better. Thank you!" (${a.name} is fully healed.)` : `You press cobweb and moss where it hurts. "Thank you… that helps a little."`, options: [{ label: 'Rest now', action: done }], onClose: done });
     const o = g.objectives.get('lesson');
     if (o?.data?.medLesson === 'treat') g.objectives.complete('lesson');
     else g.training.medProgress('treat');
