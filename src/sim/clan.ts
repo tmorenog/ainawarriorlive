@@ -434,6 +434,7 @@ export class ClanSim {
   apprenticeCeremony(c: Cat, mentorOverride?: Cat, path?: 'warrior' | 'medicine') {
     const med = this.medicine;
     // the player chooses their path: warrior or medicine cat
+    if (c.isPlayer && !path && !mentorOverride && c.medicinePath && med && med.alive && !med.isPlayer) path = 'medicine';
     if (c.isPlayer && !path && !mentorOverride) {
       if (this.pathAsked) return;
       this.pathAsked = true;

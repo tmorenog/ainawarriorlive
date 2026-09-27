@@ -114,6 +114,7 @@ export interface Cat {
   mentored: number; // number of apprentices trained
   ceremonyDelay?: number; // extra moons before becoming an apprentice (kit punishment)
   kitOffenses?: number;
+  medicinePath?: boolean; // promised to the medicine cat as a kit
 }
 
 export function displayName(c: Cat): string {

@@ -195,6 +195,10 @@ export class Interactions {
       clan.adjust(c, pc, likes ? 4 : -5);
       g.ui.dialog({ speaker: c, text: likes ? 'Ha! You\'ll pay for that one!' : simRng.pick(['Mouse-brain.', 'Is that supposed to be funny?', 'Grow up.']), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
     } });
+    // ask the medicine cat to take you as their apprentice
+    if (c.role === 'medicine' && !c.isPlayer && (pc.stage === 'kit' || pc.stage === 'apprentice') && pc.role !== 'medicineApprentice' && !(pc.stage === 'kit' && pc.medicinePath)) {
+      opts.push({ label: 'Ask to become their apprentice', hint: 'the medicine cat\'s path', action: () => this.askMedicineApprentice(a, done) });
+    }
     // medicine: be treated, or treat others
     const hurt = (x: Cat) => x.sick > 10 || x.injury > 10 || x.health < x.maxHealth - 10;
     if (c.role === 'medicine' && (g.player.poison > 0 || hurt(pc))) {
@@ -700,6 +704,36 @@ export class Interactions {
     g.clan.log(`${displayName(pc)} ate deathberries.`, 'event');
     if (!pc.exiled) g.objectives.add({ id: 'poison', kind: 'visit', title: 'Get to the medicine den!', desc: 'Deathberry poison is spreading. The medicine cat can make you retch it up with yarrow.', target: { x: g.camp.dens.medicine.x, z: g.camp.dens.medicine.z }, radius: 2.5, need: 1 });
     if (pc.health <= 0) g.clan.kill(pc, 'deathberries');
+  }
+
+  /** The medicine cat happily agrees to teach the player. */
+  askMedicineApprentice(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const med = a.cat;
+    clan.adjust(med, pc, 10, { text: `${pc.given} asked to learn the ways of a medicine cat from me.`, weight: 5 });
+    if (pc.stage === 'kit') {
+      pc.medicinePath = true;
+      clan.remember(pc, `${displayName(med)} promised to make me a medicine cat apprentice.`, 6, med.id);
+      g.ui.dialog({ speaker: med, text: `*purrs* Yes! I'd be honoured, ${displayName(pc)}. When you reach six moons, you'll come to my den as my apprentice. Until then — watch, listen, and learn your herbs.`, options: [{ label: 'Thank you!', action: done }], onClose: done });
+      return;
+    }
+    // an apprentice switches paths now
+    const old = clan.get(pc.mentor);
+    if (old && old.apprentice === pc.id) old.apprentice = null;
+    if (old && old.id !== med.id) clan.adjust(old, pc, -2);
+    g.objectives.fail('lesson', true);
+    g.objectives.fail('assessment', true);
+    pc.role = 'medicineApprentice';
+    pc.mentor = med.id;
+    med.apprentice = pc.id;
+    g.training.lastLessonHour = -99;
+    clan.log(`${displayName(pc)} became ${displayName(med)}'s medicine cat apprentice.`, 'ceremony');
+    clan.remember(pc, `I asked ${displayName(med)} to teach me, and they said yes. I will be a medicine cat.`, 7, med.id);
+    g.ui.dialog({ speaker: med, text: `Yes! StarClan must have sent you, ${displayName(pc)}. ${old && old.id !== med.id ? `I'll speak to ${displayName(old)} and the leader. ` : ''}From today you are my apprentice. Come — there are herbs to sort.`, options: [{ label: 'I\'m ready!', action: done }], onClose: done });
+    g.ui.toast(`You are now a medicine cat apprentice. ${displayName(med)} will teach you.`, 'good');
+    if (old && old.id !== med.id) g.ceremony(`${displayName(med)}: "${displayName(pc)} will walk the path of a medicine cat, as my apprentice."`, [pc.id, med.id]);
   }
 
   /** A player medicine cat (or apprentice) treats a clanmate. */
