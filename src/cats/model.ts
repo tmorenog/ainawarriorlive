@@ -282,6 +282,7 @@ function vc(geo: THREE.BufferGeometry, c: THREE.Color | ((x: number, y: number, 
 }
 
 const faceMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
 const whiskerMat = new THREE.LineBasicMaterial({ color: 0xf4f2ea, transparent: true, opacity: 0.7 });
 
 export class CatModel {
@@ -295,6 +296,7 @@ export class CatModel {
   ears: THREE.Mesh | null = null;
   eyes: THREE.Mesh | null = null;
   carryMesh: THREE.Mesh | null = null;
+  shadowBlob: THREE.Mesh | null = null;
   private meshes: THREE.Mesh[] = [];
   private extraGeos: THREE.BufferGeometry[] = [];
   private mats: THREE.Material[] = [];
@@ -336,6 +338,7 @@ export class CatModel {
   private rebuild() {
     this.disposeParts();
     this.body.clear();
+    if (this.shadowBlob) { this.root.remove(this.shadowBlob); this.shadowBlob = null; }
     this.headPivot = new THREE.Group();
     this.head = new THREE.Group();
     this.tailPivot = new THREE.Group();
@@ -383,10 +386,19 @@ export class CatModel {
     const fluff = app.fur === 'long' ? 1.14 : app.fur === 'medium' ? 1.06 : 1;
     const headK = HEAD_SCALE[stage];
 
-    const legLen = 0.16 * legK;
+    // ---- Body: cute kitten proportions — shorter, chubbier body.
+    // Authored in "design units" (body ≈ 1 unit long) and scaled by K into metres.
+    const K = 0.36;
+    const safe = (v: number, fb: number) => (Number.isFinite(v) && v > 0 ? v : fb);
+    const buildScale = { slender: 0.92, average: 1, stocky: 1.06, large: 1.1 }[app.body];
+    const bodyLen = Math.max(0.35, safe(0.62 * buildScale, 0.62));
+    const bodyR = Math.max(0.1, safe(0.22 * fluff * buildScale, 0.22));
+    const widthK = bodyW / buildScale; // slender/stocky width variation on top of build
+
+    const legLen = 0.13 * legK;
     this.legLen = legLen;
-    const torsoH = 0.085 * fluff;
-    const torsoY = legLen + torsoH * 0.55;
+    const torsoH = bodyR * K; // half-height of the body in metres
+    const torsoY = legLen + torsoH * 0.62;
     this.shoulderY = torsoY;
     this.body.position.set(0, torsoY, 0);
 
@@ -394,38 +406,61 @@ export class CatModel {
     const legMat = new THREE.MeshLambertMaterial({ map: tx.leg });
     const tailMat = new THREE.MeshLambertMaterial({ map: tx.tail });
     const headMat = new THREE.MeshLambertMaterial({ map: tx.head });
-    this.mats.push(torsoMat, legMat, tailMat, headMat);
+    const bellyC = app.white > 0.15 || app.pattern === 'tuxedo' || app.pattern === 'bicolor' || app.pattern === 'calico'
+      ? col('#f4f1ea') : col(app.pattern === 'colorpoint' ? app.base : app.base).lerp(col('#ffffff'), 0.3);
+    const bellyMat = new THREE.MeshLambertMaterial({ color: bellyC });
+    this.mats.push(torsoMat, legMat, tailMat, headMat, bellyMat);
 
-    // torso — sphere with poles along the spine
-    const tg = new THREE.SphereGeometry(1, 20, 14);
-    tg.rotateZ(Math.PI / 2);
-    tg.scale(0.2 * bodyL, torsoH, 0.078 * bodyW * fluff);
-    // taper the rear slightly & lift chest
-    const tp = tg.getAttribute('position');
-    for (let i = 0; i < tp.count; i++) {
-      const x = tp.getX(i), y = tp.getY(i), z = tp.getZ(i);
-      const k = x > 0 ? 1 + x * 0.6 : 1 - x * 0.4;
-      tp.setXYZ(i, x, y * k + (x > 0 ? x * 0.12 : 0), z * (x > 0 ? 1 : 1 + x * 0.2));
-    }
-    tg.computeVertexNormals();
-    this.addMesh(this.body, tg, torsoMat, true);
-    if (app.fur !== 'short') {
-      const ruff = new THREE.SphereGeometry(0.075 * fluff, 10, 8);
-      ruff.scale(0.9, 1, 1.15 * bodyW);
-      ruff.translate(0.15 * bodyL, 0.02, 0);
-      this.addMesh(this.body, ruff, torsoMat, true);
-    }
+    const bodyParts = new THREE.Group();
+    bodyParts.scale.set(K, K, K * widthK);
+    this.body.add(bodyParts);
+    // spheres with poles along the spine so the fur texture wraps like the body
+    const sphere = (r: number, ws: number, hs: number) => { const g = new THREE.SphereGeometry(r, ws, hs); g.rotateZ(Math.PI / 2); return g; };
+    // cylinder seam placed under the belly so the dorsal stripe sits on top
+    const cyl = (r0: number, r1: number, h: number, seg: number) => new THREE.CylinderGeometry(r0, r1, h, seg, 1, false, -Math.PI / 2);
+    const part = (geo: THREE.BufferGeometry, mat: THREE.Material, pos: [number, number, number], rotZ = 0, scl?: [number, number, number]) => {
+      const m = this.addMesh(bodyParts, geo, mat, true);
+      m.position.set(...pos);
+      m.rotation.z = rotZ;
+      if (scl) m.scale.set(...scl);
+      return m;
+    };
+    // main body — short, chubby cylinder + sphere caps, slight downward tilt toward the rear
+    part(cyl(bodyR, bodyR, bodyLen, 24), torsoMat, [0, 0, 0], Math.PI / 2 + 0.06);
+    part(sphere(bodyR, 22, 18), torsoMat, [bodyLen * 0.5, 0.02, 0]);
+    part(sphere(bodyR, 22, 18), torsoMat, [-bodyLen * 0.5, -0.05, 0]);
+    // shoulders
+    part(sphere(bodyR * 1.06, 18, 14), torsoMat, [bodyLen * 0.4, 0.04, 0]);
+    // lower-back haunches — sit lower than shoulders for a real cat profile
+    part(sphere(bodyR * 1.2, 22, 16), torsoMat, [-bodyLen * 0.42, -0.06, 0], 0, [0.78, 0.95, 1.08]);
+    // fluffy belly
+    part(cyl(bodyR * 0.78, bodyR * 0.78, bodyLen * 0.85, 14), bellyMat, [0, -bodyR * 0.45, 0], Math.PI / 2, [1, 0.95, 0.78]);
+    // soft chest fluff just below where the neck meets the body
+    part(sphere(bodyR * 0.78, 16, 14), bellyMat, [bodyLen * 0.42, -0.05, 0], 0, [0.85, 0.95, 1.0]);
+    // short, chubby neck
+    part(cyl(bodyR * 0.78, bodyR * 0.92, 0.16, 14), torsoMat, [bodyLen * 0.55, 0.16, 0], -0.55);
+    if (app.fur === 'long') part(sphere(bodyR * 0.95, 14, 12), torsoMat, [bodyLen * 0.5, 0.1, 0], 0, [0.8, 1, 1.15]);
 
-    // head
-    this.headPivot.position.set(0.19 * bodyL, 0.055, 0);
+    // soft contact shadow under the cat (keeps small kits grounded visually)
+    const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);
+    sh.rotation.x = -Math.PI / 2;
+    sh.position.y = 0.006;
+    sh.scale.set(bodyLen * 0.7 * K * 1.6, bodyR * 1.6 * K * widthK * 1.3, 1);
+    sh.renderOrder = 1;
+    this.root.add(sh);
+    this.meshes.push(sh);
+    this.shadowBlob = sh;
+
+    // head sits on top of the neck
+    const neckTop: [number, number] = [bodyLen * 0.55 + Math.sin(0.55) * 0.08, 0.16 + Math.cos(0.55) * 0.08];
+    this.headPivot.position.set(neckTop[0] * K, neckTop[1] * K, 0);
     this.body.add(this.headPivot);
     this.headPivot.add(this.head);
-    this.head.position.set(0.05, 0.035, 0);
+    this.head.position.set(0.04, 0.022, 0);
     this.head.scale.setScalar(headK);
     const hg = new THREE.SphereGeometry(0.072, 16, 12);
     hg.scale(1.05, 0.92, 1 * (app.fur === 'long' ? 1.08 : 1));
     this.addMesh(this.head, hg, headMat, true);
-    this.eyeHeight = torsoY + (0.055 + 0.035 + 0.02 * headK) * 1;
 
     // face bits (merged): muzzle, nose, ears, cheek fluff
     const whiteMuzzle = app.white > 0.15 || app.pattern === 'tuxedo' || app.pattern === 'bicolor';
@@ -497,14 +532,14 @@ export class CatModel {
 
     // legs
     const legR = 0.022 * (app.body === 'stocky' || app.body === 'large' ? 1.15 : 1) * (app.fur === 'long' ? 1.1 : 1);
-    const hipX = 0.13 * bodyL, hipZ = 0.052 * bodyW;
+    const hipX = bodyLen * 0.42 * K, hipZ = bodyR * 0.55 * K * widthK;
     const pawC = app.white > 0.05 || app.pattern === 'tuxedo' ? '#f4f1ea' : app.pattern === 'colorpoint' ? app.second : app.base;
     const pawMat = new THREE.MeshLambertMaterial({ color: col(pawC) });
     this.mats.push(pawMat);
     const legLocal = legLen + torsoH * 0.45;
     for (const [lx, lz] of [[hipX, hipZ], [hipX, -hipZ], [-hipX, hipZ], [-hipX, -hipZ]]) {
       const pivot = new THREE.Group();
-      pivot.position.set(lx, -torsoH * 0.35, lz);
+      pivot.position.set(lx + (lx < 0 ? -0.004 : 0.004), -torsoH * 0.35 + (lx < 0 ? -0.05 * K : 0), lz);
       this.body.add(pivot);
       const lg = new THREE.CylinderGeometry(legR * (lx < 0 ? 1.25 : 1), legR * 0.85, legLocal, 7);
       lg.translate(0, -legLocal / 2, 0);
@@ -517,7 +552,7 @@ export class CatModel {
     }
 
     // tail
-    this.tailPivot.position.set(-0.19 * bodyL, 0.03, 0);
+    this.tailPivot.position.set(-(bodyLen * 0.5 + bodyR * 0.85) * K, 0.0, 0);
     this.body.add(this.tailPivot);
     const segN = app.tail === 'short' ? 3 : 7;
     const segL = (app.tail === 'short' ? 0.03 : 0.042) * (stage === 'kit' ? 0.8 : 1);
@@ -543,7 +578,7 @@ export class CatModel {
     if (app.tail === 'kinked' && this.tailSegs[4]) this.tailSegs[4].userData.kink = 0.9;
 
     this.root.scale.setScalar(s);
-    this.eyeHeight = (torsoY + 0.09) * s;
+    this.eyeHeight = (torsoY + (neckTop[1] + 0.06) * K + 0.03 * headK) * s;
   }
 
   setCarry(color: number | null) {
@@ -570,7 +605,7 @@ export class CatModel {
   }
 
   setShadows(on: boolean) {
-    for (const m of this.meshes) m.castShadow = on;
+    for (const m of this.meshes) m.castShadow = on && m !== this.shadowBlob;
   }
 
   /** Animate. `speed` in m/s (world units). */
