@@ -71,6 +71,8 @@ export interface SaveData {
   mods: any;
   events: any;
   objectives: any[];
+  /** Set once the 'old clanmates back to 30 moons' reset has been applied. */
+  agesReset?: boolean;
 }
 
 export function hasSave(): boolean {
@@ -132,6 +134,7 @@ export function writeSave(g: Game): boolean {
     objectives: g.objectives.serialize(),
   };
   try {
+    (data as SaveData).agesReset = true;
     localStorage.setItem(KEY_NOW(), JSON.stringify(data));
     return true;
   } catch (e) {

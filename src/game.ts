@@ -319,6 +319,8 @@ export class Game {
       this.player.moss = d.player.moss ?? 0;
       this.player.updateCarryVisual();
       if (bornInto) { this.bornIntoClan(bornInto); return; }
+      // saves from before the age reset existed get it once
+      if (!d.agesReset) this.youngAgain();
       this.startPlaying();
       this.ui.toast(`Welcome back, ${displayName(c.player)}.`, 'good');
     }
