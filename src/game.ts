@@ -325,6 +325,15 @@ export class Game {
     const c = this.clan;
     const old = c.player;
     if (old) old.isPlayer = false;
+    // a fresh start: clanmates who grew old are young again (30 moons)
+    for (const x of c.home()) {
+      if (x.age <= 30) continue;
+      x.age = 30;
+      x.bornDay = this.time.day - 30;
+      if (x.stage === 'elder') { x.stage = 'warrior'; if (x.role === 'elder' as string) x.role = 'none'; }
+      x.health = x.maxHealth;
+    }
+    this.npcs.refreshModels();
     const home = c.home();
     const mother = home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.mate && !x.isPlayer && x.role !== 'medicine')
       ?? home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.role !== 'medicine')
