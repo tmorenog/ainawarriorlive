@@ -253,6 +253,7 @@ export class Game {
       const rng = new RNG(hashString(`${spec.lore}:${spec.clanName}`));
       const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: 0, rng: new RNG((Math.random() * 1e9) | 0) });
       this.clan.newClan(me, rng);
+      this.youngAgain();
       this.weather.kind = 'sunny';
       const nursery = this.camp.dens.nursery;
       this.chunks.primeAround(0, 0);
@@ -323,20 +324,24 @@ export class Game {
     }
   }
 
+  /** Whenever you start a new cat, every clanmate older than 30 moons is 30 again (elders become warriors). */
+  youngAgain() {
+    for (const x of this.clan.home()) {
+      if (x.age <= 30) continue;
+      x.age = 30;
+      x.bornDay = this.time.day - 30;
+      if (x.stage === 'elder') x.stage = 'warrior';
+      x.health = x.maxHealth;
+    }
+    this.npcs.refreshModels();
+  }
+
   /** The player arrives as a new kit in an existing clan; every cat already in it stays. */
   private bornIntoClan(spec: NewGameSpec) {
     const c = this.clan;
     const old = c.player;
     if (old) old.isPlayer = false;
-    // a fresh start: clanmates who grew old are young again (30 moons)
-    for (const x of c.home()) {
-      if (x.age <= 30) continue;
-      x.age = 30;
-      x.bornDay = this.time.day - 30;
-      if (x.stage === 'elder') { x.stage = 'warrior'; if (x.role === 'elder' as string) x.role = 'none'; }
-      x.health = x.maxHealth;
-    }
-    this.npcs.refreshModels();
+    this.youngAgain();
     const home = c.home();
     const mother = home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.mate && !x.isPlayer && x.role !== 'medicine')
       ?? home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.role !== 'medicine')
@@ -553,6 +558,7 @@ export class Game {
       old.isPlayer = false;
       this.clan.lineage.push(old.id);
     }
+    this.youngAgain();
     const agent = this.npcs.agents.get(cat.id);
     const pos = agent ? agent.pos.clone() : new THREE.Vector3(0, 0, 3);
     this.npcs.removeAgent(cat.id);
