@@ -31,6 +31,7 @@ export class Interactions {
   drop() {
     const g = this.game;
     const pl = g.player;
+    if (g.mossBalls?.held) { g.mossBalls.toss(pl.forward().x, pl.forward().z, 0.6); g.ui.toast('You put the moss ball down.', 'info'); return; }
     const pile = g.camp.pile;
     if (pl.prey.length && dist2(pl.pos.x, pl.pos.z, pile.x, pile.z) < 2.5 && !g.clan.player.exiled) { this.depositPrey(); return; }
     if (pl.prey.length) {
@@ -174,7 +175,19 @@ export class Interactions {
       return;
     }
     // moss balls in camp
+    if (g.mossBalls?.held) {
+      this.current = { text: 'Toss the moss ball', action: () => {
+        g.mossBalls.toss(f.x, f.z, pc.stage === 'kit' ? 4 : 5.5);
+        g.audio.swipe();
+        for (const a of g.npcs.agents.values()) if (a.cat.stage === 'kit' && a.cat.clan === 'home' && dist2(a.pos.x, a.pos.z, p.x, p.z) < 8 && simRng.chance(0.3)) a.say('I\'ll get it!', 1.5);
+      } };
+      return;
+    }
     const mb = g.mossBalls?.nearest(p.x, p.z, 0.9 * Math.max(0.7, pl.scale) + 0.2);
+    if (mb && !pl.prey.length) {
+      this.current = { text: 'Pick up the moss ball', action: () => { g.mossBalls.pickUp(mb); g.audio.pick(); g.ui.toast('You carry the moss ball in your jaws. Press E / ✋ to toss it, or walk into another to bat it.', 'info'); } };
+      return;
+    }
     if (mb) {
       this.current = { text: 'Bat the moss ball', action: () => {
         g.mossBalls.kick(mb, f.x, f.z, pc.stage === 'kit' ? 4.5 : 6, 'player');

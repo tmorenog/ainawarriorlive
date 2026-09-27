@@ -8,6 +8,8 @@ export interface MossBall { mesh: THREE.Mesh; pos: THREE.Vector3; vel: THREE.Vec
 export class MossBalls {
   balls: MossBall[] = [];
   private npcKickT = 0;
+  /** The ball the player is carrying in their mouth. */
+  held: MossBall | null = null;
   constructor(private game: Game) {}
 
   /** Place fresh moss balls near the nursery (called whenever the camp is rebuilt). */
@@ -15,6 +17,7 @@ export class MossBalls {
     const g = this.game;
     for (const b of this.balls) { b.mesh.removeFromParent(); b.mesh.geometry.dispose(); }
     this.balls = [];
+    this.held = null;
     const n = g.camp.dens.nursery;
     const mat = new THREE.MeshLambertMaterial({ color: 0x6f9a4a });
     for (let i = 0; i < 2; i++) {
@@ -36,8 +39,19 @@ export class MossBalls {
 
   nearest(x: number, z: number, maxD: number): MossBall | null {
     let best: MossBall | null = null, bd = maxD;
-    for (const b of this.balls) { const d = Math.hypot(b.pos.x - x, b.pos.z - z); if (d < bd) { bd = d; best = b; } }
+    for (const b of this.balls) { if (b === this.held) continue; const d = Math.hypot(b.pos.x - x, b.pos.z - z); if (d < bd) { bd = d; best = b; } }
     return best;
+  }
+
+  pickUp(b: MossBall) { this.held = b; b.vel.set(0, 0, 0); }
+
+  /** Toss the carried ball forward. */
+  toss(dirX: number, dirZ: number, power: number) {
+    const b = this.held;
+    if (!b) return;
+    this.held = null;
+    this.kick(b, dirX, dirZ, power, 'player');
+    b.vel.y = 2;
   }
 
   kick(b: MossBall, dirX: number, dirZ: number, power: number, who: string) {
@@ -70,7 +84,15 @@ export class MossBalls {
     }
     // the player pushes the ball by walking into it
     const p = g.player.pos;
+    if (this.held) {
+      const b = this.held;
+      const f = g.player.forward();
+      const sc = Math.max(0.5, g.player.scale);
+      b.pos.set(p.x + f.x * 0.3 * sc, p.y + 0.18 * sc, p.z + f.z * 0.3 * sc);
+      b.mesh.position.copy(b.pos);
+    }
     for (const b of this.balls) {
+      if (b === this.held) continue;
       const dx = b.pos.x - p.x, dz = b.pos.z - p.z;
       const d = Math.hypot(dx, dz);
       const reach = 0.3 * Math.max(0.6, g.player.scale) + b.r;
@@ -88,7 +110,7 @@ export class MossBalls {
       const f = Math.exp(-dt * 1.4);
       b.vel.x *= f; b.vel.z *= f;
       const rr = Math.hypot(b.pos.x, b.pos.z);
-      if (rr > CAMP_RADIUS - 1.2) {
+      if (rr > CAMP_RADIUS - 1.2 && rr < CAMP_RADIUS + 0.4) {
         const nx = b.pos.x / rr, nz = b.pos.z / rr;
         const vn = b.vel.x * nx + b.vel.z * nz;
         if (vn > 0) { b.vel.x -= 1.6 * vn * nx; b.vel.z -= 1.6 * vn * nz; }
