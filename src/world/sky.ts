@@ -9,9 +9,9 @@ const KEYS: Key[] = [
   [4.5, '#0d1430', '#2a2c4a', '#7a8cc8', 0.25],
   [5.8, '#2b3a6e', '#b87a7a', '#ffb07a', 0.5],
   [7, '#4d7fc0', '#f4b98a', '#ffd2a0', 1.2],
-  [9.5, '#4a8ad8', '#bcd9ec', '#fff0d8', 1.9],
-  [13, '#3f86d8', '#cfe4f0', '#fff6e8', 2.1],
-  [16.5, '#4a84cc', '#e8dcc0', '#ffe6c0', 1.9],
+  [9.5, '#4a8ad8', '#bcd9ec', '#fff0d8', 1.55],
+  [13, '#3f86d8', '#cfe4f0', '#fff6e8', 1.65],
+  [16.5, '#4a84cc', '#e8dcc0', '#ffe6c0', 1.55],
   [18.8, '#3d5c9c', '#ffae70', '#ffb070', 1.4],
   [20, '#27315f', '#d8705a', '#ff8a60', 0.7],
   [21.2, '#0f1633', '#35304e', '#7080c0', 0.3],
@@ -180,7 +180,7 @@ export class Sky {
     this.sun.intensity = li * caveDim * (this.sunDir.y > 0.05 ? smoothIn(this.sunDir.y) : 0.55);
     this.hemi.color.copy(top).lerp(new THREE.Color(0xffffff), 0.35);
     this.hemi.groundColor.set(0x3d3522).lerp(new THREE.Color(0x0a0c14), night);
-    this.hemi.intensity = lerp(0.95, 0.35, night) * caveDim + 0.05;
+    this.hemi.intensity = lerp(0.8, 0.35, night) * caveDim + 0.05;
     this.ambient.intensity = lerp(0.12, 0.22, night) * caveDim;
 
     this.fogColor.copy(hor).lerp(top, 0.25);

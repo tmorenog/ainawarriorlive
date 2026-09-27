@@ -413,7 +413,7 @@ export class ChunkManager {
       c = [lerp(c[0], 0.94, sn), lerp(c[1], 0.96, sn), lerp(c[2], 1.0, sn)];
     }
     // river bank sand / mud
-    if (s.bank > 0.01) c = [lerp(c[0], 0.6, s.bank * 0.7), lerp(c[1], 0.54, s.bank * 0.7), lerp(c[2], 0.4, s.bank * 0.7)];
+    if (s.bank > 0.01) c = [lerp(c[0], 0.5, s.bank * 0.7), lerp(c[1], 0.44, s.bank * 0.7), lerp(c[2], 0.32, s.bank * 0.7)];
     const wet = Math.max(s.river, s.lake, s.stream);
     if (wet > 0.01) c = [lerp(c[0], 0.36, wet), lerp(c[1], 0.33, wet), lerp(c[2], 0.25, wet)];
     if (s.road > 0.05) {
