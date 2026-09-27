@@ -10,6 +10,7 @@ import { CONTROLS_HTML } from './panels';
 import { HOME_CLAN_NAMES } from '../world/territory';
 import { CLASSIC_CLANS, CLASSIC_PREFIXES, LoreMode, lore } from '../lore';
 import { isFamily } from '../sim/social';
+import { listSaves, newSlot, setSlot } from '../save/save';
 
 export interface Settings {
   quality: 'low' | 'medium' | 'high';
@@ -55,15 +56,19 @@ export class Menus {
     h('h1', '', 'Mistwood', s);
     h('div', 'tag', 'a forest clan life — from kit to legend, and beyond', s);
     const menu = h('div', 'menu', '', s);
-    if (hasSave) {
-      const c = h('button', '', 'Continue your story', menu);
-      c.onclick = () => { this.game.audio.start(); this.game.continueGame(); };
+    const saves = listSaves();
+    if (saves.length) {
+      h('div', 'tag', saves.length > 1 ? 'Your cats' : 'Your cat', menu);
+      for (const sv of saves.slice(0, 8)) {
+        const c = h('button', '', `▶ ${esc(sv.name)} — ${esc(sv.stage)}${sv.generation > 1 ? ` · gen ${sv.generation}` : ''}`, menu);
+        c.onclick = () => { this.game.audio.start(); setSlot(sv.slot); this.game.continueGame(); };
+      }
     }
-    const n = h('button', '', hasSave ? 'Begin a new life' : 'Begin your life', menu);
+    const n = h('button', '', saves.length ? '＋ Begin a new life (your other cats stay saved)' : 'Begin your life', menu);
     n.onclick = () => {
       this.game.audio.start();
-      if (hasSave) this.confirm('Start over?', 'Your saved story will be replaced when the new one is saved.', () => this.create());
-      else this.create();
+      newSlot();
+      this.create();
     };
     const ctl = h('button', '', 'How to play', menu);
     ctl.onclick = () => this.help(() => this.title(hasSave));

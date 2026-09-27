@@ -1,10 +1,48 @@
 // Save / load via localStorage. The world itself is regenerated from the seed;
 // only the simulation state and world modifications are stored.
 import type { Game } from '../game';
-import type { Cat } from '../cats/types';
+import { Cat, displayName, roleLabel } from '../cats/types';
 import { lore, LoreMode } from '../lore';
 
-const KEY = 'mistwood-save-v1';
+// Every cat you start gets its own save slot, so a new life never erases an old one.
+const BASE = 'mistwood-save-v1';
+const SLOT_KEY = 'mistwood-slot';
+const keyFor = (slot: number) => (slot === 0 ? BASE : `${BASE}-${slot}`);
+let currentSlot = (() => { try { return Number(localStorage.getItem(SLOT_KEY) ?? 0) || 0; } catch { return 0; } })();
+const KEY_NOW = () => keyFor(currentSlot);
+
+export interface SaveSummary { slot: number; name: string; stage: string; clan: string; generation: number; savedAt: number; }
+
+export function listSaves(): SaveSummary[] {
+  const out: SaveSummary[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)!;
+      if (k !== BASE && !k.startsWith(BASE + '-')) continue;
+      const slot = k === BASE ? 0 : Number(k.slice(BASE.length + 1));
+      if (!Number.isFinite(slot)) continue;
+      try {
+        const d = JSON.parse(localStorage.getItem(k)!) as SaveData;
+        const pc = d.clan.cats[d.clan.playerId];
+        out.push({ slot, name: pc ? displayName(pc) : '?', stage: pc ? roleLabel(pc) : '', clan: d.homeName, generation: d.clan.generation, savedAt: d.savedAt });
+      } catch { /* skip broken save */ }
+    }
+  } catch { /* storage unavailable */ }
+  return out.sort((a, b) => b.savedAt - a.savedAt);
+}
+
+export function setSlot(slot: number) {
+  currentSlot = slot;
+  try { localStorage.setItem(SLOT_KEY, String(slot)); } catch { /* ignore */ }
+}
+
+/** Pick a fresh, unused slot for a brand-new cat. */
+export function newSlot() {
+  const used = new Set(listSaves().map((s) => s.slot));
+  let n = 0;
+  while (used.has(n)) n++;
+  setSlot(n);
+}
 
 export interface SaveData {
   v: 1;
@@ -35,12 +73,12 @@ export interface SaveData {
 }
 
 export function hasSave(): boolean {
-  try { return !!localStorage.getItem(KEY); } catch { return false; }
+  return listSaves().length > 0;
 }
 
 export function readSave(): SaveData | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY_NOW());
     if (!raw) return null;
     const d = JSON.parse(raw);
     return d && d.v === 1 ? d : null;
@@ -84,7 +122,7 @@ export function writeSave(g: Game): boolean {
     objectives: g.objectives.serialize(),
   };
   try {
-    localStorage.setItem(KEY, JSON.stringify(data));
+    localStorage.setItem(KEY_NOW(), JSON.stringify(data));
     return true;
   } catch (e) {
     console.warn('save failed', e);
@@ -93,5 +131,5 @@ export function writeSave(g: Game): boolean {
 }
 
 export function deleteSave() {
-  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(KEY_NOW()); } catch { /* ignore */ }
 }
