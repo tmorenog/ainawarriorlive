@@ -58,6 +58,47 @@ export class Interactions {
     g.ui.toast('You aren\'t carrying anything.', 'info');
   }
 
+  drink() {
+    const g = this.game;
+    const pl = g.player;
+    const pc = g.clan.player;
+    g.audio.eat();
+    pl.stamina = 100;
+    pc.health = Math.min(pc.maxHealth, pc.health + 5);
+    const drought = g.events.active.some((e) => e.type === 'drought');
+    if (drought) pc.health = Math.min(pc.maxHealth, pc.health + 10);
+    g.ui.toast(drought ? 'You lap up the precious water. In this drought, every drop helps.' : simRng.pick(['You lap up cool, fresh water. Refreshing!', 'The water is cold and clear. You feel ready for anything.', 'You drink until your whiskers drip.']), 'good');
+    // nearby friends come to drink beside you
+    for (const a of g.npcs.agents.values()) {
+      if (a.activity === 'follow' && dist2(a.pos.x, a.pos.z, pl.pos.x, pl.pos.z) < 6 && a.cat.clan === 'home') { a.say('*laps water beside you*', 2); g.clan.adjust(a.cat, pc, 1); }
+    }
+  }
+
+  /** Share a piece of fresh-kill with a clanmate: from your mouth, or from the pile when in camp. */
+  private shareFreshKill(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    const again = () => this.talkMenu(a, done);
+    let what = 'a piece of fresh-kill';
+    if (g.player.prey.length) { const pr = g.player.prey.shift()!; g.player.updateCarryVisual(); what = `your ${pr.kind}`; }
+    else if (clan.food >= 1) clan.addFood(-1);
+    else { g.ui.dialog({ speaker: c, text: 'The pile is empty. Maybe we should hunt together first?', options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done }); return; }
+    pc.hunger = clamp(pc.hunger + 30, 0, 100);
+    c.hunger = clamp(c.hunger + 30, 0, 100);
+    g.audio.eat();
+    g.audio.purr();
+    a.forcedPose = 'groom';
+    setTimeout(() => (a.forcedPose = null), 3000);
+    const close = clan.opinion(c, pc) > 50;
+    clan.adjust(c, pc, 8, { text: `${pc.given} and I shared fresh-kill.`, weight: 3 });
+    clan.adjust(pc, c, 5);
+    if (c.stage === 'warrior' && pc.stage === 'warrior' && !isFamily(c, pc) && close) clan.rel(c, pc).romance = clamp(clan.rel(c, pc).romance + 5, 0, 100);
+    g.ui.toast(`You share ${what} with ${a.name}.`, 'good');
+    g.ui.dialog({ speaker: c, text: simRng.pick(['Mmm, this is good. Thanks for sharing.', 'Sharing tongues and fresh-kill — this is the best part of the day.', '*purrs, chewing happily*', 'You can have the last bite. No, really!']), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+  }
+
   private pickUp(i: number) {
     const g = this.game;
     const d = this.dropped[i];
@@ -103,6 +144,14 @@ export class Interactions {
     if (dist2(p.x, p.z, pile.x, pile.z) < 2 && !pc.exiled) {
       if (pl.prey.length) { this.current = { text: `Drop your catch on the fresh-kill pile`, action: () => this.depositPrey() }; return; }
       if (g.clan.food >= 1) { this.current = { text: `Eat from the fresh-kill pile (${Math.floor(g.clan.food)} left)`, action: () => this.eatFromPile() }; return; }
+    }
+    // water: lap from the edge of a stream, pond or lake
+    {
+      const ax = p.x + f.x * 1.1, az = p.z + f.z * 1.1;
+      if (g.chunks.waterDepthAt(ax, az) > 0.02 || g.chunks.waterDepthAt(p.x, p.z) > 0.02) {
+        this.current = { text: 'Drink water', action: () => this.drink() };
+        return;
+      }
     }
     // herbs & moss
     const its = g.chunks.interactablesNear(p.x, p.z, 1.3 * Math.max(0.7, pl.scale));
@@ -284,6 +333,8 @@ export class Interactions {
       pc.reputation = clamp(pc.reputation + (needy ? 2 : 1), -100, 100);
       g.ui.dialog({ speaker: c, text: needy ? 'Oh, thank you! I was so hungry.' : 'For me? You\'re too kind.', options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
     } });
+    const inCamp = Math.hypot(g.player.pos.x, g.player.pos.z) < 17.5;
+    if (!pc.exiled && (g.player.prey.length || (inCamp && clan.food >= 1))) opts.push({ label: 'Share fresh-kill together', hint: g.player.prey.length ? 'what you carry' : 'from the pile', action: () => this.shareFreshKill(a, done) });
     const young = (st: string) => st === 'kit' || st === 'apprentice';
     if (c.stage === 'kit' || (young(pc.stage) && young(c.stage))) {
       opts.push({ label: 'Play-fight', action: () => { done(); this.playFight(a); } });

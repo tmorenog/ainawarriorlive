@@ -45,6 +45,7 @@ The repo includes a `vercel.json` (Vite framework, `npm run build`, output `dist
 | Dodge (in combat) | Space + direction | ⤴ |
 | Sniff / track | Q | 👃 |
 | Eat carried prey | G | 🍖 |
+| Drink (at any stream, pond or lake) | E | ✋ |
 | Drop what you carry (on the pile if you're next to it) | B | ⤵ |
 | First / third person | V | 👁 |
 | Journal · Map · Council | J · M · L | 📖 · 🗺 |
