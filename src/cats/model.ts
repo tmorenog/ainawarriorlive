@@ -3,7 +3,7 @@
 // cats look genuinely different rather than recoloured copies.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Appearance, LifeStage } from './types';
+import { Accessory, Appearance, LifeStage } from './types';
 import { RNG, hashString } from '../core/rng';
 
 export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim';
@@ -440,17 +440,19 @@ export class CatModel {
     // short, chubby neck
     part(cyl(bodyR * 0.78, bodyR * 0.92, 0.16, 14), torsoMat, [bodyLen * 0.55, 0.16, 0], -0.55);
     if (app.fur === 'long') part(sphere(bodyR * 0.95, 14, 12), torsoMat, [bodyLen * 0.5, 0.1, 0], 0, [0.8, 1, 1.15]);
-    // accessories worn around the neck
-    const acc = app.accessory ?? 'none';
-    if (acc !== 'none' && acc !== 'flowerCrown' && acc !== 'feather') {
-      const accC = col(app.accessoryColor ?? (acc === 'leafScarf' ? '#4f8a3a' : acc === 'shellNecklace' ? '#f3ead8' : '#b8323a'));
+    // accessories worn around the neck (a cat can wear several)
+    const accList = accessoriesOf(app);
+    const neckItems = accList.filter((x) => NECK_ITEMS.includes(x));
+    neckItems.forEach((acc, idx) => {
+      const accC = col(app.accessoryColor && idx === 0 ? app.accessoryColor : ACC_DEFAULT_COLOR[acc]);
       const accMat = new THREE.MeshLambertMaterial({ color: accC });
       this.mats.push(accMat);
       const neck = new THREE.Group();
-      neck.position.set(bodyLen * 0.58, 0.19, 0);
+      // stack several neck items a little apart along the neck
+      neck.position.set(bodyLen * 0.58 + idx * 0.02, 0.19 + idx * 0.035, 0);
       neck.rotation.z = -0.55;
       bodyParts.add(neck);
-      const ringR = bodyR * 0.95;
+      const ringR = bodyR * (0.95 - idx * 0.05);
       if (acc === 'collar' || acc === 'bellCollar' || acc === 'berryCharm') {
         const tg = new THREE.TorusGeometry(ringR, 0.024, 8, 22);
         tg.rotateX(Math.PI / 2);
@@ -458,33 +460,34 @@ export class CatModel {
         if (acc === 'bellCollar') {
           const bellMat = new THREE.MeshPhongMaterial({ color: 0xe8c44a, shininess: 90, specular: 0xffffff });
           this.mats.push(bellMat);
-          const b = this.addMesh(neck, new THREE.SphereGeometry(0.034, 10, 8), bellMat);
-          b.position.set(ringR + 0.02, -0.03, 0);
+          const bl = this.addMesh(neck, new THREE.SphereGeometry(0.034, 10, 8), bellMat);
+          bl.position.set(ringR + 0.02, -0.03, 0);
         }
         if (acc === 'berryCharm') {
           const bm = new THREE.MeshPhongMaterial({ color: 0x7a1e5a, shininess: 60 });
           this.mats.push(bm);
-          for (const dz of [-0.018, 0, 0.018]) { const b = this.addMesh(neck, new THREE.SphereGeometry(0.013, 8, 6), bm); b.position.set(ringR + 0.012, -0.018 - Math.abs(dz) * 0.4, dz); }
+          for (const dz of [-0.018, 0, 0.018]) { const bb = this.addMesh(neck, new THREE.SphereGeometry(0.013, 8, 6), bm); bb.position.set(ringR + 0.012, -0.018 - Math.abs(dz) * 0.4, dz); }
         }
       } else if (acc === 'leafScarf') {
         for (let i = 0; i < 12; i++) {
-          const a = (i / 12) * Math.PI * 2;
+          const an = (i / 12) * Math.PI * 2;
           const lg = new THREE.SphereGeometry(0.03, 6, 4);
           lg.scale(1, 0.35, 0.6);
           const l = this.addMesh(neck, lg, accMat);
-          l.position.set(Math.cos(a) * ringR, -0.01, Math.sin(a) * ringR);
-          l.rotation.y = -a;
+          l.position.set(Math.cos(an) * ringR, -0.01, Math.sin(an) * ringR);
+          l.rotation.y = -an;
         }
-      } else if (acc === 'shellNecklace') {
+      } else if (acc === 'shellNecklace' || acc === 'clawNecklace') {
         for (let i = 0; i < 14; i++) {
-          const a = (i / 14) * Math.PI * 2;
-          const sg = new THREE.SphereGeometry(0.012, 6, 5);
-          sg.scale(1, 0.7, 1);
+          const an = (i / 14) * Math.PI * 2;
+          const sg = acc === 'clawNecklace' ? new THREE.ConeGeometry(0.008, 0.03, 5) : new THREE.SphereGeometry(0.012, 6, 5);
+          if (acc === 'shellNecklace') sg.scale(1, 0.7, 1);
           const sh2 = this.addMesh(neck, sg, accMat);
-          sh2.position.set(Math.cos(a) * ringR, -0.012, Math.sin(a) * ringR);
+          sh2.position.set(Math.cos(an) * ringR, acc === 'clawNecklace' ? -0.025 : -0.012, Math.sin(an) * ringR);
+          if (acc === 'clawNecklace') sh2.rotation.z = Math.PI;
         }
       }
-    }
+    });
 
     // soft contact shadow under the cat (keeps small kits grounded visually)
     const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);
@@ -574,23 +577,44 @@ export class CatModel {
     wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
     const wl = new THREE.LineSegments(wg, whiskerMat);
     this.head.add(wl);
-    if (app.accessory === 'flowerCrown') {
-      const fc = [0xf2a3c4, 0xf5e16a, 0xffffff, 0xb79cf0, 0xf28a6a];
-      for (let i = 0; i < 9; i++) {
-        const a = (i / 9) * Math.PI * 2;
-        const fm = new THREE.MeshLambertMaterial({ color: app.accessoryColor && i % 2 === 0 ? col(app.accessoryColor) : new THREE.Color(fc[i % fc.length]) });
-        this.mats.push(fm);
-        const f = this.addMesh(this.head, new THREE.SphereGeometry(0.012, 7, 5), fm);
-        f.position.set(-0.005 + Math.cos(a) * 0.045, 0.058, Math.sin(a) * 0.052);
+    const headMatOf = (c: string) => { const m = new THREE.MeshLambertMaterial({ color: col(c), side: THREE.DoubleSide }); this.mats.push(m); return m; };
+    for (const acc of accList) {
+      if (acc === 'flowerCrown') {
+        const fc = ['#f2a3c4', '#f5e16a', '#ffffff', '#b79cf0', '#f28a6a'];
+        for (let i = 0; i < 9; i++) {
+          const an = (i / 9) * Math.PI * 2;
+          const f = this.addMesh(this.head, new THREE.SphereGeometry(0.012, 7, 5), headMatOf(app.accessoryColor && i % 2 === 0 ? app.accessoryColor : fc[i % fc.length]));
+          f.position.set(-0.005 + Math.cos(an) * 0.045, 0.058, Math.sin(an) * 0.052);
+        }
+      } else if (acc === 'feather') {
+        const fg = new THREE.SphereGeometry(0.03, 8, 6);
+        fg.scale(0.35, 1.6, 0.12);
+        const f = this.addMesh(this.head, fg, headMatOf(ACC_DEFAULT_COLOR.feather));
+        f.position.set(-0.03, 0.07, 0.05);
+        f.rotation.set(0.3, 0, 0.7);
+      } else if (acc === 'bow') {
+        const bm = headMatOf(app.accessoryColor ?? ACC_DEFAULT_COLOR.bow);
+        for (const sz of [-1, 1]) {
+          const lg = new THREE.ConeGeometry(0.018, 0.035, 8);
+          lg.rotateX(sz * Math.PI / 2);
+          const l = this.addMesh(this.head, lg, bm);
+          l.position.set(-0.01, 0.07, -0.04 + sz * 0.02);
+        }
+        const k = this.addMesh(this.head, new THREE.SphereGeometry(0.009, 6, 5), bm);
+        k.position.set(-0.01, 0.07, -0.04);
+      } else if (acc === 'flowerEar') {
+        const petals = headMatOf(ACC_DEFAULT_COLOR.flowerEar);
+        const centre = headMatOf('#f2c94c');
+        for (let i = 0; i < 5; i++) {
+          const an = (i / 5) * Math.PI * 2;
+          const pg = new THREE.SphereGeometry(0.009, 6, 4);
+          pg.scale(1, 0.4, 1);
+          const pm = this.addMesh(this.head, pg, petals);
+          pm.position.set(-0.02 + Math.cos(an) * 0.011, 0.06, -0.055 + Math.sin(an) * 0.011);
+        }
+        const cm = this.addMesh(this.head, new THREE.SphereGeometry(0.007, 6, 4), centre);
+        cm.position.set(-0.02, 0.062, -0.055);
       }
-    } else if (app.accessory === 'feather') {
-      const fm = new THREE.MeshLambertMaterial({ color: col(app.accessoryColor ?? '#e9e2d0'), side: THREE.DoubleSide });
-      this.mats.push(fm);
-      const fg = new THREE.SphereGeometry(0.03, 8, 6);
-      fg.scale(0.35, 1.6, 0.12);
-      const f = this.addMesh(this.head, fg, fm);
-      f.position.set(-0.03, 0.07, 0.05);
-      f.rotation.set(0.3, 0, 0.7);
     }
     this.extraGeos.push(wg);
 
@@ -766,4 +790,15 @@ export class CatModel {
       this.eyes.scale.y = sy;
     }
   }
+}
+
+const NECK_ITEMS: Accessory[] = ['collar', 'bellCollar', 'berryCharm', 'leafScarf', 'shellNecklace', 'clawNecklace'];
+const ACC_DEFAULT_COLOR: Record<Accessory, string> = {
+  none: '#ffffff', collar: '#b8323a', bellCollar: '#2f5fb8', berryCharm: '#6b4a2b', leafScarf: '#4f8a3a', shellNecklace: '#f3ead8',
+  clawNecklace: '#efe6d2', flowerCrown: '#f2a3c4', feather: '#e9e2d0', bow: '#e05c8a', flowerEar: '#ffffff',
+};
+/** Everything a cat is wearing (supports old single-accessory saves). */
+export function accessoriesOf(app: Appearance): Accessory[] {
+  if (app.accessories?.length) return app.accessories.filter((a) => a !== 'none');
+  return app.accessory && app.accessory !== 'none' ? [app.accessory] : [];
 }

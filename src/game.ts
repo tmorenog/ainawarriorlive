@@ -1,6 +1,7 @@
 // Game orchestrator: owns every system, runs the main loop, handles new game,
 // loading, sleeping, time skips, death and succession.
 import type { EventType } from './sim/events';
+import { MossBalls } from './world/mossball';
 import * as THREE from 'three';
 import { clanTitle, lore } from './lore';
 import { Bus } from './core/bus';
@@ -180,6 +181,8 @@ export class Game {
     this.chunks = new ChunkManager({ terrain: this.terrain, territories: this.territories, mods: this.mods, season: this.time.season, day: this.time.day, seed }, this.scene);
     this.camp = new Camp(this.terrain, this.scene);
     this.campColliders = this.camp.colliders;
+    if (!this.mossBalls) this.mossBalls = new MossBalls(this);
+    this.mossBalls.reset();
     this.applySettings();
   }
 
@@ -673,6 +676,7 @@ export class Game {
     this.save();
   }
 
+  mossBalls!: MossBalls;
   pendingProphecy: { type: EventType; day: number } | null = null;
 
   /** A dream visit from a starry-furred cat of the Long Meadow (StarClan). */
@@ -874,6 +878,7 @@ export class Game {
     this.creatures.update(dt);
     this.combat.update(dt);
     this.fire.update(dt);
+    this.mossBalls.update(dt);
     this.events.update(dt);
     this.objectives.update();
     this.scent.update(dt);

@@ -40,13 +40,15 @@ export interface Appearance {
   /** Second eye colour (odd eyes). */
   eye2?: string;
   accessory?: Accessory;
+  accessories?: Accessory[];
   accessoryColor?: string;
 }
 
-export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm';
+export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm' | 'bow' | 'flowerEar' | 'clawNecklace';
 export const ACCESSORY_LABEL: Record<Accessory, string> = {
   none: 'None', collar: 'Collar', bellCollar: 'Bell collar', flowerCrown: 'Flower crown', feather: 'Feather behind ear',
   leafScarf: 'Leaf scarf', shellNecklace: 'Shell necklace', berryCharm: 'Berry charm',
+  bow: 'Bow', flowerEar: 'Flower behind ear', clawNecklace: 'Claw necklace',
 };
 
 export interface Personality {

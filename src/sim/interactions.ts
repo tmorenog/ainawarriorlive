@@ -173,6 +173,17 @@ export class Interactions {
       this.current = { text: `Talk to ${a.name}${a.activity === 'sleep' ? ' (sleeping)' : ''}`, action: () => this.talk(a) };
       return;
     }
+    // moss balls in camp
+    const mb = g.mossBalls?.nearest(p.x, p.z, 0.9 * Math.max(0.7, pl.scale) + 0.2);
+    if (mb) {
+      this.current = { text: 'Bat the moss ball', action: () => {
+        g.mossBalls.kick(mb, f.x, f.z, pc.stage === 'kit' ? 4.5 : 6, 'player');
+        g.audio.swipe();
+        if (simRng.chance(0.3)) g.ui.toast(simRng.pick(['Whee! The moss ball goes flying!', 'You pounce and bat the moss ball across camp!', 'Got it! …it got away again.']), 'info');
+        for (const a of g.npcs.agents.values()) if (a.cat.stage === 'kit' && a.cat.clan === 'home' && dist2(a.pos.x, a.pos.z, p.x, p.z) < 8) { g.clan.adjust(a.cat, pc, 1, undefined, 1); if (simRng.chance(0.25)) a.say('My turn! My turn!', 1.5); }
+      } };
+      return;
+    }
     // prey you put down
     const di = this.dropped.findIndex((d) => dist2(d.x, d.z, p.x, p.z) < 1.4 * Math.max(0.7, pl.scale));
     if (di >= 0) { this.current = { text: `Pick up the ${this.dropped[di].kind}`, action: () => this.pickUp(di) }; return; }

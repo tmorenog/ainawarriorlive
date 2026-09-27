@@ -233,8 +233,21 @@ export class Menus {
     const szi = h('input', '', undefined, szr) as HTMLInputElement;
     szi.type = 'range'; szi.min = '0.85'; szi.max = '1.15'; szi.step = '0.01'; szi.value = String(spec.app.size);
     szi.oninput = () => { spec.app.size = parseFloat(szi.value); refresh(); };
-    chips<Accessory>('Accessory', (Object.keys(ACCESSORY_LABEL) as Accessory[]).map((a) => [a, ACCESSORY_LABEL[a]] as [Accessory, string]), () => spec.app.accessory ?? 'none', (v) => (spec.app.accessory = v));
-    const acr = field('Accessory colour');
+    // accessories: tap to add or remove — wear as many as you like
+    const axr = field('Accessories (tap to wear several)');
+    spec.app.accessories = spec.app.accessories ?? (spec.app.accessory && spec.app.accessory !== 'none' ? [spec.app.accessory] : []);
+    for (const a of (Object.keys(ACCESSORY_LABEL) as Accessory[]).filter((x) => x !== 'none')) {
+      const b = h('button', `chip ${spec.app.accessories.includes(a) ? 'on' : ''}`, ACCESSORY_LABEL[a], axr);
+      b.onclick = () => {
+        const list = spec.app.accessories!;
+        const i = list.indexOf(a);
+        if (i >= 0) list.splice(i, 1); else list.push(a);
+        spec.app.accessory = undefined;
+        b.classList.toggle('on', i < 0);
+        refresh();
+      };
+    }
+    const acr = field('Main accessory colour');
     colorInput(acr, () => spec.app.accessoryColor ?? '#b8323a', (v) => (spec.app.accessoryColor = v), 'Accessory colour');
     const kr = field('Preview');
     const kb = h('button', 'chip', 'Show as kit', kr);
