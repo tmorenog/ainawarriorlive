@@ -99,6 +99,28 @@ export class Interactions {
     g.ui.dialog({ speaker: c, text: simRng.pick(['Mmm, this is good. Thanks for sharing.', 'Sharing tongues and fresh-kill — this is the best part of the day.', '*purrs, chewing happily*', 'You can have the last bite. No, really!']), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
   }
 
+  saveBerryCat(a: NpcAgent) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const pl = g.player;
+    const herb = (['bitterroot', 'sunpetal', 'silverleaf'] as HerbKind[]).find((k) => pl.herbs[k] > 0);
+    if (herb) { pl.herbs[herb]--; pl.updateCarryVisual(); }
+    const kit = a.cat;
+    kit.sick = 0;
+    const ev = g.events.get('deathberries');
+    if (ev) g.events.active.splice(g.events.active.indexOf(ev), 1);
+    clan.adjust(kit, pc, 30, { text: `${pc.given} saved me from the deathberries.`, weight: 8 });
+    clan.remember(pc, `I saved ${displayName(kit)} from deathberry poison.`, 6, kit.id);
+    pc.deeds++;
+    for (const c of clan.home()) if (!c.isPlayer && (kit.parents.includes(c.id) || c.role === 'medicine' || c.role === 'leader')) clan.adjust(c, pc, 8);
+    g.objectives.complete('berry-kit');
+    if (pc.role === 'medicine' || pc.role === 'medicineApprentice') g.training.medProgress('treat');
+    a.activity = 'idle'; a.actTimer = 0;
+    a.say('*coughs up the berries* …I feel better. Thank you!', 4);
+    g.ui.dialog({ speaker: kit, text: `You make ${a.name} chew the ${herb ?? 'herbs'}. A moment later ${pronoun(kit, 'subj')} retches up the deathberries. "Th-thank you… I'll never eat those again!"`, options: [{ label: 'You\'re safe now', action: () => {} }] });
+  }
+
   private pickUp(i: number) {
     const g = this.game;
     const d = this.dropped[i];
@@ -197,6 +219,14 @@ export class Interactions {
     const clan = g.clan;
     const pc = clan.player;
     const c = a.cat;
+    const berryEv = g.events.get('deathberries');
+    if (berryEv && berryEv.data.id === c.id && c.alive) {
+      const herbs = g.player.herbs.silverleaf + g.player.herbs.sunpetal + g.player.herbs.bitterroot;
+      g.ui.dialog({ speaker: c, text: `${a.name} is curled up, shaking, with red juice on ${pronoun(c, 'poss')} whiskers. "I… I ate the shiny berries… it hurts…"`, options: herbs > 0
+        ? [{ label: 'Give them herbs to retch the berries up', action: () => this.saveBerryCat(a) }, { label: 'Hold on — I\'ll be back', action: () => {} }]
+        : [{ label: 'I need herbs! I\'ll find some — hold on!', action: () => g.ui.toast('Look for herbs nearby (sniff with Q / 👃), then come back.', 'objective') }] });
+      return;
+    }
     if (a.activity === 'sleep') {
       g.ui.dialog({ speaker: c, text: `${a.name} is curled up fast asleep, snoring softly.`, options: [
         { label: `Nudge ${pronoun(c, 'obj')} awake`, action: () => this.wakeCat(a) },

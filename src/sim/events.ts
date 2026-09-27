@@ -350,7 +350,10 @@ export class EventSystem {
         clan.setRecent(`${displayName(k)} ate deathberries!`);
         g.ui.toast(`☠ ${displayName(k)} ate deathberries! The medicine cat needs herbs — quickly!`, 'danger');
         g.audio.alarm();
-        if (!clan.player.exiled) g.objectives.add({ id: 'berry-kit', kind: 'herbs', title: `Save ${displayName(k)}`, desc: `${displayName(k)} ate deathberries. Bring any healing herb to the medicine den before it is too late.`, need: 1, deadline: g.time.totalHours + 8, reward: { rep: 10 } });
+        const ka = g.npcs.agents.get(k.id);
+        if (ka) { ka.activity = 'sleep'; ka.actTimer = 999; ka.target = null; ka.say('My tummy hurts…', 4); }
+        if (!clan.player.exiled) g.objectives.add({ id: 'berry-kit', kind: 'herbs', title: `Save ${displayName(k)}`, desc: `${displayName(k)} ate deathberries! Follow the compass to them. Pick any healing herb on the way, then talk to ${k.given} to make them retch the berries up.`, need: 1, deadline: g.time.totalHours + 8, reward: { rep: 10 }, data: { follow: k.id }, target: ka ? { x: ka.pos.x, z: ka.pos.z } : undefined });
+        g.objectives.focus?.('berry-kit');
         return true;
       }
       case 'gathering':

@@ -182,6 +182,10 @@ export class Objectives {
           continue;
         }
       }
+      if (o.data?.follow) {
+        const fa = game.npcs.agents.get(o.data.follow);
+        if (fa) o.target = { x: fa.pos.x, z: fa.pos.z };
+      }
       switch (o.kind) {
         case 'visit':
           if (o.target && dist2(p.x, p.z, o.target.x, o.target.z) < (o.radius ?? 6)) this.bump(o);

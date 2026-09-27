@@ -5,6 +5,7 @@ import { clanTitle } from '../lore';
 import type { UI } from './ui';
 import { h, esc } from './ui';
 import { Cat, LESSONS, LESSON_LABEL, displayName, roleLabel } from '../cats/types';
+import { TrainingSystem } from '../sim/training';
 import { REL_COLOR, isFamily, relLabel } from '../sim/social';
 import { RULES } from '../sim/clan';
 import { PATTERN_LABEL } from '../cats/generate';
@@ -123,7 +124,20 @@ export class Panels {
             ab.onclick = () => { g.objectives.abandon(o.id); this.render(); };
           }
         }
-        if (pc.stage === 'apprentice') {
+        const MED = { gather: 'Gathering herbs', treat: 'Treating the sick', herblore: 'Herb lore' } as const;
+        const medRow = (c: Cat) => (Object.keys(MED) as (keyof typeof MED)[]).map((k) => {
+          const n = TrainingSystem.MED_LESSONS[k].reduce((s2, l) => s2 + c.training[l], 0);
+          return `<b>${MED[k]}</b><span>${'●'.repeat(n)}${'○'.repeat(6 - n)}</span>`;
+        }).join('');
+        if (pc.stage === 'apprentice' && pc.role === 'medicineApprentice') {
+          h('h3', '', 'Medicine training', body);
+          h('div', 'kv', medRow(pc), body);
+          h('p', '', 'You never hunt for progress. Gather herbs, bring them to the medicine den, and treat sick, hurt or aching clanmates (talk to them). Keep going and your mentor will set your medicine cat assessment.', body);
+        } else if (pc.role === 'medicine') {
+          h('h3', '', 'Medicine cat', body);
+          h('div', 'kv', `<b>Healing skill</b><span>${Math.round(pc.skills.healing)}</span><b>Herbs carried</b><span>${pc.isPlayer ? g.player.herbs.silverleaf + g.player.herbs.sunpetal + g.player.herbs.bitterroot : 0}</span><b>Clanmates hurt or sick</b><span>${clan.home().filter((c) => !c.isPlayer && (c.sick > 10 || c.injury > 10)).length}</span>`, body);
+          h('p', '', 'Your path: gather herbs → heal your clanmates → repeat. Every herb you bring and every cat you treat raises your skill and reputation.', body);
+        } else if (pc.stage === 'apprentice') {
           h('h3', '', 'Training progress', body);
           h('div', 'kv', LESSONS.map((l) => `<b>${LESSON_LABEL[l]}</b><span>${'●'.repeat(pc.training[l])}${'○'.repeat(3 - pc.training[l])}</span>`).join(''), body);
           h('p', '', 'Complete at least one lesson of each kind (nine in total) and be twelve moons old to take your warrior assessment.', body);
@@ -131,7 +145,7 @@ export class Panels {
         const ap = clan.get(pc.apprentice);
         if (ap) {
           h('h3', '', `Your apprentice: ${esc(ap.given)}`, body);
-          h('div', 'kv', LESSONS.map((l) => `<b>${LESSON_LABEL[l]}</b><span>${'●'.repeat(ap.training[l])}${'○'.repeat(3 - ap.training[l])}</span>`).join(''), body);
+          h('div', 'kv', ap.role === 'medicineApprentice' ? medRow(ap) : LESSONS.map((l) => `<b>${LESSON_LABEL[l]}</b><span>${'●'.repeat(ap.training[l])}${'○'.repeat(3 - ap.training[l])}</span>`).join(''), body);
           h('p', '', g.training.readyForWarrior(ap) && ap.age >= 12 ? `${ap.given} is ready! Tell the Warden.` : 'Talk to your apprentice to train them.', body);
         }
         break;
