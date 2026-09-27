@@ -107,8 +107,20 @@ export class Interactions {
     a.actTimer = 999;
     a.target = null;
     a.heading = Math.atan2(g.player.pos.z - a.pos.z, g.player.pos.x - a.pos.x);
-    const done = () => { if (a.activity === 'talkPlayer') { a.activity = prev === 'follow' ? 'follow' : 'idle'; a.actTimer = 0; } };
+    const done = () => { if (a.activity === 'talkPlayer') { a.activity = prev === 'follow' || prev === 'shield' ? prev : 'idle'; a.actTimer = 0; } };
     if (c.clan !== 'home') return this.talkOutsider(a, done);
+    if (pc.stage === 'kit' && Math.hypot(g.player.pos.x, g.player.pos.z) > 17.5 && c.stage !== 'kit' && !pc.exiled) {
+      if (prev === 'shield' || g.npcs.isPlayerFriend(a)) {
+        g.ui.dialog({ speaker: c, text: 'Shh! Get behind me — if anyone sees you out here you\'ll be in big trouble!', options: [
+          { label: 'Hide behind them', action: () => { g.npcs.startShield(a); } },
+          { label: 'Ask them to walk you home', action: () => { a.activity = 'follow'; a.followTarget = 'player'; a.userWalkHome = true; a.say('Alright, but quietly!', 2); g.ui.toast('Lead the way back to camp.', 'info'); } },
+          { label: 'Thanks! I\'ll go back now', action: () => { done(); } },
+        ], onClose: done });
+      } else {
+        this.scoldKit(a, done);
+      }
+      return;
+    }
     const op = clan.opinion(c, pc);
     const r = clan.rel(c, pc);
     r.familiarity = clamp(r.familiarity + 2, 0, 100);
@@ -242,6 +254,28 @@ export class Interactions {
     return simRng.pick(lines);
   }
 
+  /** A clanmate who isn't your friend finds you outside camp as a kit. */
+  scoldKit(a: NpcAgent, done: () => void, text?: string) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    if (!g.player.kitOutFlag) {
+      g.player.kitOutFlag = true;
+      clan.infraction('kitLeaveCamp', [a.id]);
+    }
+    g.ui.dialog({ speaker: a.cat, text: text ?? simRng.pick([`What are you doing out here, ${pc.given}kit? Go back to camp — now!`, 'Kits don\'t leave camp! A fox could snap you up in one bite. Back you go!', 'Does your mother know you\'re out here? Get back to the nursery!']), options: [
+      { label: 'Okay… I\'m going', action: () => {
+        done();
+        g.objectives.add({ id: 'kit-home', kind: 'visit', title: 'Go back to camp', desc: `${a.name} caught you outside camp. Hurry back before you get in more trouble.`, target: { x: 0, z: 2 }, radius: 12, need: 1 });
+      } },
+      { label: '"I\'m not a baby! Just a little longer…"', action: () => {
+        done();
+        clan.adjust(a.cat, pc, -6, { text: `${pc.given}kit talked back to me outside camp.`, weight: -2 });
+        a.say('Mouse-brain! I\'m telling the leader.', 3);
+      } },
+    ], onClose: done });
+  }
+
   private proposeMate(a: NpcAgent, done: () => void) {
     const g = this.game;
     const clan = g.clan;
@@ -371,6 +405,9 @@ export class Interactions {
         g.ui.dialog({ speaker: a.cat, text: intent.text, options: [...lessons.map((l) => ({ ...l, action: () => { done(); l.action(); } })), { label: 'Not today', action: () => { clan.adjust(a.cat, pc, -3); done(); } }], onClose: done });
         return;
       }
+      case 'scoldKit':
+        this.scoldKit(a, done, intent.text);
+        return;
       case 'play':
         g.ui.dialog({ speaker: a.cat, text: intent.text, options: [
           { label: 'Play-fight!', action: () => { done(); this.playFight(a); } },

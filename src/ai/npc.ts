@@ -15,10 +15,10 @@ import type { Fighter } from '../player/combat';
 export type Activity =
   | 'idle' | 'wander' | 'sit' | 'sleep' | 'eat' | 'talk' | 'groom' | 'patrol' | 'hunt' | 'train' | 'play'
   | 'herbs' | 'ceremony' | 'flee' | 'fight' | 'follow' | 'shelter' | 'stranded' | 'gathering' | 'approach' | 'talkPlayer'
-  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'watch' | 'leaving';
+  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'watch' | 'leaving' | 'shield';
 
 export interface ApproachIntent {
-  kind: 'training' | 'play' | 'order' | 'greet' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner';
+  kind: 'training' | 'play' | 'order' | 'greet' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit';
   text: string;
   data?: any;
 }
@@ -78,6 +78,7 @@ export class NpcAgent implements Fighter {
   userWarnT?: number;
   userSpar?: boolean;
   userGossip?: string | null;
+  userWalkHome?: boolean;
 
   constructor(public cat: Cat, private game: Game) {
     this.model = new CatModel(cat.app, cat.stage);
@@ -323,6 +324,7 @@ export class NpcManager {
     if (a.activity === 'fight') { this.fightThink(a, dt); return; }
     if (a.activity === 'stranded') { a.mood = 'afraid'; if (simRng.chance(dt * 0.25)) a.say(simRng.pick(['Help! Help me!', 'The water is rising!', 'Someone, please!']), 3); return; }
     if (a.activity === 'follow') { this.followThink(a); return; }
+    if (a.activity === 'shield') { this.shieldThink(a); return; }
     if (a.activity === 'talkPlayer') { if (a.actTimer <= 0) a.activity = 'idle'; return; }
     if (a.activity === 'leaving') { if (a.actTimer <= 0 || !a.target) this.removeAgent(a.id); return; }
     if (c.clan !== 'home') { this.outsiderThink(a, dt, dPlayer); return; }
@@ -739,10 +741,107 @@ export class NpcManager {
     }
   }
 
+  // ------------------------------------------------------------------ kit sneaking out
+  /** Is this cat a friend of the player (would cover for them)? */
+  isPlayerFriend(a: NpcAgent) {
+    const p = this.game.clan.player;
+    return !!p && this.game.clan.opinion(a.cat, p) >= 28;
+  }
+
+  /** The kit-player is outside camp: nearby clanmates react. */
+  kitSpotted(): void {
+    const g = this.game;
+    const pl = g.player;
+    if (this.shielder()) return;
+    for (const a of this.agents.values()) if (a.activity === 'approach' && a.approach?.kind === 'scoldKit') return;
+    for (const a of this.agents.values()) {
+      if (a.cat.clan !== 'home' || a.cat.stage === 'kit' || a.activity === 'sleep' || a.activity === 'fight' || a.activity === 'shield' || a.activity === 'approach' || a.activity === 'talkPlayer') continue;
+      const d = dist2(a.pos.x, a.pos.z, pl.pos.x, pl.pos.z);
+      if (d > 16 * g.weather.visibility + 2) continue;
+      this.endConvo(a);
+      a.patrol = null;
+      if (this.isPlayerFriend(a)) {
+        this.startShield(a);
+        return;
+      }
+      a.activity = 'approach';
+      a.approach = { kind: 'scoldKit', text: `${pl.cat.given}kit? What are you doing out here? Get back to camp this instant!` };
+      a.say('Hey! You there!', 2);
+      return;
+    }
+  }
+
+  shielder(): NpcAgent | null {
+    for (const a of this.agents.values()) if (a.activity === 'shield') return a;
+    return null;
+  }
+
+  startShield(a: NpcAgent) {
+    this.endConvo(a);
+    a.patrol = null;
+    a.activity = 'shield';
+    a.actTimer = 999;
+    a.mood = 'alert';
+    a.say(simRng.pick(['Shh! Quick — get behind me!', 'Stay behind me, little one. Nobody will see you.', 'Psst! Hide behind me before someone spots you!']), 3.5);
+    this.game.ui.toast(`${a.name} steps in front of you to hide you from the others.`, 'good');
+    this.game.clan.remember(this.game.clan.player, `${a.name} hid me when I snuck out of camp.`, 3, a.id);
+  }
+
+  private shieldThink(a: NpcAgent) {
+    const g = this.game;
+    const pl = g.player;
+    const d = dist2(a.pos.x, a.pos.z, pl.pos.x, pl.pos.z);
+    const pc = g.clan.player;
+    if (!pc || pc.stage !== 'kit' || Math.hypot(pl.pos.x, pl.pos.z) < 16 || d > 18) {
+      a.activity = 'idle';
+      a.mood = 'neutral';
+      if (d < 18) a.say(simRng.pick(['Phew. That was close!', 'Our secret, okay?', 'Now scamper home before your mother notices.']), 3);
+      return;
+    }
+    // stand between the kit and whoever could see them (or toward camp)
+    let threat: { x: number; z: number } | null = null, bd = 30;
+    for (const o of this.agents.values()) {
+      if (o === a || o.cat.clan !== 'home' || o.cat.stage === 'kit' || o.activity === 'sleep') continue;
+      const od = dist2(o.pos.x, o.pos.z, pl.pos.x, pl.pos.z);
+      if (od < bd) { bd = od; threat = o.pos; }
+    }
+    const t = threat ?? { x: 0, z: 0 };
+    let dx = t.x - pl.pos.x, dz = t.z - pl.pos.z;
+    const l = Math.hypot(dx, dz) || 1;
+    dx /= l; dz /= l;
+    const off = 0.55 + a.model.scale * 0.35;
+    const tx = pl.pos.x + dx * off, tz = pl.pos.z + dz * off;
+    if (dist2(a.pos.x, a.pos.z, tx, tz) > 0.25) {
+      a.target = { x: tx, z: tz };
+      a.route = [];
+      a.moveSpeed = dist2(a.pos.x, a.pos.z, tx, tz) > 3 ? 3.2 : 1.4;
+    } else {
+      a.target = null;
+      a.heading = Math.atan2(dz, dx); // face the watcher, body blocking their view
+      a.forcedPose = 'sit';
+    }
+    if (a.target) a.forcedPose = null;
+    if (simRng.chance(0.004)) a.say(simRng.pick(['Shh… keep your tail down.', 'Nothing to see here!', 'Don\'t move a whisker.']), 2.5);
+  }
+
+  /** Cats the kit is hidden from don't count as witnesses. */
+  isHiddenFrom(o: NpcAgent) {
+    const s = this.shielder();
+    if (!s || o === s) return false;
+    return dist2(s.pos.x, s.pos.z, this.game.player.pos.x, this.game.player.pos.z) < 2.2;
+  }
+
   private followThink(a: NpcAgent) {
     const player = this.game.player;
     const tgt = a.followTarget === 'player' ? player.pos : a.followTarget instanceof NpcAgent ? a.followTarget.pos : null;
     if (!tgt) { a.activity = 'idle'; return; }
+    if (a.userWalkHome && Math.hypot(player.pos.x, player.pos.z) < 15) {
+      a.userWalkHome = false;
+      a.activity = 'idle';
+      a.followTarget = null;
+      a.say('Home safe. Off to the nursery with you!', 3);
+      return;
+    }
     const d = dist2(a.pos.x, a.pos.z, tgt.x, tgt.z);
     if (d > 2.2) {
       a.target = { x: tgt.x, z: tgt.z };
@@ -1093,7 +1192,8 @@ export class NpcManager {
     const vis = this.game.weather.visibility;
     const out: string[] = [];
     for (const a of this.agents.values()) {
-      if (a.cat.clan !== 'home' || a.activity === 'sleep') continue;
+      if (a.cat.clan !== 'home' || a.activity === 'sleep' || a.activity === 'shield') continue;
+      if (this.isHiddenFrom(a) && dist2(x, z, this.game.player.pos.x, this.game.player.pos.z) < 3) continue;
       if (dist2(a.pos.x, a.pos.z, x, z) < r * vis) out.push(a.id);
     }
     return out;
