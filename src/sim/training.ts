@@ -7,6 +7,7 @@ import { Cat, LESSONS, LESSON_LABEL, Lesson, displayName } from '../cats/types';
 import { simRng } from '../core/rng';
 import { dist2 } from '../core/math';
 import type { Fighter } from '../player/combat';
+import { isClassic } from '../lore';
 
 const QUIZ: { q: string; a: string[]; correct: number }[] = [
   { q: 'A kit wanders toward the border. What do you do?', a: ['Bring them safely back to camp', 'Let them learn the hard way', 'Tell someone later, maybe'], correct: 0 },
@@ -268,12 +269,21 @@ export class TrainingSystem {
   assessmentComplete() {
     const g = this.game;
     const p = g.clan.player;
-    const opts = g.clan.epithetChoices(p);
+    const classic = isClassic();
+    const opts = g.clan.epithetChoices(p).map((e) => (classic ? p.given + e.toLowerCase() : e));
     g.ui.nameChoice(
       'Your warrior ceremony',
-      `The clan gathers beneath the High Rock. ${g.clan.leader ? displayName(g.clan.leader) : 'The Warden'} asks what name the Long Meadow whispers for you. Your name will be "${p.given} ___".`,
+      `The clan gathers beneath the High Rock. ${g.clan.leader ? displayName(g.clan.leader) : 'The Warden'} asks what name the Long Meadow whispers for you. Your name will be "${p.given}${classic ? '' : ' '}___".`,
       opts,
-      (epithet) => g.clan.warriorCeremony(p, epithet),
+      (name) => {
+        let epithet = name;
+        if (classic) {
+          const low = name.toLowerCase();
+          epithet = low.startsWith(p.given.toLowerCase()) ? low.slice(p.given.length) : low;
+          if (!epithet) epithet = 'heart';
+        }
+        g.clan.warriorCeremony(p, epithet);
+      },
     );
   }
 

@@ -143,6 +143,7 @@ export function conversation(ctx: Ctx, topic: Topic): { lines: [Cat, string][]; 
           'Every cat that dies walks the Long Meadow, where prey never runs short.',
           'I once chased a hare all the way to the Tallfolk fields. Never caught it.',
           'The Council Stones were set by cats older than any clan, so that we might meet in peace.',
+          'Never eat the bright red berries. Deathberries, we call them. They took a kit from us once.',
         ])],
         [b, pick(['Tell it again!', 'Is that really true?', 'I love that one.', 'Things were different then.'])],
       ];
@@ -239,6 +240,7 @@ export function adviceLine(npc: Cat, hint: { preyNear?: string; eventHint?: stri
     'Bring moss to the elders and nursery — soft bedding keeps them healthy.',
     'Never cross another clan\'s border without reason. They will smell it on you.',
     'Tallfolk dens have dogs. Keep your distance.',
+    'Deathberries grow on dark bushes in the forest — shiny and red. One mouthful can kill a kit.',
   );
   return pick(opts);
 }

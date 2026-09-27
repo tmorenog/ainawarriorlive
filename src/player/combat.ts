@@ -33,6 +33,7 @@ export class CombatSystem {
   private alphaAttr: THREE.BufferAttribute;
   telegraphs = new Map<Fighter, number>();
   lastPlayerHit = -99;
+  yieldUntil = -99;
 
   constructor(private game: Game) {
     const N = 120;
@@ -66,9 +67,51 @@ export class CombatSystem {
     return out;
   }
 
+  /** The player submits: every fight aimed at them ends, and enemies leave them be for a while. */
+  playerYield() {
+    const g = this.game;
+    const foes = [...this.active].filter((f) => f.fightTarget?.kind === 'player');
+    if (!foes.length) return;
+    let real = false;
+    for (const f of foes) {
+      this.disengage(f);
+      const ag = g.npcs.agents.get(f.id);
+      if (ag) {
+        if (ag.userSpar) { g.training.sparLost(ag); ag.activity = 'idle'; continue; }
+        real = true;
+        ag.hostile = false;
+        ag.userAggressive = false;
+        ag.warned = 3;
+        ag.mood = 'neutral';
+        ag.activity = ag.cat.clan === 'home' ? 'idle' : 'rivalPatrol';
+        ag.say(ag.cat.clan === 'home' ? 'Then stay out of our way!' : simRng.pick(['Go back where you belong.', 'Smart choice. Now leave.', 'Run home, then!']), 3);
+        continue;
+      }
+      const cr = g.creatures.get(f.id);
+      if (cr) {
+        real = true;
+        cr.state = 'wander';
+        cr.fightTarget = null;
+        cr.windup = 0;
+        const ax = cr.pos.x - g.player.pos.x, az = cr.pos.z - g.player.pos.z;
+        const l = Math.hypot(ax, az) || 1;
+        cr.target = { x: cr.pos.x + (ax / l) * 25, z: cr.pos.z + (az / l) * 25 };
+        cr.timer = 12;
+      }
+    }
+    g.player.inCombatT = 0;
+    this.yieldUntil = g.clock + 20;
+    if (real) {
+      const c = g.clan.player;
+      c.reputation = clamp(c.reputation - 1, -100, 100);
+      g.ui.toast('You flatten your ears, crouch low and back away. The fight is over.', 'info');
+    }
+  }
+
   /** a starts fighting b. Nearby clanmates rally if a home cat or the player is attacked. */
   engage(a: Fighter, b: Fighter, spar = false) {
     if (!a.alive || !b.alive) return;
+    if (b.kind === 'player' && !spar && this.yieldUntil > this.game.clock) return;
     a.fightTarget = b;
     this.active.add(a);
     const agent = this.game.npcs.agents.get(a.id);
@@ -133,7 +176,9 @@ export class CombatSystem {
     let rel = Math.abs(((toAtt - def.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     // rel ~ 0 => attacker in front; PI => behind
     const posBonus = rel > 2.3 ? 1.5 : rel > 1.2 ? 1.2 : 1;
-    const hitChance = clamp(0.72 + (att.power - def.power) * 0.01 + (posBonus - 1) * 0.3 - def.defense * 0.5, 0.35, 0.95);
+    let hitChance = clamp(0.72 + (att.power - def.power) * 0.01 + (posBonus - 1) * 0.3 - def.defense * 0.5, 0.35, 0.95);
+    if (def.kind === 'player') hitChance *= 0.75; // fights are forgiving for the player
+    if (att.kind === 'player') hitChance = Math.min(0.97, hitChance + 0.15);
     if (!simRng.chance(hitChance)) {
       this.game.audio.swipe();
       if (att.kind === 'player') this.game.ui.floatText('Miss', '#ddd');

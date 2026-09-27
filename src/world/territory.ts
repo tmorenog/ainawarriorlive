@@ -1,6 +1,7 @@
 // Clan territories, borders, landmarks and gathering places.
 import { RNG } from '../core/rng';
 import { Simplex2 } from '../core/noise';
+import { CLASSIC_CLANS, CLASSIC_COLORS, CLASSIC_TEMPER, isClassic } from '../lore';
 
 export interface RivalClanDef {
   index: number;
@@ -49,8 +50,9 @@ export class Territories {
   constructor(seed: number, homeName?: string) {
     const rng = new RNG(seed ^ 0x51ed27);
     this.n = new Simplex2(seed + 77);
-    this.homeName = homeName ?? rng.pick(HOME_CLAN_NAMES);
-    const names = rng.shuffle(RIVAL_NAMES.slice());
+    const classic = isClassic();
+    this.homeName = homeName ?? rng.pick(classic ? CLASSIC_CLANS : HOME_CLAN_NAMES);
+    const names = classic ? rng.shuffle(CLASSIC_CLANS.filter((n) => n !== this.homeName)) : rng.shuffle(RIVAL_NAMES.slice());
     const base = rng.range(0, Math.PI * 2);
     const temps: RivalClanDef['temperament'][] = ['proud', 'cautious', 'hostile', 'friendly'];
     for (let i = 0; i < 3; i++) {
@@ -59,11 +61,11 @@ export class Territories {
       this.rivals.push({
         index: i,
         name: names[i],
-        color: RIVAL_COLORS[(i * 2 + rng.int(0, 6)) % RIVAL_COLORS.length],
+        color: classic ? CLASSIC_COLORS[names[i]] : RIVAL_COLORS[(i * 2 + rng.int(0, 6)) % RIVAL_COLORS.length],
         cx: Math.cos(a) * d,
         cz: Math.sin(a) * d,
         radius: rng.range(135, 155),
-        temperament: rng.pick(temps),
+        temperament: classic ? CLASSIC_TEMPER[names[i]] : rng.pick(temps),
       });
     }
     // Council rocks between rivals 0 and 1

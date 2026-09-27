@@ -1,12 +1,14 @@
 // Title screen, character creation, pause menu, settings, and the memorial
 // / successor screen that continues the story after a cat dies.
 import type { Game } from '../game';
+import { clanTitle } from '../lore';
 import { h, esc } from './ui';
 import { Appearance, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
 import { EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
 import { RNG } from '../core/rng';
 import { CONTROLS_HTML } from './panels';
 import { HOME_CLAN_NAMES } from '../world/territory';
+import { CLASSIC_CLANS, CLASSIC_PREFIXES, LoreMode, lore } from '../lore';
 import { isFamily } from '../sim/social';
 
 export interface Settings {
@@ -31,7 +33,7 @@ export function saveSettings(s: Settings) {
   try { localStorage.setItem('mistwood-settings', JSON.stringify(s)); } catch { /* ignore */ }
 }
 
-export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string }
+export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string; lore: LoreMode }
 
 export class Menus {
   private screen: HTMLElement | null = null;
@@ -93,11 +95,12 @@ export class Menus {
     const g = this.game;
     const rng = new RNG((Math.random() * 1e9) | 0);
     const spec: NewGameSpec = existing ?? {
-      name: rng.pick(GIVEN_NAMES),
+      name: rng.pick(CLASSIC_PREFIXES),
       sex: rng.chance(0.5) ? 'tom' : 'she',
       app: randomAppearance(rng),
       seed: (Math.random() * 1e6) | 0,
-      clanName: rng.pick(HOME_CLAN_NAMES),
+      clanName: 'ThunderClan',
+      lore: 'classic',
     };
     let asKit = false;
     const s = h('div', 'screen create', '', this.root);
@@ -108,14 +111,14 @@ export class Menus {
       spec.app.second = spec.app.pattern === 'tortie' || spec.app.pattern === 'calico' || spec.app.pattern === 'colorpoint' || spec.app.pattern === 'smoke'
         ? secondFor(spec.app.base, spec.app.pattern, rng) : spec.app.second;
       g.showPreview(spec.app, asKit ? 'kit' : 'warrior');
-      label.innerHTML = `${esc(spec.name)}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
+      label.innerHTML = `${esc(spec.lore === 'classic' ? spec.name + (asKit ? 'kit' : 'heart') : spec.name)}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
     };
     h('h2', '', 'Your cat', form);
     h('div', '', '<span style="color:var(--ink-dim);font-size:13px">You will be born as a kit in the nursery. This is how you will look when grown.</span>', form);
 
     const field = (name: string) => { const f = h('div', 'field', `<label>${name}</label>`, form); return h('div', 'row', '', f); };
     // name
-    const nr = field('Name');
+    const nr = field(spec.lore === 'classic' ? 'Name (e.g. Fire → Firekit, Firepaw, Fireheart)' : 'Name');
     const ni = h('input', '', undefined, nr) as HTMLInputElement;
     ni.type = 'text';
     ni.maxLength = 14;
@@ -123,7 +126,7 @@ export class Menus {
     ni.oninput = () => { spec.name = ni.value.replace(/[^A-Za-z' -]/g, '').slice(0, 14); refresh(); };
     ni.onkeydown = (e) => e.stopPropagation();
     const rn = h('button', 'chip', '🎲', nr);
-    rn.onclick = () => { spec.name = rng.pick(GIVEN_NAMES); ni.value = spec.name; refresh(); };
+    rn.onclick = () => { spec.name = rng.pick(spec.lore === 'classic' ? CLASSIC_PREFIXES : GIVEN_NAMES); ni.value = spec.name; refresh(); };
     const chips = <T extends string>(name: string, opts: [T, string][], get: () => T, set: (v: T) => void) => {
       const r = field(name);
       const els: HTMLElement[] = [];
@@ -181,9 +184,16 @@ export class Menus {
     const rb = h('button', 'chip', '🎲 Randomise look', kr);
     rb.onclick = () => { spec.app = randomAppearance(rng); this.create(spec); };
     h('h2', '', 'Your world', form).style.marginTop = '20px';
-    const cr = field('Clan name');
+    lore.mode = spec.lore;
+    chips<LoreMode>('Clans & naming', [['classic', 'Forest Clans (Thunder, River, Wind, Shadow)'], ['original', 'Original Mistwood clans']], () => spec.lore, (v) => {
+      spec.lore = v;
+      lore.mode = v;
+      spec.clanName = v === 'classic' ? 'ThunderClan' : HOME_CLAN_NAMES[0];
+      this.create(spec);
+    });
+    const cr = field('Your clan');
     const cs = h('select', '', '', cr) as HTMLSelectElement;
-    for (const n of HOME_CLAN_NAMES) { const o = h('option', '', `${n} Clan`, cs) as HTMLOptionElement; o.value = n; }
+    for (const n of spec.lore === 'classic' ? CLASSIC_CLANS : HOME_CLAN_NAMES) { const o = h('option', '', `${clanTitle(n)}`, cs) as HTMLOptionElement; o.value = n; }
     cs.value = spec.clanName;
     cs.onchange = () => (spec.clanName = cs.value);
     const sr = field('World seed (same seed = same forest)');
@@ -279,7 +289,7 @@ export class Menus {
     h('h1', '', `${esc(displayName(dead))} walks the Long Meadow`, s);
     const kits = dead.kits.map((k) => clan.get(k)).filter((k) => k) as Cat[];
     const summary = [
-      `${roleLabel({ ...dead, alive: true })} of ${esc(g.territories.homeName)} Clan`,
+      `${roleLabel({ ...dead, alive: true })} of ${clanTitle(esc(g.territories.homeName))}`,
       `lived ${Math.floor(dead.age)} moons`,
       `died of ${esc(cause)}`,
       dead.mentored ? `mentored ${dead.mentored} apprentice${dead.mentored > 1 ? 's' : ''}` : '',

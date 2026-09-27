@@ -301,6 +301,26 @@ export function herbGeo(): THREE.BufferGeometry {
   return mergeGeometries(parts)!;
 }
 
+export function deathberryGeo(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const blobs: [number, number, number, number][] = [[0, 0.22, 0, 0.26], [0.18, 0.16, 0.08, 0.18], [-0.16, 0.17, -0.06, 0.2]];
+  blobs.forEach(([x, y, z, r], i) => {
+    const s = new THREE.IcosahedronGeometry(r, 1);
+    displace(s, 0.2, 5, i * 5);
+    radialNormals(s, 0.4);
+    s.translate(x, y, z);
+    parts.push(prep(s, (_px, py) => { const v = 0.55 + py; return [0.13 * v, 0.3 * v, 0.14 * v]; }));
+  });
+  // clusters of glossy red berries
+  for (let i = 0; i < 16; i++) {
+    const a = i * 2.39, h = 0.12 + (i % 5) * 0.06, r = 0.2 + (i % 3) * 0.04;
+    const b = new THREE.SphereGeometry(0.022, 6, 5);
+    b.translate(Math.cos(a) * r, h, Math.sin(a) * r);
+    parts.push(prep(b, [1.4, 0.08, 0.1]));
+  }
+  return mergeGeometries(parts)!;
+}
+
 export function mossGeo(): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(0.18, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
   g.scale(1, 0.35, 1);
@@ -444,6 +464,7 @@ function buildAssets() {
     log: logGeo(),
     deadTree: deadTreeGeo(),
     herb: herbGeo(),
+    deathberry: deathberryGeo(),
     moss: mossGeo(),
     mat: {
       trunk: windMaterial({ sway: 0.0 }),

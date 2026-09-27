@@ -1,5 +1,6 @@
 // Minimal in-game UI: HUD, prompts, toasts, speech bubbles, dialogs, modals.
 import * as THREE from 'three';
+import { clanTitle } from '../lore';
 import type { Game } from '../game';
 import { Cat, displayName, roleLabel } from '../cats/types';
 import { WEATHER_ICON, WEATHER_LABEL } from '../world/weather';
@@ -7,6 +8,7 @@ import { SEASON_NAMES } from '../world/worldState';
 import { relLabel, REL_COLOR, isFamily } from '../sim/social';
 import { Panels } from './panels';
 import { clamp } from '../core/math';
+import { loreText } from '../lore';
 
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: string, parent?: HTMLElement): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -16,7 +18,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, h
   return el;
 }
 export function esc(s: string) {
-  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+  return loreText(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 }
 
 export interface DialogOpt { label: string; action: () => void; hint?: string; disabled?: boolean }
@@ -39,6 +41,7 @@ export class UI {
   private banner: HTMLElement;
   private badge: HTMLElement;
   private fps: HTMLElement;
+  private giveUp: HTMLElement;
   private pounce: HTMLElement;
   private crosshair: HTMLElement;
   private dialogEl: HTMLElement | null = null;
@@ -74,6 +77,8 @@ export class UI {
     this.badge = h('div', 'decision-badge interactive hidden', '', this.hud);
     this.badge.onclick = () => this.game.decisions.showNext();
     this.fps = h('div', 'fps hidden', '', this.root);
+    this.giveUp = h('button', 'giveup hidden', '🏳 Give up <kbd>X</kbd>', this.hud);
+    this.giveUp.onclick = () => this.game.combat.playerYield();
     this.fadeEl = h('div', 'fade', '', this.root);
     this.panels = new Panels(game, this);
     window.addEventListener('keydown', (e) => this.onKey(e));
@@ -125,7 +130,7 @@ export class UI {
   }
 
   areaLabel(label: string) {
-    this.area.textContent = label;
+    this.area.textContent = loreText(label);
     this.area.classList.remove('flash');
     void this.area.offsetWidth;
     this.area.classList.add('flash');
@@ -139,7 +144,7 @@ export class UI {
   }
 
   fade(on: boolean, text = '') {
-    this.fadeEl.textContent = text;
+    this.fadeEl.textContent = loreText(text);
     this.fadeEl.classList.toggle('on', on);
   }
 
@@ -279,6 +284,7 @@ export class UI {
     }
     this.fps.classList.toggle('hidden', !this.showFps);
     if (g.state !== 'playing') return;
+    this.giveUp.classList.toggle('hidden', !g.combat.playerInCombat);
     this.updateBubbles();
     this.updatePrompt();
     this.updateCompass();
@@ -331,7 +337,7 @@ export class UI {
     this.time.innerHTML = `<div class="big">${icon} ${t.label()}</div>
       <div class="dim">Moon ${t.day + 1} · ${SEASON_NAMES[t.season]}</div>
       <div class="dim">${WEATHER_ICON[w.kind]} ${WEATHER_LABEL[w.kind]} · ${Math.round(w.temperature)}°</div>
-      <div class="dim">${g.territories.homeName} Clan · 🍖 ${Math.floor(g.clan.food)}</div>`;
+      <div class="dim">${clanTitle(g.territories.homeName)} · 🍖 ${Math.floor(g.clan.food)}</div>`;
   }
 
   private updateObjective() {

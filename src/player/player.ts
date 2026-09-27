@@ -60,6 +60,7 @@ export class Player implements Fighter {
   private checkT = 0;
   sniffCd = 0;
   sleeping = false;
+  poison = 0; // deathberry poisoning, 0..1
 
   constructor(private game: Game) {}
 
@@ -71,8 +72,8 @@ export class Player implements Fighter {
   get maxHp() { return this.cat.maxHealth; }
   get alive() { return !!this.cat && this.cat.alive; }
   get stageK() { return this.cat.stage === 'kit' ? 0.35 : this.cat.stage === 'apprentice' ? 0.7 : this.cat.stage === 'elder' ? 0.8 : 1; }
-  get power() { return (5 + this.cat.strength * 0.1 + this.cat.skills.fighting * 0.12) * this.stageK; }
-  get defense() { return 0.08 + this.cat.skills.fighting / 500; }
+  get power() { return (7 + this.cat.strength * 0.13 + this.cat.skills.fighting * 0.15) * Math.max(0.55, this.stageK); }
+  get defense() { return 0.2 + this.cat.skills.fighting / 400; }
   get isDodging() { return this.dodgeT > 0; }
   get scale() { return this.model.scale; }
   get carrySlots() { return this.prey.reduce((s, p) => s + p.slots, 0); }
@@ -423,7 +424,7 @@ export class Player implements Fighter {
       game.training.sparLost(by);
       return;
     }
-    let death = by.kind === 'creature' ? (by.name === 'Badger' ? 0.3 : by.name === 'Dog' ? 0.18 : 0.12) : 0.06;
+    let death = by.kind === 'creature' ? (by.name === 'Badger' ? 0.12 : by.name === 'Dog' ? 0.08 : 0.05) : 0.02;
     if (cat.stage === 'kit' || cat.stage === 'apprentice') death *= 0.3;
     if (cat.stage === 'elder') death *= 1.8;
     if (simRng.chance(death)) {

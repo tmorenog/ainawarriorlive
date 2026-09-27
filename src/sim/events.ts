@@ -13,7 +13,7 @@ import type { Fire } from '../world/fire';
 
 export type EventType =
   | 'fire' | 'flood' | 'drought' | 'storm' | 'coldSnap' | 'badger' | 'fox' | 'dog' | 'shortage' | 'fallenTree'
-  | 'rockslide' | 'loner' | 'illness' | 'rivalSkirmish' | 'gathering' | 'abandonedKit' | 'npcInfraction';
+  | 'rockslide' | 'loner' | 'illness' | 'rivalSkirmish' | 'gathering' | 'abandonedKit' | 'npcInfraction' | 'deathberries';
 
 export interface ActiveEvent {
   id: string;
@@ -84,7 +84,7 @@ export class EventSystem {
     const w = g.weather;
     const drought = this.isActive('drought');
     const opts: [EventType, number][] = [
-      ['fox', 3], ['fallenTree', w.p.wind > 0.6 ? 3 : 1], ['loner', g.clan.home().length > 26 ? 0.2 : g.clan.home().length < 15 ? 3 : 1.2], ['npcInfraction', 1.2], ['abandonedKit', 0.3],
+      ['fox', 3], ['fallenTree', w.p.wind > 0.6 ? 3 : 1], ['deathberries', g.clan.home().some((c) => c.stage === 'kit' && !c.isPlayer) && g.time.season !== 'winter' ? 0.7 : 0], ['loner', g.clan.home().length > 26 ? 0.2 : g.clan.home().length < 15 ? 3 : 1.2], ['npcInfraction', 1.2], ['abandonedKit', 0.3],
       ['dog', 0.8], ['rockslide', w.p.rain > 0.5 ? 1.2 : 0.4],
     ];
     if (!majorActive) {
@@ -339,6 +339,20 @@ export class EventSystem {
         cool(2);
         return true;
       }
+      case 'deathberries': {
+        const kits = clan.home(false).filter((c) => c.stage === 'kit' || c.stage === 'apprentice');
+        if (!kits.length) return false;
+        const k = simRng.pick(kits);
+        k.sick = clamp(k.sick + 85, 0, 100);
+        add(8, { id: k.id });
+        cool(6);
+        clan.log(`${displayName(k)} ate deathberries!`, 'event');
+        clan.setRecent(`${displayName(k)} ate deathberries!`);
+        g.ui.toast(`☠ ${displayName(k)} ate deathberries! The medicine cat needs herbs — quickly!`, 'danger');
+        g.audio.alarm();
+        if (!clan.player.exiled) g.objectives.add({ id: 'berry-kit', kind: 'herbs', title: `Save ${displayName(k)}`, desc: `${displayName(k)} ate deathberries. Bring any healing herb to the medicine den before it is too late.`, need: 1, deadline: g.time.totalHours + 8, reward: { rep: 10 } });
+        return true;
+      }
       case 'gathering':
         return this.startGathering();
     }
@@ -573,6 +587,16 @@ export class EventSystem {
       case 'shortage':
         g.clan.log('Prey is returning to the forest.', 'event');
         break;
+      case 'deathberries': {
+        const k = g.clan.get(e.data.id);
+        if (k && k.alive) {
+          const helped = k.sick < 50 || (g.clan.medicine && simRng.chance(0.5));
+          if (helped) { k.sick = 0; g.clan.log(`${displayName(k)} recovered from the deathberries.`, 'event'); }
+          else g.clan.kill(k, 'deathberries');
+        }
+        g.objectives.fail('berry-kit', true);
+        break;
+      }
       case 'badger':
         g.objectives.fail('badger', true);
         break;

@@ -887,7 +887,7 @@ export class NpcManager {
       // circle a little
       a.target = null;
       if (a.attackCd <= 0) {
-        a.windup = 0.45;
+        a.windup = t.kind === 'player' ? 0.75 : 0.45;
         game.combat.telegraph(a);
       } else if (simRng.chance(dt * 0.8)) {
         const ang = a.heading + Math.PI / 2 * (simRng.chance(0.5) ? 1 : -1);

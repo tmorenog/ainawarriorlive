@@ -1,8 +1,10 @@
 // Clan simulation: population, aging, ceremonies, births, deaths, food,
 // politics (leader/deputy), reputation and the clan code.
 import type { Game } from '../game';
+import { clanTitle } from '../lore';
 import { Cat, LESSONS, Lesson, Relation, displayName, pronoun } from '../cats/types';
-import { createCat, epithetOptions, makeEpithet, stageForAge } from '../cats/generate';
+import { createCat, epithetOptions, makeEpithet, personalityFrom, stageForAge } from '../cats/generate';
+import { BOOK_CATS, BookCat, isClassic } from '../lore';
 import { RNG, simRng } from '../core/rng';
 import { clamp } from '../core/math';
 import { compatibility, isFamily } from './social';
@@ -219,8 +221,53 @@ export class ClanSim {
       attitude: r.temperament === 'hostile' ? -40 : r.temperament === 'friendly' ? 20 : r.temperament === 'proud' ? -10 : 0,
     }));
     for (const r of this.rivals) this.populateRival(r.index, rng);
-    this.log(`You were born into ${this.game.territories.homeName} Clan, the kit of ${displayName(mother)} and ${displayName(father)}.`, 'birth');
+    if (isClassic()) this.seedBookCats(playerCat);
+    this.log(`You were born into ${clanTitle(this.game.territories.homeName)}, the kit of ${displayName(mother)} and ${displayName(father)}.`, 'birth');
     this.log(`${displayName(leader)} leads the clan as Warden, with ${displayName(deputy)} as Second.`, 'politics');
+  }
+
+  /** Classic mode: famous cats from the books take their places in each clan. */
+  private seedBookCats(player: Cat) {
+    const protectedIds = new Set([player.id, ...player.parents]);
+    const apply = (c: Cat, b: BookCat) => {
+      c.given = b.prefix;
+      c.epithet = b.stage === 'apprentice' ? null : b.suffix;
+      c.sex = b.sex;
+      c.age = b.age;
+      c.traits = b.traits.slice();
+      c.pers = personalityFrom(c.traits, simRng);
+      c.app = { ...c.app, ...b.app, second: b.app.second ?? c.app.second, white: b.app.white ?? (b.app.pattern ? 0 : c.app.white) };
+      c.stage = b.stage ?? (b.age >= 80 && !b.role ? 'elder' : 'warrior');
+      if (b.role === 'leader') c.skills.fighting = Math.max(c.skills.fighting, 70);
+      if (b.role === 'medicine') c.skills.healing = 85;
+      this.usedNames.add(b.prefix);
+    };
+    const place = (clan: Cat['clan'], list: BookCat[]) => {
+      const pool = Object.values(this.cats).filter((c) => c.alive && c.clan === clan && !protectedIds.has(c.id) && !c.mate && c.stage !== 'kit');
+      const used = new Set<string>();
+      for (const b of list) {
+        let target: Cat | undefined;
+        if (b.role === 'leader') target = clan === 'home' ? this.leader : pool.find((c) => c.role === 'leader');
+        else if (b.role === 'deputy' && clan === 'home') target = this.deputy;
+        else if (b.role === 'medicine' && clan === 'home') target = this.medicine;
+        else if (b.stage === 'apprentice') target = pool.find((c) => !used.has(c.id) && c.stage === 'apprentice' && c.role === 'none');
+        else if (b.stage === 'elder') target = pool.find((c) => !used.has(c.id) && c.stage === 'elder');
+        target = target && !used.has(target.id) && !protectedIds.has(target.id) ? target : pool.find((c) => !used.has(c.id) && c.role === 'none' && c.stage === 'warrior');
+        if (!target) continue;
+        used.add(target.id);
+        if (clan !== 'home' && b.role) {
+          if (b.role === 'leader') for (const o of pool) if (o.role === 'leader') o.role = 'none';
+          target.role = b.role;
+        }
+        apply(target, b);
+        if (b.stage === 'apprentice' && !target.mentor && clan === 'home') {
+          const m = this.pickMentor(target);
+          if (m) { target.mentor = m.id; m.apprentice = target.id; }
+        }
+      }
+    };
+    place('home', BOOK_CATS[this.game.territories.homeName] ?? []);
+    for (const r of this.game.territories.rivals) place(r.index, BOOK_CATS[r.name] ?? []);
   }
 
   populateRival(index: number, rng: RNG = simRng) {
@@ -680,7 +727,7 @@ export class ClanSim {
     this.deputyId = c.id;
     const leader = this.leader;
     this.log(`${leader ? displayName(leader) : 'The clan'} named ${displayName(c)} the new Second.`, 'politics');
-    this.game.ceremony(`${leader ? displayName(leader) : 'The Warden'}: "I name ${displayName(c)} as Second of ${this.game.territories.homeName} Clan."`, [c.id]);
+    this.game.ceremony(`${leader ? displayName(leader) : 'The Warden'}: "I name ${displayName(c)} as Second of ${clanTitle(this.game.territories.homeName)}."`, [c.id]);
     this.setRecent(`${displayName(c)} is the new Second.`);
     if (c.isPlayer) {
       this.remember(c, 'I was named Second of the clan.', 10);

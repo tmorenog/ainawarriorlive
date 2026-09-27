@@ -2,6 +2,7 @@
 // only the simulation state and world modifications are stored.
 import type { Game } from '../game';
 import type { Cat } from '../cats/types';
+import { lore, LoreMode } from '../lore';
 
 const KEY = 'mistwood-save-v1';
 
@@ -10,6 +11,7 @@ export interface SaveData {
   savedAt: number;
   seed: number;
   homeName: string;
+  lore?: LoreMode;
   totalHours: number;
   weather: { kind: string; snowCover: number };
   clan: {
@@ -59,6 +61,7 @@ export function writeSave(g: Game): boolean {
     savedAt: Date.now(),
     seed: g.seed,
     homeName: g.territories.homeName,
+    lore: lore.mode,
     totalHours: g.time.totalHours,
     weather: { kind: g.weather.kind, snowCover: g.weather.snowCover },
     clan: {

@@ -1,3 +1,5 @@
+import { loreName } from '../lore';
+
 // Core data model for every cat in the simulation (player included).
 
 export type LifeStage = 'kit' | 'apprentice' | 'warrior' | 'elder';
@@ -113,9 +115,7 @@ export interface Cat {
 }
 
 export function displayName(c: Cat): string {
-  if (c.stage === 'kit') return `Little ${c.given}`;
-  if (c.epithet) return `${c.given} ${c.epithet}`;
-  return c.given;
+  return loreName(c);
 }
 
 export function roleLabel(c: Cat): string {

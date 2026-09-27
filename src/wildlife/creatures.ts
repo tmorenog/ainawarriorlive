@@ -10,9 +10,9 @@ import { angleDiff, clamp, dist2 } from '../core/math';
 export type CreatureKind = 'fox' | 'badger' | 'dog';
 
 const DEFS: Record<CreatureKind, { name: string; spec: QuadSpec; hp: number; power: number; speed: number; notice: number; reach: number; aggression: number; chaseTime: number }> = {
-  fox: { name: 'Fox', spec: FOX, hp: 55, power: 8, speed: 5.2, notice: 16, reach: 0.75, aggression: 0.6, chaseTime: 25 },
-  badger: { name: 'Badger', spec: BADGER, hp: 140, power: 15, speed: 2.9, notice: 12, reach: 0.8, aggression: 0.9, chaseTime: 40 },
-  dog: { name: 'Dog', spec: DOG, hp: 95, power: 10, speed: 7.2, notice: 28, reach: 0.9, aggression: 0.7, chaseTime: 18 },
+  fox: { name: 'Fox', spec: FOX, hp: 42, power: 5, speed: 5.2, notice: 16, reach: 0.75, aggression: 0.6, chaseTime: 25 },
+  badger: { name: 'Badger', spec: BADGER, hp: 105, power: 9.5, speed: 2.9, notice: 12, reach: 0.8, aggression: 0.9, chaseTime: 40 },
+  dog: { name: 'Dog', spec: DOG, hp: 75, power: 6.5, speed: 7.2, notice: 28, reach: 0.9, aggression: 0.7, chaseTime: 18 },
 };
 
 export class Creature implements Fighter {
@@ -132,7 +132,7 @@ export class CreatureManager {
     const game = this.game;
     let best: Fighter | null = null, bd = r;
     const pl = game.player;
-    if (pl.alive) {
+    if (pl.alive && game.combat.yieldUntil < game.clock) {
       const d = dist2(c.pos.x, c.pos.z, pl.pos.x, pl.pos.z) * (pl.crouching ? 1.6 : 1);
       if (d < bd) { bd = d; best = pl; }
     }
@@ -213,7 +213,7 @@ export class CreatureManager {
         } else {
           c.target = null;
           if (c.cd <= 0) {
-            c.windup = c.type === 'badger' ? 0.75 : 0.55;
+            c.windup = c.type === 'badger' ? 1.0 : 0.8;
             game.combat.telegraph(c);
           }
         }

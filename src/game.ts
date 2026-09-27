@@ -1,6 +1,7 @@
 // Game orchestrator: owns every system, runs the main loop, handles new game,
 // loading, sleeping, time skips, death and succession.
 import * as THREE from 'three';
+import { clanTitle, lore } from './lore';
 import { Bus } from './core/bus';
 import { GameTime } from './core/time';
 import { RNG, simRng } from './core/rng';
@@ -151,6 +152,7 @@ export class Game {
     this.menus.loading('Growing the forest…');
     await new Promise((r) => setTimeout(r, 30));
     const save = readSave();
+    lore.mode = save?.lore ?? 'classic';
     this.setupWorld(save?.seed ?? 4242, save?.homeName);
     this.time.totalHours = 17.8;
     this.chunks.primeAround(0, 0);
@@ -239,6 +241,7 @@ export class Game {
       this.resetSystems();
       this.time.totalHours = 7;
       this.lastHour = Math.floor(this.time.totalHours);
+      lore.mode = spec.lore;
       this.setupWorld(spec.seed, spec.clanName);
       const rng = new RNG(spec.seed * 7 + 3);
       const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: 0, rng: new RNG((Math.random() * 1e9) | 0) });
@@ -253,7 +256,7 @@ export class Game {
       this.objectives.add({ id: 'kit-rock', kind: 'visit', title: 'See the High Rock', desc: 'The Warden speaks to the clan from the High Rock.', target: { x: this.camp.highRock.x, z: this.camp.highRock.z + 3 }, radius: 4, need: 1 });
       this.startPlaying();
       const mother = this.clan.get(me.parents[0]);
-      this.ui.showBanner(`You are ${me.given}, a kit of ${this.territories.homeName} Clan. ${mother ? `Your mother ${displayName(mother)} watches over you in the nursery.` : ''} Stay inside the camp until you are old enough to train.`, 12);
+      this.ui.showBanner(`You are ${displayName(me)}, a kit of ${clanTitle(this.territories.homeName)}. ${mother ? `Your mother ${displayName(mother)} watches over you in the nursery.` : ''} Stay inside the camp until you are old enough to train.`, 12);
       this.save();
     }, 60);
   }
@@ -267,6 +270,7 @@ export class Game {
       this.resetSystems();
       this.time.totalHours = d.totalHours;
       this.lastHour = Math.floor(d.totalHours);
+      lore.mode = d.lore ?? 'original';
       this.setupWorld(d.seed, d.homeName);
       Object.assign(this.mods, d.mods);
       const c = this.clan;
@@ -504,7 +508,7 @@ export class Game {
     this.sleepUntil = null;
     this.time.speed = 1;
     this.startPlaying();
-    this.ui.showBanner(`You are now ${displayName(cat)}, ${cat.stage === 'kit' ? 'a kit' : cat.stage === 'apprentice' ? 'an apprentice' : cat.stage === 'elder' ? 'an elder' : 'a warrior'} of ${this.territories.homeName} Clan. Generation ${this.clan.generation}.`, 10);
+    this.ui.showBanner(`You are now ${displayName(cat)}, ${cat.stage === 'kit' ? 'a kit' : cat.stage === 'apprentice' ? 'an apprentice' : cat.stage === 'elder' ? 'an elder' : 'a warrior'} of ${clanTitle(this.territories.homeName)}. Generation ${this.clan.generation}.`, 10);
     this.save();
   }
 
@@ -628,7 +632,11 @@ export class Game {
         c.hunger = clamp(c.hunger - 1.35, 0, 100);
         if (c.hunger < 8) c.health -= 1.2;
       }
-      if (c.hunger > 25 && !this.combat.playerInCombat) c.health = Math.min(c.maxHealth, c.health + (this.player.sleeping ? 8 : 3));
+      if (this.player.poison > 0) {
+        c.health -= 7 * this.player.poison;
+        this.player.poison = Math.max(0, this.player.poison - 0.07);
+        if (c.health <= 0) { this.clan.kill(c, 'deathberries'); return; }
+      } else if (c.hunger > 25 && !this.combat.playerInCombat) c.health = Math.min(c.maxHealth, c.health + (this.player.sleeping ? 8 : 3));
       if (c.health <= 0) this.clan.kill(c, 'hunger');
     }
     if (hour === 6) {
@@ -701,6 +709,7 @@ export class Game {
     if (!this.player.busy && !this.player.sleeping) {
       if (input.pressed('KeyE')) this.interactions.interact();
     }
+    if (input.pressed('KeyX') && this.combat.playerInCombat) this.combat.playerYield();
     if (input.pressed('KeyJ')) this.ui.panels.toggle('journal');
     if (input.pressed('KeyM')) this.ui.panels.toggle('map');
     if (input.pressed('KeyL')) this.ui.panels.toggle('leader');

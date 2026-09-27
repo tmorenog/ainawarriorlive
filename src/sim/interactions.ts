@@ -1,6 +1,7 @@
 // Everything the player can *do* with the world: talk, groom, share prey,
 // court a mate, deliver herbs and moss, sleep, escort cats, give orders.
 import type { Game } from '../game';
+import { clanTitle } from '../lore';
 import type { NpcAgent, ApproachIntent } from '../ai/npc';
 import type { PreyKind } from '../wildlife/models';
 import { PREY } from '../wildlife/prey';
@@ -55,6 +56,11 @@ export class Interactions {
     const its = g.chunks.interactablesNear(p.x, p.z, 1.3 * Math.max(0.7, pl.scale));
     if (its.length) {
       const it = its[0];
+      if (it.type === 'berries') {
+        const kit = pc.stage === 'kit';
+        this.current = { text: kit ? 'Taste the shiny red berries' : 'Deathberries! Eat them anyway? (deadly poison)', action: () => this.eatDeathberries(it) };
+        return;
+      }
       if (it.type === 'herb') { const info = HERB_INFO[it.kind as HerbKind]; this.current = { text: `Pick ${info.name} (${info.use})`, action: () => this.collect(it) }; }
       else this.current = { text: 'Gather soft moss', action: () => this.collect(it) };
       return;
@@ -62,6 +68,11 @@ export class Interactions {
     // dens
     const den = g.camp.denAt(p.x, p.z);
     if (den && !pc.exiled) {
+      const med = g.clan.medicine;
+      if (den.name === 'medicine' && med && !med.isPlayer && (pl.poison > 0 || pc.sick > 25 || pc.injury > 25)) {
+        this.current = { text: `Ask ${displayName(med)} for help`, action: () => this.seekHealing() };
+        return;
+      }
       if (den.name === 'medicine' && (pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot) > 0) { this.current = { text: 'Leave your herbs with the healer', action: () => this.deliverHerbs() }; return; }
       if ((den.name === 'elders' || den.name === 'nursery') && pl.moss > 0) { this.current = { text: `Line the ${den.label.toLowerCase()} with fresh moss`, action: () => this.deliverMoss(den.name) }; return; }
       if (den.name === g.npcs.denFor(pc) || (den.name === 'warriors' && pc.stage === 'warrior')) {
@@ -321,7 +332,7 @@ export class Interactions {
       g.ui.dialog({ speaker: c, text: 'Maybe I will. Thank you for the kindness.', options: [{ label: 'Farewell', action: done }], onClose: done });
     } });
     opts.push({ label: 'Leave', action: done });
-    g.ui.dialog({ speaker: c, text, sub: isRival ? `${clanName} Clan` : 'Loner', options: opts, onClose: done });
+    g.ui.dialog({ speaker: c, text, sub: isRival ? `${clanTitle(clanName)}` : 'Loner', options: opts, onClose: done });
   }
 
   private askReturn(a: NpcAgent, done: () => void) {
@@ -524,6 +535,40 @@ export class Interactions {
     pl.updateCarryVisual();
   }
 
+  eatDeathberries(it: Interactable) {
+    const g = this.game;
+    const pc = g.clan.player;
+    g.chunks.takeInteractable(it);
+    g.audio.eat();
+    const kit = pc.stage === 'kit';
+    g.player.poison = 1;
+    pc.sick = clamp(pc.sick + 70, 0, 100);
+    pc.health -= kit ? 45 : 30;
+    g.ui.hurtFlash();
+    g.ui.toast('The berries taste bitter... your belly cramps and the world spins. Deathberries! Get to the medicine cat — fast!', 'danger');
+    g.clan.remember(pc, 'I ate deathberries. I will never forget that bitter taste.', -6);
+    g.clan.log(`${displayName(pc)} ate deathberries.`, 'event');
+    if (!pc.exiled) g.objectives.add({ id: 'poison', kind: 'visit', title: 'Get to the medicine den!', desc: 'Deathberry poison is spreading. The medicine cat can make you retch it up with yarrow.', target: { x: g.camp.dens.medicine.x, z: g.camp.dens.medicine.z }, radius: 2.5, need: 1 });
+    if (pc.health <= 0) g.clan.kill(pc, 'deathberries');
+  }
+
+  seekHealing() {
+    const g = this.game;
+    const pc = g.clan.player;
+    const med = g.clan.medicine!;
+    const poisoned = g.player.poison > 0;
+    g.player.poison = 0;
+    pc.sick = Math.max(0, pc.sick - (poisoned ? 70 : 40));
+    pc.injury = Math.max(0, pc.injury - 30);
+    pc.health = Math.min(pc.maxHealth, pc.health + 15);
+    g.objectives.complete('poison');
+    g.clan.adjust(pc, med, 5);
+    g.ui.dialog({ speaker: med, text: poisoned
+      ? 'Deathberries?! Mouse-brain! Here — chew this yarrow, quickly. ... There. Get it all out. You were lucky.'
+      : simRng.pick(['Hold still. A poultice of marigold and cobweb will do.', 'Eat these herbs and rest. You\'ll be right in a day or two.', 'Let me see... yes, I can help with that.']),
+      options: [{ label: 'Thank you', action: () => {} }] });
+  }
+
   deliverHerbs() {
     const g = this.game;
     const pl = g.player;
@@ -533,6 +578,15 @@ export class Interactions {
     let healed = 0;
     for (let i = 0; i < pl.herbs.sunpetal + pl.herbs.bitterroot; i++) { const c = sick.find((x) => x.sick > 0); if (c) { c.sick = Math.max(0, c.sick - 35); healed++; clan.adjust(c, clan.player, 5, { text: `${clan.player.given}'s herbs helped me recover.`, weight: 3 }); } }
     for (let i = 0; i < pl.herbs.silverleaf; i++) { const c = sick.find((x) => x.injury > 0); if (c) { c.injury = Math.max(0, c.injury - 35); healed++; } }
+    const berryEv = g.events.get('deathberries');
+    const kit = berryEv ? clan.get(berryEv.data.id) : undefined;
+    if (kit && kit.alive && n > 0) {
+      kit.sick = 0;
+      clan.adjust(kit, clan.player, 30, { text: `${clan.player.given} brought the herbs that saved me from the deathberries.`, weight: 8 });
+      clan.remember(clan.player, `I helped save ${displayName(kit)} from deathberry poison.`, 6, kit.id);
+      clan.player.deeds++;
+      g.ui.toast(`${displayName(kit)} retches up the berries. They will live!`, 'good');
+    }
     pl.herbs = { silverleaf: 0, sunpetal: 0, bitterroot: 0 };
     pl.updateCarryVisual();
     const med = clan.medicine;

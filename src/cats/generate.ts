@@ -1,5 +1,6 @@
 // Procedural generation of cats: names, looks, personalities and inheritance.
 import { RNG, simRng } from '../core/rng';
+import { CLASSIC_PREFIXES, CLASSIC_SUFFIXES, isClassic } from '../lore';
 import {
   Appearance, BodyType, Cat, ClanId, EarShape, FurLength, LESSONS, Lesson, Pattern, Personality, Sex, TailShape, Trait,
 } from './types';
@@ -19,6 +20,14 @@ const EPI_PRE = ['Swift', 'Quiet', 'Bright', 'Long', 'Stone', 'Brook', 'Sun', 'M
 const EPI_SUF = ['foot', 'whisker', 'heart', 'song', 'runner', 'tail', 'claw', 'pelt', 'leap', 'eye', 'stripe', 'shade', 'watcher', 'step', 'gaze', 'fur', 'ear', 'bloom', 'strider', 'breath', 'spark', 'wing', 'fang', 'dash'];
 
 export function makeEpithet(rng: RNG, cat?: Cat): string {
+  if (isClassic()) {
+    let suf = rng.pick(CLASSIC_SUFFIXES);
+    if (cat?.app.pattern === 'tabby' && rng.chance(0.3)) suf = 'stripe';
+    if (cat && cat.pers.bravery > 0.7 && rng.chance(0.3)) suf = rng.pick(['heart', 'claw', 'storm', 'fang']);
+    if (cat && cat.pers.kindness > 0.7 && rng.chance(0.3)) suf = rng.pick(['heart', 'flower', 'song', 'leaf']);
+    if (cat && CLASSIC_PREFIXES.includes(cat.given) && cat.given.toLowerCase() === suf) suf = 'heart';
+    return suf;
+  }
   let pre = rng.pick(EPI_PRE);
   let suf = rng.pick(EPI_SUF);
   if (cat) {
@@ -199,10 +208,11 @@ export function createCat(opts: CreateOpts = {}): Cat {
   const rng = opts.rng ?? simRng;
   const age = opts.age ?? rng.range(14, 60);
   const sex: Sex = opts.sex ?? (rng.chance(0.5) ? 'tom' : 'she');
-  let given = opts.given ?? rng.pick(GIVEN_NAMES);
+  const pool = isClassic() ? CLASSIC_PREFIXES : GIVEN_NAMES;
+  let given = opts.given ?? rng.pick(pool);
   if (!opts.given && opts.usedNames) {
     let guard = 0;
-    while (opts.usedNames.has(given) && guard++ < 60) given = rng.pick(GIVEN_NAMES);
+    while (opts.usedNames.has(given) && guard++ < 60) given = rng.pick(pool);
     opts.usedNames.add(given);
   }
   const parents = opts.parents ?? [];

@@ -23,8 +23,8 @@ export const HERB_INFO: Record<HerbKind, { name: string; color: [number, number,
 
 export interface Interactable {
   key: string;
-  type: 'herb' | 'moss';
-  kind: HerbKind | 'moss';
+  type: 'herb' | 'moss' | 'berries';
+  kind: HerbKind | 'moss' | 'deathberry';
   x: number; y: number; z: number;
   mesh: THREE.InstancedMesh;
   index: number;
@@ -1067,7 +1067,29 @@ export class ChunkManager {
       const hidden = ctx.mods.taken[key] !== undefined;
       moss.add(m.x, m.y, m.z, i, hidden ? 0 : 1.4, hidden ? 0 : 1.4, hidden ? 0 : 1.4, [1, 1, 1]);
     });
+    // Deathberry bushes (yew): bright red, deadly poisonous
+    const berries = new InstBuilder();
+    const berryData: { x: number; y: number; z: number }[] = [];
+    const brng = new RNG(hash2(chunk.cx, chunk.cz, ctx.seed + 77));
+    const nb = brng.chance(0.55) ? brng.int(1, 2) : 0;
+    for (let i = 0; i < nb; i++) {
+      const x = chunk.x0 + brng.range(3, CHUNK_SIZE - 3), z = chunk.z0 + brng.range(3, CHUNK_SIZE - 3);
+      const idx = chunk.nearestIndex(x, z);
+      const biome = BIOMES[chunk.biomes[idx]];
+      if (chunk.flags[idx] & 11 || Math.hypot(x, z) < 24 || !(biome === 'forest' || biome === 'pine' || biome === 'marsh')) continue;
+      const y = chunk.heightAt(x, z);
+      if (y < this.waterLevel + 0.05) continue;
+      berryData.push({ x, y, z });
+    }
+    berryData.forEach((b, i) => {
+      const key = `${chunk.cx},${chunk.cz},b${i}`;
+      const taken = ctx.mods.taken[key];
+      if (taken !== undefined && ctx.day - taken >= 4) delete ctx.mods.taken[key];
+      const k = ctx.mods.taken[key] !== undefined ? 0 : 1;
+      berries.add(b.x, b.y, b.z, i * 1.7, k, k, k, [1, 1, 1]);
+    });
     const add = (m: THREE.InstancedMesh | null) => { if (m) { (m as any).sharedGeo = true; detail.add(m); } return m; };
+    const bm = add(berries.build(A.deathberry, A.mat.bush, false));
     add(grass.build(A.grass, A.mat.grass, false));
     add(ferns.build(A.fern, A.mat.fern, false));
     add(flowers.build(A.flower, A.mat.flower, false));
@@ -1083,6 +1105,10 @@ export class ChunkManager {
     if (mm) mossData.forEach((m, i) => {
       mm.getMatrixAt(i, tmp);
       chunk.interactables.push({ key: `${chunk.cx},${chunk.cz},m${i}`, type: 'moss', kind: 'moss', x: m.x, y: m.y, z: m.z, mesh: mm, index: i, matrix: tmp.clone() });
+    });
+    if (bm) berryData.forEach((b, i) => {
+      bm.getMatrixAt(i, tmp);
+      chunk.interactables.push({ key: `${chunk.cx},${chunk.cz},b${i}`, type: 'berries', kind: 'deathberry', x: b.x, y: b.y, z: b.z, mesh: bm, index: i, matrix: tmp.clone() });
     });
     chunk.detail = detail;
     chunk.group.add(detail);

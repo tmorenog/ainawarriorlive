@@ -4,6 +4,15 @@ A 3D, first-person cat clan life simulator that runs in the browser. You're born
 
 Every name, clan, character, place, model, sound and bit of lore is original. All art is procedural geometry and all audio is synthesised at runtime, so the project contains no external assets.
 
+## Clans & naming
+
+On the character screen you choose between two lore modes:
+
+- **Forest Clans (default):** a fan tribute to the *Warriors* novels by Erin Hunter. It has ThunderClan, RiverClan, WindClan and ShadowClan, with book-style names (Firekit → Firepaw → Fireheart → Firestar), StarClan, Twolegs, Fourtrees, Highrock and medicine cats. Familiar cats from the books start in each clan: Bluestar, Tigerclaw, Spottedleaf, Graystripe, Sandstorm, Yellowfang, Ravenpaw, Crookedstar, Leopardfur, Tallstar, Brokenstar and others.
+- **Original Mistwood clans:** the game's own names and lore.
+
+*Warriors* names and characters belong to their owners. This mode is an unofficial, non-commercial tribute. If you publish the game, consider making the original mode the default.
+
 ## Running it
 
 ```bash
@@ -43,7 +52,8 @@ The repo includes a `vercel.json` (Vite framework, `npm run build`, output `dist
 - **Life stages.** Kit → apprentice (a ceremony where a mentor is assigned) → warrior (a ceremony where you choose your warrior name) → elder. Aging changes your size, speed, strength and duties.
 - **Playable training.** Hunting, tracking, spar fighting, exploring to a landmark, border marking, and a quiz on the clan code. Once you've trained enough you take a warrior assessment. As a mentor you teach your own apprentice the same lessons.
 - **Hunting.** Each prey animal has its own senses: hearing, sight, and smell that depends on which way the wind blows. Each also escapes differently: mice dart, rabbits zig-zag, birds fly off, squirrels climb trees, fish dive, frogs hop. Crouch, stalk and time your pounce, then carry the catch back to the pile.
-- **Combat.** Stylised and non-graphic, against foxes, badgers, dogs, and rival or exiled cats. The outcome depends on health, strength, fighting skill, which side you attack from, attack wind-ups, dodges and luck. Nearby clanmates come to help. Losing a fight usually means an injury, and sometimes death.
+- **Deathberries.** Glossy red bushes grow in the forest and are deadly poisonous. Eating them poisons you until a medicine cat makes you retch them up. Sometimes a kit eats them and you have to rush herbs to the medicine den.
+- **Combat.** Stylised and non-graphic, against foxes, badgers, dogs, and rival or exiled cats. The outcome depends on health, strength, fighting skill, which side you attack from, attack wind-ups, dodges and luck. Nearby clanmates come to help. Fights are forgiving, and you can press **X** or the 🏳 button to give up and back away. Losing a fight usually means an injury, and only rarely death.
 - **Clan code and consequences.** Rules cover leaving camp as a kit, crossing borders, eating before the clan is fed, disobeying orders, helping outsiders, going near Tallfolk dens, and breaking confinement. Only witnesses (or scent found later) catch you. Punishments escalate: a warning, extra duties, confinement to camp, loss of rank, and eventually exile. Exiles can survive alone and later ask to come home.
 - **Relationships and family.** Cats can be strangers, acquaintances, friends, close friends, rivals, enemies, family or mates. You can groom, share prey, tease, play-fight, court a mate and raise kits, or foster orphans.
 - **Politics.** The leader (the "Warden") appoints a Second (the deputy). When the Warden dies or retires, the Second takes over. A Warden who loses the clan's support can be forced to step down. As Warden or Second you organise patrols, choose mentors, name your Second, judge rule-breakers, decide whether loners may join, exile cats, respond to fires, floods, droughts, illness and border raids, and deal with the rival clans. Clan cats react to your choices according to their personalities.

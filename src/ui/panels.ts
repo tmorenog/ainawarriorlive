@@ -1,6 +1,7 @@
 // Full-screen panels: journal (duties, events, relationships, clan, code,
 // memories, discoveries, controls), territory map and the leader's council.
 import type { Game } from '../game';
+import { clanTitle } from '../lore';
 import type { UI } from './ui';
 import { h, esc } from './ui';
 import { Cat, LESSONS, LESSON_LABEL, displayName, roleLabel } from '../cats/types';
@@ -21,6 +22,7 @@ export const CONTROLS_HTML = `
 <b>Swipe / attack</b><span>Left click or F</span>
 <b>Heavy pounce attack</b><span>Right click or R</span>
 <b>Dodge (in a fight)</b><span>Space + a direction</span>
+<b>Give up a fight</b><span>X (or the 🏳 button) — back away and end the fight</span>
 <b>Sniff / track</b><span>Q — reveals scent trails to prey, danger and herbs</span>
 <b>Eat what you carry</b><span>G (breaks the code unless starving or the clan is fed)</span>
 <b>Camera</b><span>V toggles first / third person</span>
@@ -238,7 +240,7 @@ export class Panels {
     if (this.selected) { const c = clan.get(this.selected); if (c) { const back = h('button', 'btn dim', '← Back', body); back.onclick = () => { this.selected = null; this.render(); }; this.catDetail(c, body); return; } }
     const home = clan.home();
     h('div', 'kv', `
-      <b>Clan</b><span>${esc(g.territories.homeName)} Clan — ${home.length} cats</span>
+      <b>Clan</b><span>${clanTitle(esc(g.territories.homeName))} — ${home.length} cats</span>
       <b>Warden</b><span>${clan.leader ? esc(displayName(clan.leader)) : '—'}</span>
       <b>Second</b><span>${clan.deputy ? esc(displayName(clan.deputy)) : '—'}</span>
       <b>Healer</b><span>${clan.medicine ? esc(displayName(clan.medicine)) : '—'}</span>
@@ -264,7 +266,7 @@ export class Panels {
     h('h3', '', 'Neighbouring clans', body);
     for (const r of clan.rivals) {
       const def = g.territories.rivals[r.index];
-      h('div', 'entry', `<b style="color:${def.color}">${esc(def.name)} Clan</b> — ${def.temperament}, strength ${Math.round(r.strength)}, feeling toward us: ${r.attitude > 20 ? 'friendly' : r.attitude < -30 ? 'hostile' : 'wary'} (${Math.round(r.attitude)})`, body);
+      h('div', 'entry', `<b style="color:${def.color}">${clanTitle(esc(def.name))}</b> — ${def.temperament}, strength ${Math.round(r.strength)}, feeling toward us: ${r.attitude > 20 ? 'friendly' : r.attitude < -30 ? 'hostile' : 'wary'} (${Math.round(r.attitude)})`, body);
     }
     const dead = clan.dead();
     if (dead.length) {
@@ -443,7 +445,7 @@ export class Panels {
       case 'rivals': {
         for (const r of clan.rivals) {
           const def = g.territories.rivals[r.index];
-          const d = h('div', 'detail', `<b style="color:${def.color}">${esc(def.name)} Clan</b> — ${def.temperament}; strength ${Math.round(r.strength)}; attitude ${Math.round(r.attitude)}`, body);
+          const d = h('div', 'detail', `<b style="color:${def.color}">${clanTitle(esc(def.name))}</b> — ${def.temperament}; strength ${Math.round(r.strength)}; attitude ${Math.round(r.attitude)}`, body);
           if (isLeader) {
             btn('Send a peace envoy', () => { r.attitude = Math.min(100, r.attitude + 8); g.clan.log(`An envoy carried words of peace to ${def.name}.`, 'politics'); g.decisions.react(['kind', 'cautious'], 2); g.ui.toast(`${def.name} seems a little warmer toward us.`, 'good'); this.render(); }, d, 'btn dim');
             btn('Order a border show of strength', () => { clan.borderSafety = Math.min(100, clan.borderSafety + 25); r.attitude = Math.max(-100, r.attitude - 5); g.decisions.react(['brave'], 2); g.ui.toast('Warriors paraded along the border.', 'info'); this.render(); }, d, 'btn dim');
