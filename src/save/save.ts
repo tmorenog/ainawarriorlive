@@ -85,6 +85,14 @@ export function readSave(): SaveData | null {
   } catch { return null; }
 }
 
+export function readSaveSlot(slot: number): SaveData | null {
+  try {
+    const raw = localStorage.getItem(keyFor(slot));
+    const d = raw ? JSON.parse(raw) : null;
+    return d && d.v === 1 ? d : null;
+  } catch { return null; }
+}
+
 export function writeSave(g: Game): boolean {
   const c = g.clan;
   const p = g.player;

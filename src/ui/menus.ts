@@ -10,7 +10,7 @@ import { CONTROLS_HTML } from './panels';
 import { HOME_CLAN_NAMES } from '../world/territory';
 import { CLASSIC_CLANS, CLASSIC_PREFIXES, LoreMode, lore } from '../lore';
 import { isFamily } from '../sim/social';
-import { listSaves, newSlot, setSlot } from '../save/save';
+import { SaveSummary, listSaves, newSlot, setSlot } from '../save/save';
 
 export interface Settings {
   quality: 'low' | 'medium' | 'high';
@@ -35,7 +35,7 @@ export function saveSettings(s: Settings) {
   try { localStorage.setItem('mistwood-settings', JSON.stringify(s)); } catch { /* ignore */ }
 }
 
-export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string; lore: LoreMode }
+export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string; lore: LoreMode; joinSlot?: number }
 
 export class Menus {
   private screen: HTMLElement | null = null;
@@ -67,14 +67,34 @@ export class Menus {
     const n = h('button', '', saves.length ? '＋ Begin a new life (your other cats stay saved)' : 'Begin your life', menu);
     n.onclick = () => {
       this.game.audio.start();
-      newSlot();
-      this.create();
+      if (!saves.length) { this.joinSlot = undefined; newSlot(); this.create(); return; }
+      this.whereBorn(saves, () => this.title(hasSave));
     };
     const ctl = h('button', '', 'How to play', menu);
     ctl.onclick = () => this.help(() => this.title(hasSave));
     const st = h('button', '', 'Settings', menu);
     st.onclick = () => this.settings(() => this.title(hasSave));
     h('div', 'foot', 'An original world. Keyboard & mouse, or touch. Best with sound on. Progress saves automatically in your browser.', s);
+  }
+
+  private joinSlot: number | undefined;
+
+  /** Choose to start fresh, or be born into the clan of one of your saved stories (same cats!). */
+  whereBorn(saves: SaveSummary[], back: () => void) {
+    this.clear();
+    const s = h('div', 'screen title-screen', '', this.root);
+    this.screen = s;
+    h('h1', '', 'Where will you be born?', s);
+    const menu = h('div', 'menu', '', s);
+    const fresh = h('button', '', '🌱 A brand-new clan', menu);
+    fresh.onclick = () => { this.joinSlot = undefined; newSlot(); this.create(); };
+    for (const sv of saves.slice(0, 8)) {
+      const b = h('button', '', `🏡 Into ${esc(clanTitle(sv.clan))} — with ${esc(sv.name)}'s clanmates`, menu);
+      b.onclick = () => { this.joinSlot = sv.slot; newSlot(); this.create(); };
+    }
+    const bk = h('button', '', '← Back', menu);
+    bk.onclick = back;
+    h('div', 'foot', 'Being born into a saved clan keeps every cat in it — they will still be there, and your old cat lives on as a clanmate.', s);
   }
 
   confirm(title: string, text: string, yes: () => void) {
@@ -216,6 +236,7 @@ export class Menus {
       if (!spec.name.trim()) { ni.focus(); return; }
       spec.name = spec.name.trim().charAt(0).toUpperCase() + spec.name.trim().slice(1);
       this.clear();
+      spec.joinSlot = this.joinSlot;
       g.newGame(spec);
     };
     const back = h('button', 'btn dim', '← Back', form);

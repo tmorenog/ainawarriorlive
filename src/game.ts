@@ -34,7 +34,7 @@ import { AudioEngine, SoundEnv } from './audio/audio';
 import { UI } from './ui/ui';
 import { Menus, NewGameSpec, Settings, loadSettings } from './ui/menus';
 import { TouchControls, isTouchDevice } from './ui/touch';
-import { hasSave, readSave, writeSave } from './save/save';
+import { SaveData, hasSave, readSave, readSaveSlot, writeSave } from './save/save';
 import { Appearance, Cat, LifeStage, displayName, LESSONS } from './cats/types';
 import { createCat } from './cats/generate';
 import { CatModel } from './cats/model';
@@ -237,6 +237,8 @@ export class Game {
     this.state = 'loading';
     this.menus.loading('You open your eyes for the first time…');
     this.clearPreview();
+    const join = spec.joinSlot !== undefined ? readSaveSlot(spec.joinSlot) : null;
+    if (join) { setTimeout(() => this.loadData(join, spec), 60); return; }
     setTimeout(() => {
       this.resetSystems();
       this.time.totalHours = 7;
@@ -266,7 +268,12 @@ export class Game {
     if (!d) { this.menus.create(); return; }
     this.state = 'loading';
     this.menus.loading('Returning to the forest…');
-    setTimeout(() => {
+    setTimeout(() => this.loadData(d), 60);
+  }
+
+  /** Load a saved clan; `bornInto` makes the player a brand-new kit in it instead of the saved cat. */
+  private loadData(d: SaveData, bornInto?: NewGameSpec) {
+    {
       this.resetSystems();
       this.time.totalHours = d.totalHours;
       this.lastHour = Math.floor(d.totalHours);
@@ -303,9 +310,48 @@ export class Game {
       this.player.herbs = d.player.herbs ?? { silverleaf: 0, sunpetal: 0, bitterroot: 0 };
       this.player.moss = d.player.moss ?? 0;
       this.player.updateCarryVisual();
+      if (bornInto) { this.bornIntoClan(bornInto); return; }
       this.startPlaying();
       this.ui.toast(`Welcome back, ${displayName(c.player)}.`, 'good');
-    }, 60);
+    }
+  }
+
+  /** The player arrives as a new kit in an existing clan; every cat already in it stays. */
+  private bornIntoClan(spec: NewGameSpec) {
+    const c = this.clan;
+    const old = c.player;
+    if (old) old.isPlayer = false;
+    const home = c.home();
+    const mother = home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.mate && !x.isPlayer && x.role !== 'medicine')
+      ?? home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.role !== 'medicine')
+      ?? home.find((x) => x.stage !== 'kit');
+    const father = mother ? c.get(mother.mate) : null;
+    const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: this.time.day, usedNames: c.usedNames, rng: new RNG((Math.random() * 1e9) | 0) });
+    me.bornDay = this.time.day - 3;
+    me.isPlayer = true;
+    c.cats[me.id] = me;
+    c.usedNames.add(me.given);
+    if (mother) {
+      me.parents = father ? [mother.id, father.id] : [mother.id];
+      mother.kits.push(me.id);
+      if (father) father.kits.push(me.id);
+      c.rel(me, mother).opinion = 80; c.rel(mother, me).opinion = 90;
+      if (father) { c.rel(father, me).opinion = 80; c.rel(me, father).opinion = 70; }
+    }
+    c.playerId = me.id;
+    c.generation = 1;
+    c.lineage = [];
+    if (old && old.alive) this.npcs.syncRoster();
+    this.npcs.removeAgent(me.id);
+    const nursery = this.camp.dens.nursery;
+    this.objectives.list = [];
+    this.player.prey = [];
+    this.player.attach();
+    this.player.placeAt(nursery.x + 1.2, nursery.z - 1.2, Math.atan2(nursery.x, nursery.z) + Math.PI);
+    c.log(`${displayName(me)} was born in the nursery.`, 'birth');
+    this.startPlaying();
+    this.ui.showBanner(`You are ${displayName(me)}, a new kit of ${clanTitle(this.territories.homeName)}.${mother ? ` Your mother ${displayName(mother)} watches over you.` : ''}${old ? ` ${displayName(old)} ${old.alive ? 'is one of your clanmates now' : 'is remembered here'}.` : ''} Every cat of the clan is still here.`, 12);
+    this.save();
   }
 
   private resetSystems() {
