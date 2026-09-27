@@ -112,6 +112,8 @@ export interface Cat {
   confinedUntil: number | null;
   deeds: number; // notable good deeds (for leadership)
   mentored: number; // number of apprentices trained
+  ceremonyDelay?: number; // extra moons before becoming an apprentice (kit punishment)
+  kitOffenses?: number;
 }
 
 export function displayName(c: Cat): string {

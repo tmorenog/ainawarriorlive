@@ -64,7 +64,8 @@ export class ClanSim {
   unpopularDays = 0;
   recentInfractions = 0;
   lastRecent = '';
-  borderSafety = 60; // 0..100 how well-marked the borders are
+  borderSafety = 60;
+  kitPunishPending = false; // 0..100 how well-marked the borders are
   usedNames = new Set<string>();
 
   constructor(private game: Game) {}
@@ -403,7 +404,7 @@ export class ClanSim {
 
   checkStage(c: Cat) {
     const want = stageForAge(c.age);
-    if (c.stage === 'kit' && c.age >= 6) this.apprenticeCeremony(c);
+    if (c.stage === 'kit' && c.age >= 6 + (c.ceremonyDelay ?? 0)) this.apprenticeCeremony(c);
     else if (c.stage === 'apprentice' && c.age >= 12) {
       const ready = LESSONS.every((l) => c.training[l] >= 1) && LESSONS.reduce((s, l) => s + c.training[l], 0) >= 9;
       if (c.isPlayer) {
@@ -428,8 +429,36 @@ export class ClanSim {
     } else if (c.role === 'leader' && c.age > 100 && !c.isPlayer && simRng.chance(0.2)) this.retire(c);
   }
 
-  apprenticeCeremony(c: Cat, mentorOverride?: Cat) {
+  private pathAsked = false;
+
+  apprenticeCeremony(c: Cat, mentorOverride?: Cat, path?: 'warrior' | 'medicine') {
     const med = this.medicine;
+    // the player chooses their path: warrior or medicine cat
+    if (c.isPlayer && !path && !mentorOverride) {
+      if (this.pathAsked) return;
+      this.pathAsked = true;
+      const medName = med && med.alive ? displayName(med) : null;
+      this.game.ui.choice('Your apprentice ceremony', `You have reached six moons. The clan gathers beneath the High Rock. Which path calls to you, ${c.given}kit?`, [
+        { label: 'The warrior\'s path', hint: 'hunt, fight, patrol, lead', action: () => { this.pathAsked = false; this.apprenticeCeremony(c, undefined, 'warrior'); } },
+        { label: 'The medicine cat\'s path', hint: medName ? `learn herbs and healing from ${medName}` : 'no medicine cat to teach you!', action: () => { this.pathAsked = false; this.apprenticeCeremony(c, undefined, medName ? 'medicine' : 'warrior'); } },
+      ]);
+      return;
+    }
+    if (c.isPlayer && path === 'medicine' && med && med.alive && !med.isPlayer) {
+      c.stage = 'apprentice';
+      c.role = 'medicineApprentice';
+      c.mentor = med.id;
+      med.apprentice = c.id;
+      this.adjust(c, med, 10);
+      this.adjust(med, c, 10);
+      const leaderName = this.leader ? displayName(this.leader) : 'The clan';
+      this.game.ceremony(`${leaderName}: "${displayName(c)}, you have chosen the path of a medicine cat. ${displayName(med)} will teach you the ways of herbs and healing."`, [c.id, med.id]);
+      this.log(`${displayName(c)} became ${displayName(med)}'s healer apprentice.`, 'ceremony');
+      this.remember(c, `I chose the path of a medicine cat. ${displayName(med)} is my mentor.`, 7);
+      c.reputation += 3;
+      this.game.onPlayerStageChange();
+      return;
+    }
     const medApprentice = !c.isPlayer && med && !med.apprentice && (c.pers.kindness > 0.6 || c.traits.includes('curious')) && simRng.chance(0.5);
     c.stage = 'apprentice';
     if (medApprentice && med) {
@@ -455,8 +484,8 @@ export class ClanSim {
     }
     const leaderName = leader ? displayName(leader) : 'The clan';
     const text = mentor
-      ? `${leaderName}: "${c.given}, from this moon you are an apprentice. ${displayName(mentor)} will be your mentor."`
-      : `${leaderName}: "${c.given}, from this moon you are an apprentice."`;
+      ? `${leaderName}: "${displayName(c)}, from this moon you are an apprentice. ${displayName(mentor)} will be your mentor."`
+      : `${leaderName}: "${displayName(c)}, from this moon you are an apprentice."`;
     this.game.ceremony(text, [c.id, mentor?.id ?? '']);
     this.log(`${c.given} became an apprentice${mentor ? `, mentored by ${displayName(mentor)}` : ''}.`, 'ceremony');
     if (c.isPlayer) {
@@ -493,7 +522,8 @@ export class ClanSim {
     c.stage = 'warrior';
     if (c.role === 'medicineApprentice') {
       c.stage = 'warrior';
-      if (!this.medicine || !this.medicine.alive) { c.role = 'medicine'; this.medicineId = c.id; }
+      c.role = 'medicine';
+      if (!this.medicine || !this.medicine.alive) this.medicineId = c.id;
     }
     c.epithet = epithet ?? makeEpithet(simRng, c);
     if (mentor) {
@@ -506,7 +536,9 @@ export class ClanSim {
     c.mentor = null;
     c.joinedDay = this.game.time.day;
     const leader = this.leader;
-    const text = `${leader ? displayName(leader) : 'The clan'}: "${c.given}, you have earned your warrior name. From this moon you will be known as ${displayName(c)}!"`;
+    const text = c.role === 'medicine' && mentor?.role === 'medicine'
+      ? `${displayName(mentor)}: "${c.given}, you have learned the ways of a medicine cat. From this moon you will be known as ${displayName(c)}!"`
+      : `${leader ? displayName(leader) : 'The clan'}: "${c.given}, you have earned your warrior name. From this moon you will be known as ${displayName(c)}!"`;
     this.game.ceremony(text, [c.id]);
     this.log(`${c.given} earned the warrior name ${displayName(c)}.`, 'ceremony');
     if (c.isPlayer) {
@@ -600,7 +632,7 @@ export class ClanSim {
       if (this.deputyId === c.id) { this.deputyId = null; }
       if (this.medicineId === c.id) {
         this.medicineId = null;
-        const ap = this.home().find((x) => x.role === 'medicineApprentice');
+        const ap = this.home().find((x) => x.role === 'medicine' && x.alive) ?? this.home().find((x) => x.role === 'medicineApprentice');
         if (ap) { ap.role = 'medicine'; this.medicineId = ap.id; this.log(`${displayName(ap)} is now the clan's healer.`, 'politics'); }
       }
       if (this.leaderId === c.id) this.leaderSteppedDown(c, 'died');

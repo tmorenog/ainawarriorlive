@@ -49,6 +49,8 @@ export class UI {
   private modalEl: HTMLElement | null = null;
   private bubblePool: HTMLElement[] = [];
   private platePool: HTMLElement[] = [];
+  private placePool: HTMLElement[] = [];
+  private placeLayer!: HTMLElement;
   private hudT = 0;
   panels: Panels;
   showFps = false;
@@ -69,6 +71,7 @@ export class UI {
     this.prompt = h('div', 'hud-prompt hidden', '', this.hud);
     this.crosshair = h('div', 'crosshair', '', this.hud);
     this.pounce = h('div', 'pounce-meter hidden', '', this.hud);
+    this.placeLayer = h('div', '', '', this.hud);
     this.bubbles = h('div', '', '', this.hud);
     this.toasts = h('div', 'toasts', '', this.root);
     this.hurt = h('div', 'hurt', '', this.root);
@@ -286,6 +289,7 @@ export class UI {
     if (g.state !== 'playing') return;
     this.giveUp.classList.toggle('hidden', !g.combat.playerInCombat);
     this.updateBubbles();
+    this.updatePlaceLabels();
     this.updatePrompt();
     this.updateCompass();
     const p = g.player;
@@ -399,6 +403,38 @@ export class UI {
       html += `<span class="${it.cls}" style="left:${x}px${it.label === '◆' ? ';color:#e8b865' : ''}">${it.label}</span>`;
     }
     this.compass.innerHTML = html;
+  }
+
+  /** Floating signs over every den and camp landmark. */
+  private updatePlaceLabels() {
+    const g = this.game;
+    const camp = g.camp;
+    const pp = g.player.pos;
+    const W = window.innerWidth, H = window.innerHeight;
+    let i = 0;
+    if (Math.hypot(pp.x, pp.z) < 45) {
+      const places: { label: string; icon: string; x: number; z: number; y: number }[] = [];
+      const icons: Record<string, string> = { leader: '👑', warriors: '⚔️', apprentices: '🐾', nursery: '🍼', elders: '🌙', medicine: '🌿' };
+      for (const d of Object.values(camp.dens)) places.push({ label: d.label, icon: icons[d.name] ?? '🏠', x: d.x, z: d.z, y: g.groundAt(d.x, d.z) + d.radius * 0.85 + 0.55 });
+      places.push({ label: 'High Rock', icon: '🪨', x: camp.highRock.x, z: camp.highRock.z, y: camp.highRock.top + 0.6 });
+      places.push({ label: `Fresh-kill pile (${Math.floor(g.clan.food)})`, icon: '🍖', x: camp.pile.x, z: camp.pile.z, y: g.groundAt(camp.pile.x, camp.pile.z) + 0.6 });
+      places.push({ label: 'Camp entrance', icon: '🌲', x: camp.entrance.x, z: camp.entrance.z - 2, y: g.groundAt(camp.entrance.x, camp.entrance.z - 2) + 1.2 });
+      for (const p of places) {
+        const d = Math.hypot(p.x - pp.x, p.z - pp.z);
+        if (d > 32) continue;
+        this.v.set(p.x, p.y, p.z).project(g.camera);
+        if (this.v.z > 1 || Math.abs(this.v.x) > 1.05 || Math.abs(this.v.y) > 1.05) continue;
+        const el = this.placePool[i] ?? (this.placePool[i] = h('div', 'place-label', '', this.placeLayer));
+        el.style.display = '';
+        const html = `${p.icon} ${esc(p.label)}`;
+        if (el.innerHTML !== html) el.innerHTML = html;
+        el.style.left = `${(this.v.x * 0.5 + 0.5) * W}px`;
+        el.style.top = `${(-this.v.y * 0.5 + 0.5) * H}px`;
+        el.style.opacity = String(clamp(1.25 - d / 32, 0.35, 1));
+        i++;
+      }
+    }
+    for (let k = i; k < this.placePool.length; k++) this.placePool[k].style.display = 'none';
   }
 
   private updateBubbles() {

@@ -56,8 +56,13 @@ export class Objectives {
     if (giver) game.clan.adjust(giver, p, o.reward?.opinion ?? 6, o.order ? { text: `${p.given} did as I asked.`, weight: 1 } : undefined);
     game.ui.toast(`✔ ${o.title}`, 'good');
     game.audio.success();
-    if (o.kind === 'lesson' || o.kind === 'mentor') game.training.lessonComplete(o);
-    if (o.kind === 'assessment') game.training.assessmentComplete();
+    if (o.data?.medLesson) game.training.medLessonComplete(o);
+    else if (o.kind === 'lesson' || o.kind === 'mentor') game.training.lessonComplete(o);
+    if (o.kind === 'assessment' || o.data?.medAssess) game.training.assessmentComplete();
+    if (o.id === 'punish-ticks') {
+      for (const c of game.clan.home()) if (c.stage === 'elder') game.clan.adjust(c, p, 3);
+      game.ui.toast('Mouse bile stinks! But the elders purr with relief.', 'good');
+    }
   }
 
   fail(id: string, silent = false) {

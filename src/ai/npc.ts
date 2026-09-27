@@ -18,7 +18,7 @@ export type Activity =
   | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'watch' | 'leaving' | 'shield';
 
 export interface ApproachIntent {
-  kind: 'training' | 'play' | 'order' | 'greet' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit';
+  kind: 'training' | 'play' | 'order' | 'greet' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
   text: string;
   data?: any;
 }
@@ -769,6 +769,21 @@ export class NpcManager {
       a.say('Hey! You there!', 2);
       return;
     }
+  }
+
+  /** The leader (or deputy) comes to deal with a kit who was caught outside camp. */
+  summonForKitPunishment() {
+    for (const a of this.agents.values()) if (a.approach?.kind === 'punishKit' && a.activity === 'approach') return;
+    const clan = this.game.clan;
+    const judge = [clan.leader, clan.deputy].find((c) => c && c.alive && !c.isPlayer);
+    const a = judge ? this.agents.get(judge.id) : undefined;
+    if (!a || a.activity === 'fight') return;
+    if (a.pos.distanceTo(this.game.player.pos) > 55) return;
+    this.endConvo(a);
+    a.patrol = null;
+    a.activity = 'approach';
+    a.approach = { kind: 'punishKit', text: '' };
+    a.say(`${clan.player.given}kit! Come here. Now.`, 3);
   }
 
   shielder(): NpcAgent | null {

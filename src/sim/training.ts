@@ -29,7 +29,7 @@ export class TrainingSystem {
     const g = this.game;
     const p = g.clan.player;
     const h = g.time.hour;
-    return !!p && p.stage === 'apprentice' && p.role !== 'medicineApprentice' && !g.objectives.busy() && g.time.totalHours - this.lastLessonHour > 7 && h > 6.5 && h < 19;
+    return !!p && p.stage === 'apprentice' && !g.objectives.busy() && g.time.totalHours - this.lastLessonHour > 7 && h > 6.5 && h < 19;
   }
 
   nextLesson(c: Cat): Lesson {
@@ -40,6 +40,7 @@ export class TrainingSystem {
   offerLesson(mentor: NpcAgent) {
     const g = this.game;
     const p = g.clan.player;
+    if (p.role === 'medicineApprentice') { this.offerMedLesson(mentor); return; }
     const lesson = this.nextLesson(p);
     const intro: Record<Lesson, string> = {
       hunting: 'Today you hunt. Crouch low, creep close, then gather your strength and pounce. I\'ll be watching.',
@@ -259,6 +260,14 @@ export class TrainingSystem {
     const p = g.clan.player;
     if (g.objectives.has('assessment') || p.stage !== 'apprentice') return;
     const mentor = g.clan.get(p.mentor);
+    if (p.role === 'medicineApprentice') {
+      g.objectives.add({
+        id: 'assessment', kind: 'herbs', title: 'Medicine cat assessment', need: 3, giver: mentor?.id, data: { medAssess: true },
+        desc: `${mentor ? displayName(mentor) : 'Your mentor'} says you are ready. Gather three healing herbs on your own and bring them to the medicine den to earn your full name.`,
+        reward: { rep: 5 },
+      });
+      return;
+    }
     g.objectives.add({
       id: 'assessment', kind: 'assessment', title: 'Warrior assessment', need: 2, giver: mentor?.id,
       desc: `${mentor ? displayName(mentor) : 'Your mentor'} says you are ready. Hunt alone and bring two pieces of prey to the fresh-kill pile to earn your warrior name.`,
@@ -285,6 +294,99 @@ export class TrainingSystem {
         g.clan.warriorCeremony(p, epithet);
       },
     );
+  }
+
+  // ------------------------------------------------------------ medicine cat path
+  // Medicine lessons count toward the same training record (two skills each).
+  static MED_LESSONS: Record<'gather' | 'treat' | 'herblore', [Lesson, Lesson]> = {
+    gather: ['hunting', 'tracking'],
+    treat: ['fighting', 'exploring'],
+    herblore: ['rules', 'territory'],
+  };
+
+  offerMedLesson(mentor: NpcAgent) {
+    const g = this.game;
+    const p = g.clan.player;
+    const kinds = Object.keys(TrainingSystem.MED_LESSONS) as ('gather' | 'treat' | 'herblore')[];
+    const score = (k: typeof kinds[number]) => TrainingSystem.MED_LESSONS[k].reduce((s, l) => s + p.training[l], 0) + simRng.range(0, 0.5);
+    const lesson = kinds.sort((a, b) => score(a) - score(b))[0];
+    const intro = {
+      gather: 'A medicine cat must know where every herb grows. Find two healing herbs and bring them back to our den. Use your nose — sniff for them.',
+      treat: 'Today you treat a clanmate yourself. Find a cat who is hurt or sick and tend to them. I\'ll be watching your paws.',
+      herblore: 'Sit. Let\'s see how well you know your herbs.',
+    }[lesson];
+    g.ui.dialog({
+      speaker: mentor.cat,
+      text: intro,
+      options: [
+        { label: 'Begin the lesson', action: () => this.startMedLesson(lesson, mentor) },
+        { label: 'Not now (disobey your mentor)', action: () => {
+          g.clan.adjust(mentor.cat, p, -6, { text: `${p.given} refused to learn from me.`, weight: -2 });
+          g.clan.infraction('obeyOrders', [mentor.id], 'refused a lesson');
+          this.lastLessonHour = g.time.totalHours - 4;
+          mentor.activity = 'idle';
+        } },
+      ],
+    });
+  }
+
+  startMedLesson(lesson: 'gather' | 'treat' | 'herblore', mentor: NpcAgent) {
+    const g = this.game;
+    const base = { id: 'lesson', giver: mentor.id, order: true, deadline: g.time.totalHours + 12, reward: { rep: 2, opinion: 6 }, data: { medLesson: lesson, mentor: mentor.id } };
+    mentor.activity = 'idle';
+    if (lesson === 'gather') {
+      g.objectives.add({ ...base, kind: 'herbs', title: 'Medicine lesson: gather herbs', desc: 'Find two healing herbs (sniff with Q) and bring them to the medicine den.', need: 2 });
+    } else if (lesson === 'treat') {
+      let patient = g.clan.home(false).find((c) => (c.injury > 10 || c.sick > 10) && c.id !== mentor.id);
+      if (!patient) {
+        patient = simRng.pick(g.clan.home(false).filter((c) => c.stage === 'warrior' && c.id !== mentor.id));
+        if (patient) {
+          patient.injury = Math.max(patient.injury, 30);
+          g.npcs.agents.get(patient.id)?.say('Ow! I\'ve got a thorn stuck in my pad.', 4);
+        }
+      }
+      g.objectives.add({ ...base, kind: 'free', title: 'Medicine lesson: treat a clanmate', desc: `Talk to a hurt or sick cat and choose "Treat". ${patient ? displayName(patient) + ' needs help.' : ''}`, need: 1, targetId: patient?.id });
+    } else {
+      const QS: { q: string; a: string[]; correct: number }[] = [
+        { q: 'Which herb do we use for wounds?', a: ['Silverleaf', 'Deathberries', 'Sunpetal'], correct: 0 },
+        { q: 'A cat has a fever and a cough. What do you give them?', a: ['Bitterroot', 'Sunpetal', 'Moss'], correct: 1 },
+        { q: 'A kit has eaten deathberries! What do you do?', a: ['Let them sleep it off', 'Make them eat yarrow so they retch it up', 'Give them more berries'], correct: 1 },
+        { q: 'Which herb fights sickness spreading in camp?', a: ['Bitterroot', 'Silverleaf', 'Fern'], correct: 0 },
+        { q: 'What do we press on a bleeding wound?', a: ['Mud', 'Cobweb', 'Feathers'], correct: 1 },
+        { q: 'Where do deathberries grow?', a: ['On dark bushes in the forest', 'In the river', 'Only in Twoleg gardens'], correct: 0 },
+      ];
+      const qs = simRng.shuffle(QS.slice()).slice(0, 3);
+      let score = 0, i = 0;
+      const ask = () => {
+        if (i >= qs.length) {
+          g.ui.toast(`You answered ${score} of 3 correctly.`, score >= 2 ? 'good' : 'info');
+          if (score >= 2) { g.objectives.add({ ...base, kind: 'free', title: 'Medicine lesson: herb lore', desc: '', need: 1 }); g.objectives.complete('lesson'); }
+          else { mentor.say('Study your herbs and we\'ll try again.', 3); this.lastLessonHour = g.time.totalHours; }
+          return;
+        }
+        const q = qs[i++];
+        g.ui.dialog({ speaker: mentor.cat, text: q.q, options: q.a.map((a, idx) => ({ label: a, action: () => {
+          if (idx === q.correct) { score++; mentor.say('Good.', 1.5); } else mentor.say('No — think again next time.', 2);
+          setTimeout(ask, 250);
+        } })) });
+      };
+      ask();
+    }
+  }
+
+  medLessonComplete(o: Objective) {
+    const g = this.game;
+    const p = g.clan.player;
+    const lesson = o.data.medLesson as 'gather' | 'treat' | 'herblore';
+    this.lastLessonHour = g.time.totalHours;
+    for (const l of TrainingSystem.MED_LESSONS[lesson]) p.training[l] = Math.min(3, p.training[l] + 1);
+    p.skills.healing = Math.min(99, p.skills.healing + 6);
+    const m = g.npcs.agents.get(o.data.mentor);
+    m?.say(simRng.pick(['Well done. You have a healer\'s paws.', 'Good. StarClan guides you.', 'You\'re learning quickly.']), 3);
+    const label = { gather: 'Gathering herbs', treat: 'Treating the sick', herblore: 'Herb lore' }[lesson];
+    g.ui.toast(`Medicine training: ${label} (${LESSONS.reduce((s, l) => s + p.training[l], 0)}/18)`, 'good');
+    g.clan.log(`Completed a medicine lesson: ${label.toLowerCase()}.`, 'memory');
+    if (this.readyForWarrior(p) && p.age >= 12) this.offerAssessment();
   }
 
   // ------------------------------------------------------------ mentoring

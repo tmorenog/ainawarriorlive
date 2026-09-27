@@ -451,6 +451,7 @@ export class Player implements Fighter {
       // clanmates who spot a wandering kit either scold them or (if friends) hide them
       if (!this.kitOutFlag) game.npcs.kitSpotted();
     } else if (inCamp) this.kitOutFlag = false;
+    if (game.clan.kitPunishPending && cat.stage === 'kit' && !this.busy) game.npcs.summonForKitPunishment();
     // confinement
     if (cat.confinedUntil !== null && cat.confinedUntil > game.time.day && !inCamp) {
       if (!this.confineFlag) { this.confineFlag = true; game.clan.infraction('confinement', game.npcs.witnesses(x, z, 30)); }

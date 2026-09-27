@@ -524,10 +524,7 @@ export class Game {
       this.ui.toast('As Warden you answer to no one — but the clan is watching.', 'info');
       return;
     }
-    if (rule === 'kitLeaveCamp' && n <= 2) {
-      this.ui.toast(`${eName}: "Kits don't leave camp! Get back inside before a fox finds you!"`, 'danger');
-      return;
-    }
+    if (rule === 'kitLeaveCamp') return; // the leader comes to deal with kits in person
     if (n <= 1) {
       this.ui.toast(`${eName}: "${p.given}, I know what you did. Don't let it happen again."`, 'danger');
     } else if (n === 2) {

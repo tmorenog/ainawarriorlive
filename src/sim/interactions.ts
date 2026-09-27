@@ -69,8 +69,8 @@ export class Interactions {
     const den = g.camp.denAt(p.x, p.z);
     if (den && !pc.exiled) {
       const med = g.clan.medicine;
-      if (den.name === 'medicine' && med && !med.isPlayer && (pl.poison > 0 || pc.sick > 25 || pc.injury > 25)) {
-        this.current = { text: `Ask ${displayName(med)} for help`, action: () => this.seekHealing() };
+      if (den.name === 'medicine' && med && !med.isPlayer && (pl.poison > 0 || pc.sick > 10 || pc.injury > 10 || pc.health < pc.maxHealth - 10)) {
+        this.current = { text: `Ask ${displayName(med)} for help`, action: () => this.seekHealing(med) };
         return;
       }
       if (den.name === 'medicine' && (pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot) > 0) { this.current = { text: 'Leave your herbs with the healer', action: () => this.deliverHerbs() }; return; }
@@ -97,8 +97,10 @@ export class Interactions {
     const pc = clan.player;
     const c = a.cat;
     if (a.activity === 'sleep') {
-      g.ui.toast(`${a.name} is fast asleep. Best not to wake ${pronoun(c, 'obj')}.`, 'info');
-      if (simRng.chance(0.3)) { clan.adjust(c, pc, -2); a.activity = 'idle'; a.say('Mmf... what? Go away...', 2); }
+      g.ui.dialog({ speaker: c, text: `${a.name} is curled up fast asleep, snoring softly.`, options: [
+        { label: `Nudge ${pronoun(c, 'obj')} awake`, action: () => this.wakeCat(a) },
+        { label: 'Let them sleep', action: () => {} },
+      ] });
       return;
     }
     g.npcs.endConvo(a);
@@ -191,6 +193,14 @@ export class Interactions {
       clan.adjust(c, pc, likes ? 4 : -5);
       g.ui.dialog({ speaker: c, text: likes ? 'Ha! You\'ll pay for that one!' : simRng.pick(['Mouse-brain.', 'Is that supposed to be funny?', 'Grow up.']), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
     } });
+    // medicine: be treated, or treat others
+    const hurt = (x: Cat) => x.sick > 10 || x.injury > 10 || x.health < x.maxHealth - 10;
+    if (c.role === 'medicine' && (g.player.poison > 0 || hurt(pc))) {
+      opts.push({ label: 'Ask to be treated', action: () => this.seekHealing(c) });
+    }
+    if ((pc.role === 'medicine' || pc.role === 'medicineApprentice') && hurt(c) && c.id !== pc.id) {
+      opts.push({ label: `Treat ${pronoun(c, 'poss')} ${c.sick > c.injury ? 'sickness' : 'wounds'}`, action: () => this.treatCat(a, done) });
+    }
     // mates
     const pr = clan.rel(c, pc);
     if (pc.stage === 'warrior' && c.stage === 'warrior' && !pc.mate && !c.mate && !isFamily(c, pc) && op > 45) {
@@ -254,6 +264,70 @@ export class Interactions {
     return simRng.pick(lines);
   }
 
+  /** Waking a sleeping cat: grumpy serious cats may lash out. */
+  wakeCat(a: NpcAgent) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    const grumpy = c.traits.includes('serious') || c.traits.includes('aggressive') || c.traits.includes('suspicious');
+    const lashChance = c.traits.includes('aggressive') ? 0.65 : c.traits.includes('serious') ? 0.5 : grumpy ? 0.3 : 0;
+    a.activity = 'idle';
+    a.actTimer = 0;
+    a.forcedPose = null;
+    a.heading = Math.atan2(g.player.pos.z - a.pos.z, g.player.pos.x - a.pos.x);
+    if (simRng.chance(lashChance)) {
+      // a sleepy swipe: stings, but never serious
+      a.mood = 'angry';
+      a.model.pose = 'fight';
+      g.audio.hiss();
+      const dmg = pc.stage === 'kit' ? 6 : 9;
+      pc.health = Math.max(1, pc.health - dmg);
+      g.player.onHit(dmg, a);
+      g.combat.puff(g.player.pos, 6, 0.12);
+      clan.adjust(c, pc, -8, { text: `${pc.given} woke me from a good sleep.`, weight: -2 });
+      a.say(simRng.pick(['HOW DARE YOU wake me?!', '*HISS* Get away from me!', 'Mouse-brained furball! I was SLEEPING!']), 3.5);
+      g.ui.toast(`${a.name} lashes out with a sleepy swipe of claws!`, 'danger');
+      setTimeout(() => { a.mood = 'neutral'; a.activity = 'sleep'; a.actTimer = 40; }, 3500);
+    } else {
+      a.mood = 'neutral';
+      clan.adjust(c, pc, grumpy ? -3 : -1);
+      a.say(simRng.pick(['What……?', 'Mmf… what? Is it dawn already?', '…huh? Whassat? Oh. It\'s you.', 'Wha—? Is there a badger?!', 'Five more heartbeats… zzz…']), 3.5);
+      g.ui.toast(`${a.name} blinks at you sleepily.`, 'info');
+      setTimeout(() => { if (a.activity === 'idle' && g.time.isNight) { a.activity = 'sleep'; a.actTimer = 40; } }, 8000);
+    }
+  }
+
+  /** The leader deals with a kit who snuck out of camp. */
+  punishKit(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    clan.kitPunishPending = false;
+    if (pc.stage !== 'kit') { done(); return; }
+    pc.kitOffenses = (pc.kitOffenses ?? 0) + 1;
+    const repeat = pc.kitOffenses > 1;
+    const name = displayName(pc);
+    const leaderName = displayName(a.cat);
+    const text = repeat
+      ? `${name}. Again? You were told to stay in camp. The forest is full of foxes, hawks and Twolegs — you could have been killed! This time your apprentice ceremony will wait an extra moon. And you will pick the ticks off the elders.`
+      : `${name}, I hear you were found outside the camp. The forest is no place for a kit. As punishment you will pick ticks off the elders, and you will stay in camp until tomorrow.`;
+    const punish = (sassy: boolean) => {
+      pc.confinedUntil = g.time.day + 1;
+      if (repeat || sassy) pc.ceremonyDelay = (pc.ceremonyDelay ?? 0) + 1;
+      g.objectives.add({ id: 'punish-ticks', kind: 'visit', title: 'Punishment: pick ticks off the elders', desc: `${leaderName} ordered you to clean the elders' ticks with mouse bile. Go to the elders' den.`, target: { x: g.camp.dens.elders.x, z: g.camp.dens.elders.z }, radius: 3, need: 1, giver: a.id, order: true, deadline: g.time.totalHours + 16, reward: { rep: 2 } });
+      clan.log(`${leaderName} punished ${name} for leaving camp${repeat || sassy ? ' — the apprentice ceremony will be delayed a moon' : ''}.`, 'rule');
+      clan.remember(pc, `${leaderName} punished me for sneaking out of camp.`, -3, a.id);
+      if (repeat || sassy) g.ui.toast('Your apprentice ceremony has been delayed by one moon.', 'danger');
+      g.ui.toast('You are confined to camp until tomorrow.', 'danger');
+      done();
+    };
+    g.ui.dialog({ speaker: a.cat, text, options: [
+      { label: `"I'm sorry, ${leaderName}."`, action: () => { clan.adjust(a.cat, pc, 1); punish(false); } },
+      { label: '"It\'s not fair! I just wanted to explore!"', hint: 'talking back makes it worse', action: () => { clan.adjust(a.cat, pc, -5); a.say('Then you can wait an extra moon to be an apprentice, too.', 4); punish(true); } },
+    ], onClose: () => punish(false) });
+  }
+
   /** A clanmate who isn't your friend finds you outside camp as a kit. */
   scoldKit(a: NpcAgent, done: () => void, text?: string) {
     const g = this.game;
@@ -262,6 +336,7 @@ export class Interactions {
     if (!g.player.kitOutFlag) {
       g.player.kitOutFlag = true;
       clan.infraction('kitLeaveCamp', [a.id]);
+      clan.kitPunishPending = true; // word reaches the leader
     }
     g.ui.dialog({ speaker: a.cat, text: text ?? simRng.pick([`What are you doing out here, ${pc.given}kit? Go back to camp — now!`, 'Kits don\'t leave camp! A fox could snap you up in one bite. Back you go!', 'Does your mother know you\'re out here? Get back to the nursery!']), options: [
       { label: 'Okay… I\'m going', action: () => {
@@ -405,6 +480,9 @@ export class Interactions {
         g.ui.dialog({ speaker: a.cat, text: intent.text, options: [...lessons.map((l) => ({ ...l, action: () => { done(); l.action(); } })), { label: 'Not today', action: () => { clan.adjust(a.cat, pc, -3); done(); } }], onClose: done });
         return;
       }
+      case 'punishKit':
+        this.punishKit(a, done);
+        return;
       case 'scoldKit':
         this.scoldKit(a, done, intent.text);
         return;
@@ -589,15 +667,37 @@ export class Interactions {
     if (pc.health <= 0) g.clan.kill(pc, 'deathberries');
   }
 
-  seekHealing() {
+  /** A player medicine cat (or apprentice) treats a clanmate. */
+  treatCat(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    const pl = g.player;
+    const herb = (['sunpetal', 'bitterroot', 'silverleaf'] as HerbKind[]).find((k) => pl.herbs[k] > 0);
+    if (herb) { pl.herbs[herb]--; pl.updateCarryVisual(); }
+    const skill = 0.6 + pc.skills.healing / 150 + (herb ? 0.4 : 0);
+    c.injury = Math.max(0, c.injury - 30 * skill);
+    c.sick = Math.max(0, c.sick - 25 * skill);
+    c.health = Math.min(c.maxHealth, c.health + 20 * skill);
+    pc.skills.healing = Math.min(99, pc.skills.healing + 2);
+    pc.reputation = clamp(pc.reputation + 1.5, -100, 100);
+    clan.adjust(c, pc, 6, { text: `${pc.given} treated me.`, weight: 2 });
+    g.audio.pick();
+    g.ui.dialog({ speaker: c, text: herb ? `You chew the ${herb} into a poultice and press it on. ${a.name} sighs with relief. "That feels much better. Thank you."` : `You press cobweb and moss where it hurts. "Thank you… that helps a little."`, options: [{ label: 'Rest now', action: done }], onClose: done });
+    const o = g.objectives.get('lesson');
+    if (o?.data?.medLesson === 'treat') g.objectives.complete('lesson');
+  }
+
+  seekHealing(medCat?: Cat) {
     const g = this.game;
     const pc = g.clan.player;
-    const med = g.clan.medicine!;
+    const med = medCat ?? g.clan.medicine!;
     const poisoned = g.player.poison > 0;
     g.player.poison = 0;
     pc.sick = Math.max(0, pc.sick - (poisoned ? 70 : 40));
     pc.injury = Math.max(0, pc.injury - 30);
-    pc.health = Math.min(pc.maxHealth, pc.health + 15);
+    pc.health = Math.min(pc.maxHealth, pc.health + 40);
     g.objectives.complete('poison');
     g.clan.adjust(pc, med, 5);
     g.ui.dialog({ speaker: med, text: poisoned
