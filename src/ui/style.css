@@ -84,6 +84,12 @@ button { font-family: var(--font); }
 .dialog .nm { font-family: var(--serif); font-size: 20px; font-weight: 700; }
 .dialog .rl { font-size: 12px; color: var(--ink-dim); }
 .dialog .txt { font-size: 15px; line-height: 1.45; margin: 4px 0 10px; }
+.said { font-size: 13px; color: var(--accent); font-style: italic; margin: 2px 0 4px; }
+.say-row { display: flex; gap: 6px; margin: 0 0 8px; }
+.say-input { flex: 1; padding: 8px 10px; font-size: 14px; background: rgba(255,255,255,0.08); color: var(--ink); border: 1px solid var(--edge); border-radius: 8px; font-family: var(--font); }
+.say-input:focus { outline: none; border-color: var(--accent); }
+.say-send { margin: 0; }
+.typing { color: var(--ink-dim); font-style: italic; }
 .opts { display: flex; flex-direction: column; gap: 5px; }
 .opt { text-align: left; padding: 7px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: var(--ink); font-size: 14px; cursor: pointer; }
 .opt:hover, .opt:focus { background: rgba(232,184,101,0.18); border-color: var(--accent); outline: none; }

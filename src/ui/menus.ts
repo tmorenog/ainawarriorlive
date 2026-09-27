@@ -19,9 +19,10 @@ export interface Settings {
   invertY: boolean;
   dayMinutes: number;
   showFps: boolean;
+  aiChat: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { quality: 'medium', shadows: true, volume: 0.8, sensitivity: 1, invertY: false, dayMinutes: 7, showFps: false };
+export const DEFAULT_SETTINGS: Settings = { quality: 'medium', shadows: true, volume: 0.8, sensitivity: 1, invertY: false, dayMinutes: 7, showFps: false, aiChat: true };
 
 export function loadSettings(): Settings {
   try {
@@ -266,6 +267,7 @@ export class Menus {
     chips('Shadows', [[true, 'On'], [false, 'Off']], () => st.shadows, (v) => (st.shadows = v as boolean));
     chips('Length of a day', [[4, '4 min'], [7, '7 min'], [12, '12 min'], [20, '20 min']], () => st.dayMinutes, (v) => (st.dayMinutes = v as number));
     chips('Invert mouse Y', [[false, 'No'], [true, 'Yes']], () => st.invertY, (v) => (st.invertY = v as boolean));
+    chips('Cat replies to your own words', [[true, 'Smart (AI when available)'], [false, 'Simple (offline)']], () => st.aiChat, (v) => (st.aiChat = v as boolean));
     chips('Show FPS', [[false, 'No'], [true, 'Yes']], () => st.showFps, (v) => (st.showFps = v as boolean));
     const vr = field('Volume');
     const vi = h('input', '', undefined, vr) as HTMLInputElement;

@@ -22,7 +22,7 @@ export function esc(s: string) {
 }
 
 export interface DialogOpt { label: string; action: () => void; hint?: string; disabled?: boolean }
-export interface DialogSpec { speaker?: Cat; text: string; sub?: string; options: DialogOpt[]; onClose?: () => void }
+export interface DialogSpec { speaker?: Cat; text: string; sub?: string; options: DialogOpt[]; onClose?: () => void; input?: (text: string) => void; said?: string }
 
 export class UI {
   root: HTMLElement;
@@ -92,6 +92,7 @@ export class UI {
   isBusy() { return !!this.dialogEl || !!this.modalEl || this.panels.isOpen || this.game.state !== 'playing'; }
 
   private onKey(e: KeyboardEvent) {
+    if ((e.target as HTMLElement)?.tagName === 'INPUT' && e.code !== 'Escape') return;
     if (this.dialogEl && this.dialogSpec) {
       const n = parseInt(e.key, 10);
       if (n >= 1 && n <= this.dialogSpec.options.length) {
@@ -168,7 +169,30 @@ export class UI {
       const rel = c.id !== pc.id ? relLabel(c.relations[pc.id], isFamily(c, pc), c.mate === pc.id) : '';
       h('div', '', `<div class="nm">${esc(displayName(c))}</div><div class="rl">${esc(spec.sub ?? roleLabel(c))}${rel ? ` · <span style="color:${REL_COLOR[rel]}">${rel}</span>` : ''} · ${c.traits.join(', ')}</div>`, who);
     }
+    if (spec.said) h('div', 'said', `You: “${esc(spec.said)}”`, el);
     h('div', 'txt', esc(spec.text), el);
+    if (spec.input) {
+      const row = h('div', 'say-row', '', el);
+      const inp = h('input', 'say-input', undefined, row) as HTMLInputElement;
+      inp.type = 'text';
+      inp.maxLength = 200;
+      inp.placeholder = 'Say something… (type and press Enter)';
+      const send = h('button', 'btn say-send', 'Say', row);
+      const go = () => {
+        const t = inp.value.trim();
+        if (!t) return;
+        const fn = spec.input!;
+        this.closeDialog(false);
+        fn(t);
+      };
+      send.onclick = go;
+      inp.onkeydown = (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); go(); }
+        if (e.key === 'Escape') { inp.blur(); }
+      };
+      inp.onkeyup = (e) => e.stopPropagation();
+    }
     const opts = h('div', 'opts', '', el);
     spec.options.forEach((o, i) => {
       const b = h('button', 'opt', `<span class="n">${i + 1}</span>${esc(o.label)}${o.hint ? `<span class="h">(${esc(o.hint)})</span>` : ''}`, opts);

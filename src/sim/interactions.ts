@@ -11,6 +11,8 @@ import { HERB_INFO, HerbKind, Interactable } from '../world/chunks';
 import { simRng } from '../core/rng';
 import { clamp, dist2 } from '../core/math';
 import { bearing } from '../player/scent';
+import { localReply, sentiment } from './chatbot';
+import { aiReply, chatHistory } from './aiChat';
 
 export interface Prompt { text: string; action: () => void }
 
@@ -128,7 +130,7 @@ export class Interactions {
     r.familiarity = clamp(r.familiarity + 2, 0, 100);
     const text = greetPlayer(c, pc, op, { night: g.time.isNight, food: clan.food, clanSize: clan.home().length, weather: g.weatherLabel(), recent: clan.lastRecent });
     const opts = this.talkOptions(a, done);
-    g.ui.dialog({ speaker: c, text, options: opts, onClose: done });
+    g.ui.dialog({ speaker: c, text, options: opts, onClose: done, input: (t) => this.freeTalk(a, t, done) });
   }
 
   private talkOptions(a: NpcAgent, done: () => void): { label: string; action: () => void; hint?: string }[] {
@@ -237,9 +239,42 @@ export class Interactions {
     return opts;
   }
 
+  /** The player typed their own words; the cat answers in character. */
+  async freeTalk(a: NpcAgent, text: string, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    a.activity = 'talkPlayer';
+    a.actTimer = 999;
+    g.ui.dialog({ speaker: c, said: text, text: '…', options: [{ label: 'Wait for a reply', action: () => {}, disabled: true }] });
+    const local = localReply(g, c, text);
+    let reply = await aiReply(g, c, text);
+    const usedAI = !!reply;
+    if (!reply) {
+      await new Promise((r) => setTimeout(r, 350 + Math.random() * 350));
+      reply = local.reply;
+    }
+    // relationship effects come from the player's words either way
+    const delta = usedAI ? sentiment(text) : local.opinion;
+    clan.adjust(c, pc, delta, undefined, 3);
+    if (local.romance) clan.rel(c, pc).romance = clamp(clan.rel(c, pc).romance + local.romance, 0, 100);
+    if (delta <= -8) clan.remember(c, `${pc.given} said something hurtful to me.`, -2, pc.id);
+    a.mood = delta < -5 ? 'angry' : delta > 3 ? 'happy' : 'neutral';
+    if (delta < -5) g.audio.hiss();
+    const h = chatHistory(c.id);
+    h.push({ role: 'user', content: text }, { role: 'assistant', content: reply });
+    if (h.length > 12) h.splice(0, h.length - 12);
+    a.say(reply.length > 90 ? reply.slice(0, 88) + '…' : reply, 4);
+    if (!g.ui.isBusy() || document.querySelector('.dialog')) {
+      const opts = c.clan === 'home' ? this.talkOptions(a, done) : [{ label: 'Farewell', action: done }];
+      g.ui.dialog({ speaker: c, said: text, text: reply, options: opts, onClose: done, input: (t) => this.freeTalk(a, t, done) });
+    }
+  }
+
   private talkMenu(a: NpcAgent, done: () => void) {
     const g = this.game;
-    g.ui.dialog({ speaker: a.cat, text: simRng.pick(['Mm?', 'Yes?', 'What else?', '...']), options: this.talkOptions(a, done), onClose: done });
+    g.ui.dialog({ speaker: a.cat, text: simRng.pick(['Mm?', 'Yes?', 'What else?', '...']), options: this.talkOptions(a, done), onClose: done, input: (t) => this.freeTalk(a, t, done) });
   }
 
   private chatLine(c: Cat): string {
@@ -441,7 +476,7 @@ export class Interactions {
       g.ui.dialog({ speaker: c, text: 'Maybe I will. Thank you for the kindness.', options: [{ label: 'Farewell', action: done }], onClose: done });
     } });
     opts.push({ label: 'Leave', action: done });
-    g.ui.dialog({ speaker: c, text, sub: isRival ? `${clanTitle(clanName)}` : 'Loner', options: opts, onClose: done });
+    g.ui.dialog({ speaker: c, text, sub: isRival ? `${clanTitle(clanName)}` : 'Loner', options: opts, onClose: done, input: (t) => this.freeTalk(a, t, done) });
   }
 
   private askReturn(a: NpcAgent, done: () => void) {
