@@ -66,6 +66,8 @@ export class TouchControls {
     this.crouchBtn = h('div', 'tbtn', '⬇<small>crouch</small>', btns);
     this.crouchBtn.addEventListener('touchstart', (e) => { input.virtualDown('KeyC'); setTimeout(() => input.virtualUp('KeyC'), 50); e.preventDefault(); }, { passive: false });
     hold('⤴', 'jump/pounce', 'Space');
+    const dropBtn = h('div', 'tbtn', '⤵<small>drop</small>', btns);
+    dropBtn.addEventListener('touchstart', (e) => { game.interactions.drop(); e.preventDefault(); }, { passive: false });
     this.sprintBtn = h('div', 'tbtn', '💨<small>sprint</small>', btns);
     this.sprintBtn.addEventListener('touchstart', (e) => {
       this.sprint = !this.sprint;

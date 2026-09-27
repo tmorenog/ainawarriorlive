@@ -1,5 +1,6 @@
 // Everything the player can *do* with the world: talk, groom, share prey,
 // court a mate, deliver herbs and moss, sleep, escort cats, give orders.
+import * as THREE from 'three';
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import type { NpcAgent, ApproachIntent } from '../ai/npc';
@@ -21,7 +22,51 @@ export class Interactions {
   private lastSpoke = new Map<string, number>();
   private reminisced = new Set<string>();
   private remindedOf = new Set<string>();
+  /** Prey the player has dropped on the ground; it can be picked up again. */
+  dropped: { kind: PreyKind; mesh: THREE.Mesh; x: number; z: number }[] = [];
   constructor(private game: Game) {}
+
+  /** Put down what you're carrying (onto the pile if you're next to it). */
+  drop() {
+    const g = this.game;
+    const pl = g.player;
+    const pile = g.camp.pile;
+    if (pl.prey.length && dist2(pl.pos.x, pl.pos.z, pile.x, pile.z) < 2.5 && !g.clan.player.exiled) { this.depositPrey(); return; }
+    if (pl.prey.length) {
+      const pr = pl.prey.pop()!;
+      pl.updateCarryVisual();
+      const f = pl.forward();
+      const x = pl.pos.x + f.x * 0.5, z = pl.pos.z + f.z * 0.5;
+      const geo = new THREE.SphereGeometry(0.07 * (pr.slots > 1 ? 1.6 : 1), 10, 8);
+      geo.scale(1.8, 0.8, 0.9);
+      const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: pr.color }));
+      mesh.position.set(x, g.groundAt(x, z) + 0.05, z);
+      mesh.rotation.y = Math.random() * Math.PI;
+      g.scene.add(mesh);
+      this.dropped.push({ kind: pr.kind as PreyKind, mesh, x, z });
+      g.audio.drop();
+      g.ui.toast(`You put down the ${pr.kind}.`, 'info');
+      return;
+    }
+    if (pl.moss > 0 || pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot > 0) {
+      pl.moss = 0;
+      pl.herbs = { silverleaf: 0, sunpetal: 0, bitterroot: 0 };
+      pl.updateCarryVisual();
+      g.ui.toast('You drop what you were carrying.', 'info');
+      return;
+    }
+    g.ui.toast('You aren\'t carrying anything.', 'info');
+  }
+
+  private pickUp(i: number) {
+    const g = this.game;
+    const d = this.dropped[i];
+    if (!g.player.addPrey(d.kind)) { g.ui.toast('Your mouth is full.', 'info'); return; }
+    g.scene.remove(d.mesh);
+    d.mesh.geometry.dispose();
+    (d.mesh.material as THREE.Material).dispose();
+    this.dropped.splice(i, 1);
+  }
 
   /** Compute the best contextual action near the player. */
   update() {
@@ -50,6 +95,9 @@ export class Interactions {
       this.current = { text: `Talk to ${a.name}${a.activity === 'sleep' ? ' (sleeping)' : ''}`, action: () => this.talk(a) };
       return;
     }
+    // prey you put down
+    const di = this.dropped.findIndex((d) => dist2(d.x, d.z, p.x, p.z) < 1.4 * Math.max(0.7, pl.scale));
+    if (di >= 0) { this.current = { text: `Pick up the ${this.dropped[di].kind}`, action: () => this.pickUp(di) }; return; }
     // fresh-kill pile
     const pile = g.camp.pile;
     if (dist2(p.x, p.z, pile.x, pile.z) < 2 && !pc.exiled) {

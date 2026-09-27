@@ -25,6 +25,7 @@ export const CONTROLS_HTML = `
 <b>Give up a fight</b><span>X (or the 🏳 button) — back away and end the fight</span>
 <b>Sniff / track</b><span>Q — reveals scent trails to prey, danger and herbs</span>
 <b>Eat what you carry</b><span>G (breaks the code unless starving or the clan is fed)</span>
+<b>Drop what you carry</b><span>B · ⤵ on touch (onto the pile if you're next to it)</span>
 <b>Camera</b><span>V toggles first / third person</span>
 <b>Journal · Map · Council</b><span>J · M · L</span>
 <b>Menu / pause</b><span>Esc (or P)</span>

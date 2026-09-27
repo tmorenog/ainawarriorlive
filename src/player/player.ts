@@ -257,6 +257,7 @@ export class Player implements Fighter {
       if (input.anyPressed('Mouse2', 'KeyR')) this.attack(true);
       if (input.pressed('KeyQ')) this.sniff();
       if (input.pressed('KeyG')) game.interactions.eatCarried();
+      if (input.pressed('KeyB')) game.interactions.drop();
     }
 
     this.checkT -= dt;
