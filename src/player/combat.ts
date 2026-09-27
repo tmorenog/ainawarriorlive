@@ -20,6 +20,8 @@ export interface Fighter {
   alive: boolean;
   name: string;
   fightTarget?: Fighter | null;
+  /** Ids of the player's friends who have sworn to finish this attacker. */
+  doomedBy?: Set<string>;
 }
 
 interface Puff { pos: THREE.Vector3; vel: THREE.Vector3; life: number; size: number }
@@ -125,6 +127,7 @@ export class CombatSystem {
     if (b.kind === 'player' && !spar) {
       this.game.player.enterCombat();
       this.rally(a, b);
+      this.sendFriends(a);
     }
     if (b.kind === 'cat' && b.faction === 'home' && !spar) this.rally(a, b);
     if (a.kind === 'creature' || a.faction === 'rival') this.game.audio.growl(a.kind === 'creature');
@@ -145,6 +148,40 @@ export class CombatSystem {
         this.game.clan.adjust(this.game.clan.player, ag.cat, 4, { text: `${ag.name} fought at my side.`, weight: 3 });
       }
     }
+  }
+
+  /** Anyone who tries to kill the player answers to the player's friends — no matter what. */
+  sendFriends(enemy: Fighter) {
+    const g = this.game;
+    const pc = g.clan.player;
+    if (!pc || enemy.kind === 'player') return;
+    const friends = [...g.npcs.agents.values()]
+      .filter((ag) => ag.cat.clan === 'home' && ag.cat.alive && ag.cat.stage !== 'kit' && ag.id !== enemy.id && !ag.userSpar
+        && (g.clan.opinion(ag.cat, pc) >= 40 || ag.cat.mate === pc.id))
+      .sort((x, y) => dist2(x.pos.x, x.pos.z, g.player.pos.x, g.player.pos.z) - dist2(y.pos.x, y.pos.z, g.player.pos.x, g.player.pos.z));
+    if (!friends.length) return;
+    let chosen = friends.filter((ag) => dist2(ag.pos.x, ag.pos.z, g.player.pos.x, g.player.pos.z) < 80).slice(0, 2);
+    if (!chosen.length) {
+      // the closest friend was already on your trail and bursts out of the undergrowth
+      const f = friends[0];
+      const ang = Math.atan2(g.player.pos.z - enemy.pos.z, g.player.pos.x - enemy.pos.x) + simRng.range(-0.8, 0.8);
+      const x = g.player.pos.x + Math.cos(ang) * 7, z = g.player.pos.z + Math.sin(ang) * 7;
+      f.pos.set(x, g.groundAt(x, z), z);
+      chosen = [f];
+    }
+    enemy.doomedBy = enemy.doomedBy ?? new Set();
+    for (const f of chosen) {
+      if (enemy.doomedBy.has(f.id)) continue;
+      enemy.doomedBy.add(f.id);
+      if (f.activity === 'sleep') { f.activity = 'idle'; f.forcedPose = null; }
+      if (f.fightTarget && f.fightTarget !== enemy) this.disengage(f);
+      f.say(simRng.pick([`Get AWAY from ${pc.given}!`, `Nobody hurts ${pc.given}!`, `You'll never touch ${pc.given} again!`, `${pc.given}, I'm here!`]), 3);
+      f.moveSpeed = Math.max(f.moveSpeed, 6);
+      this.active.delete(f); // make sure the new target sticks
+      this.engage(f, enemy);
+      g.clan.adjust(pc, f.cat, 6, { text: `${f.name} came to save me when ${enemy.name.toLowerCase()} attacked.`, weight: 5 });
+    }
+    g.ui.toast(`${chosen.map((f) => f.name).join(' and ')} ${chosen.length > 1 ? 'charge' : 'charges'} in to protect you!`, 'good');
   }
 
   disengage(a: Fighter) {
@@ -176,15 +213,18 @@ export class CombatSystem {
     let rel = Math.abs(((toAtt - def.heading + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     // rel ~ 0 => attacker in front; PI => behind
     const posBonus = rel > 2.3 ? 1.5 : rel > 1.2 ? 1.2 : 1;
+    const avenging = !!def.doomedBy?.has(att.id);
     let hitChance = clamp(0.72 + (att.power - def.power) * 0.01 + (posBonus - 1) * 0.3 - def.defense * 0.5, 0.35, 0.95);
     if (def.kind === 'player') hitChance *= 0.75; // fights are forgiving for the player
     if (att.kind === 'player') hitChance = Math.min(0.97, hitChance + 0.15);
+    if (avenging) hitChance = 1;
     if (!simRng.chance(hitChance)) {
       this.game.audio.swipe();
       if (att.kind === 'player') this.game.ui.floatText('Miss', '#ddd');
       return false;
     }
-    const dmg = att.power * simRng.range(0.8, 1.25) * (heavy ? 1.8 : 1) * posBonus * (1 - def.defense);
+    let dmg = att.power * simRng.range(0.8, 1.25) * (heavy ? 1.8 : 1) * posBonus * (1 - def.defense);
+    if (avenging) dmg = Math.max(dmg, def.maxHp * 0.4);
     def.hp = Math.max(0, def.hp - dmg);
     this.puff(def.pos, 6 + Math.floor(dmg / 3), def.kind === 'creature' ? 0.25 : 0.12);
     this.game.audio.hit(heavy);
@@ -212,6 +252,7 @@ export class CombatSystem {
 
   defeat(f: Fighter, by: Fighter) {
     this.disengage(f);
+    if (f.doomedBy?.size && f.kind !== 'player') { this.finish(f, by); return; }
     if (f.kind === 'creature') {
       this.game.creatures.driveOff(f.id, by);
       return;
@@ -253,6 +294,39 @@ export class CombatSystem {
       const d = this.game.camp.dens.medicine;
       ag.bedSpot = d.beds[0];
       ag.setTarget(d.x, d.z);
+    }
+  }
+
+  /** An attacker brought down by the player's friend does not get up again. */
+  private finish(f: Fighter, by: Fighter) {
+    const g = this.game;
+    const saviourId = f.doomedBy!.has(by.id) ? by.id : [...f.doomedBy!][0];
+    const saviour = g.npcs.agents.get(saviourId);
+    const sName = saviour ? saviour.name : by.name;
+    this.puff(f.pos, 18, 0.3);
+    g.audio.hit(true);
+    if (f.kind === 'creature') {
+      const c = g.creatures.get(f.id);
+      if (!c) return;
+      g.events.creatureDrivenOff(c, by);
+      g.creatures.remove(c);
+      g.ui.toast(`The ${c.name.toLowerCase()} falls and does not rise again. ${sName} stands over you, fur bristling.`, 'good');
+      g.clan.log(`${sName} killed a ${c.name.toLowerCase()} that attacked ${g.clan.player.given}.`, 'event');
+    } else {
+      const ag = g.npcs.agents.get(f.id);
+      const cat = ag?.cat ?? g.clan.get(f.id);
+      if (!cat) return;
+      g.ui.toast(`${f.name} falls and does not rise again. ${sName} protected you.`, 'good');
+      g.clan.kill(cat, `a fight with ${sName}, who was protecting ${g.clan.player.given}`);
+    }
+    if (saviour) {
+      saviour.say(simRng.pick(['Are you alright? I\'d never let anything happen to you.', 'It\'s over. You\'re safe now.', 'Nobody hurts my friend.']), 4);
+      saviour.activity = 'idle';
+      saviour.fightTarget = null;
+      const pc = g.clan.player;
+      g.clan.adjust(saviour.cat, pc, 5);
+      g.clan.remember(pc, `${sName} saved my life.`, 8, saviour.id);
+      saviour.cat.deeds++;
     }
   }
 
