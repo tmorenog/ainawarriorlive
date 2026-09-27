@@ -83,7 +83,7 @@ export class Game {
   private windAngle = Math.random() * Math.PI * 2;
   private lastHour = 0;
   private last = performance.now();
-  private autosaveT = 90;
+  private autosaveT = 15;
   private previewModel: CatModel | null = null;
   private sleepUntil: number | null = null;
   private audioT = 0;
@@ -765,7 +765,7 @@ export class Game {
     this.audio.update(dt, this.soundEnv(), this.clock);
     // autosave
     this.autosaveT -= dt;
-    if (this.autosaveT <= 0) { this.autosaveT = 90; this.save(); }
+    if (this.autosaveT <= 0) { this.autosaveT = 15; this.save(); }
     void busy;
   }
 
