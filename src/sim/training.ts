@@ -438,6 +438,22 @@ export class TrainingSystem {
     }
   }
 
+  /** Medicine cats don't hunt to progress: gathering herbs and healing is their training. */
+  medProgress(kind: 'gather' | 'treat' | 'herblore') {
+    const g = this.game;
+    const p = g.clan.player;
+    p.skills.healing = Math.min(99, p.skills.healing + 3);
+    p.reputation = Math.min(100, p.reputation + 1);
+    if (p.role !== 'medicineApprentice' || p.stage !== 'apprentice') return;
+    const [a, b] = TrainingSystem.MED_LESSONS[kind];
+    const l = p.training[a] <= p.training[b] ? a : b;
+    if (p.training[l] >= 3) return;
+    p.training[l] += 1;
+    const label = { gather: 'Gathering herbs', treat: 'Treating the sick', herblore: 'Herb lore' }[kind];
+    g.ui.toast(`Medicine training: ${label} (${LESSONS.reduce((s2, x) => s2 + p.training[x], 0)}/18)`, 'good');
+    if (this.readyForWarrior(p) && p.age >= 12) this.offerAssessment();
+  }
+
   medLessonComplete(o: Objective) {
     const g = this.game;
     const p = g.clan.player;

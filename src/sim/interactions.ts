@@ -363,7 +363,7 @@ export class Interactions {
     if (c.role === 'medicine' && (g.player.poison > 0 || hurt(pc))) {
       opts.push({ label: 'Ask to be treated', action: () => this.seekHealing(c) });
     }
-    if ((pc.role === 'medicine' || pc.role === 'medicineApprentice') && hurt(c) && c.id !== pc.id) {
+    if ((pc.role === 'medicine' || pc.role === 'medicineApprentice') && (hurt(c) || c.stage === 'elder') && c.id !== pc.id) {
       opts.push({ label: `Treat ${pronoun(c, 'poss')} ${c.sick > c.injury ? 'sickness' : 'wounds'}`, action: () => this.treatCat(a, done) });
     }
     // mates
@@ -737,6 +737,15 @@ export class Interactions {
     const pc = clan.player;
     const r = simRng.next();
     const now = g.time.totalHours;
+    const healer = pc.role === 'medicine' || pc.role === 'medicineApprentice';
+    if (healer) {
+      const hurtCats = clan.home().filter((x) => !x.isPlayer && (x.sick > 10 || x.injury > 10));
+      if (hurtCats.length && r < 0.5) {
+        const t = hurtCats[0];
+        return { speech: `${displayName(t)} is hurting. Gather herbs and treat them.`, obj: { id: 'order-herbs', kind: 'herbs' as const, title: `Herbs to treat ${t.given} (2)`, desc: 'Find herbs, bring them to the medicine den, then talk to the sick cat to treat them.', need: 2, giver: giver.id, order: true, deadline: now + 20, reward: { rep: 4 } } };
+      }
+      return { speech: 'Our herb stores are low. Gather three herbs for the medicine den.', obj: { id: 'order-herbs', kind: 'herbs' as const, title: 'Stock the medicine den (3)', desc: 'Find herbs in the territory and bring them to the medicine den.', need: 3, giver: giver.id, order: true, deadline: now + 20, reward: { rep: 4 } } };
+    }
     if (clan.food < clan.home().length * 0.9 && r < 0.5 || pc.stage === 'warrior' && r < 0.35) {
       const n = pc.stage === 'apprentice' ? 1 : 2;
       return { speech: `The pile is low. Bring back ${n} piece${n > 1 ? 's' : ''} of prey.`, obj: { id: 'order-hunt', kind: 'hunt' as const, title: `Hunt for the clan (${n})`, desc: `${displayName(giver)} ordered you to bring ${n} prey to the fresh-kill pile.`, need: n, giver: giver.id, order: true, deadline: now + 14, reward: { rep: 4 } } };
@@ -967,6 +976,7 @@ export class Interactions {
     g.ui.dialog({ speaker: c, text: herb ? `You chew the ${herb} into a poultice and press it on. ${a.name} sighs with relief. "That feels much better. Thank you."` : `You press cobweb and moss where it hurts. "Thank you… that helps a little."`, options: [{ label: 'Rest now', action: done }], onClose: done });
     const o = g.objectives.get('lesson');
     if (o?.data?.medLesson === 'treat') g.objectives.complete('lesson');
+    else g.training.medProgress('treat');
   }
 
   seekHealing(medCat?: Cat) {
@@ -1006,6 +1016,11 @@ export class Interactions {
     }
     pl.herbs = { silverleaf: 0, sunpetal: 0, bitterroot: 0 };
     pl.updateCarryVisual();
+    const pcm = clan.player;
+    if (n > 0 && (pcm.role === 'medicine' || pcm.role === 'medicineApprentice') && !g.objectives.get('lesson')?.data?.medLesson) {
+      g.training.medProgress('gather');
+      if (n >= 2) g.training.medProgress('herblore');
+    }
     const med = clan.medicine;
     if (med) clan.adjust(med, clan.player, 3 + n);
     clan.player.reputation = clamp(clan.player.reputation + n, -100, 100);

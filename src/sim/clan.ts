@@ -892,7 +892,7 @@ export class ClanSim {
       }
       // maybe include the player
       const pl = this.player;
-      if (pl && (pl.stage === 'warrior' || pl.stage === 'apprentice') && !pl.exiled && pl.injury < 40 && simRng.chance(0.55) && !this.game.objectives.busy()) {
+      if (pl && (pl.stage === 'warrior' || pl.stage === 'apprentice') && pl.role !== 'medicine' && pl.role !== 'medicineApprentice' && !pl.exiled && pl.injury < 40 && simRng.chance(0.55) && !this.game.objectives.busy()) {
         const p = plans.find((x) => x.members.length > 0 && (pl.stage !== 'apprentice' || x.members.includes(pl.mentor ?? '')));
         const target = p ?? plans[0];
         if (target && target.members.length) target.members.push(pl.id);
