@@ -59,6 +59,9 @@ export class ClanSim {
   playerId = '';
   generation = 1;
   lineage: string[] = [];
+  /** Herbs stored in the medicine den. */
+  herbStore = { silverleaf: 2, sunpetal: 2, bitterroot: 1 };
+  herbTotal() { return this.herbStore.silverleaf + this.herbStore.sunpetal + this.herbStore.bitterroot; }
   patrols: Patrol[] = [];
   pending: PendingDecision[] = [];
   unpopularDays = 0;

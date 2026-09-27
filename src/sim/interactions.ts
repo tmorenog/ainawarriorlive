@@ -99,6 +99,20 @@ export class Interactions {
     g.ui.dialog({ speaker: c, text: simRng.pick(['Mmm, this is good. Thanks for sharing.', 'Sharing tongues and fresh-kill — this is the best part of the day.', '*purrs, chewing happily*', 'You can have the last bite. No, really!']), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
   }
 
+  takeHerbs() {
+    const g = this.game;
+    const pl = g.player;
+    const st = g.clan.herbStore;
+    let n = 0;
+    for (const k of ['sunpetal', 'silverleaf', 'bitterroot'] as HerbKind[]) {
+      while (st[k] > 0 && pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot < 4) { st[k]--; pl.herbs[k]++; n++; }
+    }
+    pl.updateCarryVisual();
+    g.camp.setHerbCount(g.clan.herbTotal());
+    g.audio.pick();
+    g.ui.toast(n ? `You take ${n} herb${n > 1 ? 's' : ''} in your jaws. Bring them to a sick or hurt cat and talk to them to heal.` : 'Your jaws are already full.', 'info');
+  }
+
   saveBerryCat(a: NpcAgent) {
     const g = this.game;
     const clan = g.clan;
@@ -196,7 +210,10 @@ export class Interactions {
         this.current = { text: `Ask ${displayName(med)} for help`, action: () => this.seekHealing(med) };
         return;
       }
-      if (den.name === 'medicine' && (pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot) > 0) { this.current = { text: 'Leave your herbs with the healer', action: () => this.deliverHerbs() }; return; }
+      const carrying = pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot;
+      const healer = pc.role === 'medicine' || pc.role === 'medicineApprentice';
+      if (den.name === 'medicine' && carrying > 0) { this.current = { text: `Put your herbs in the herb store (${g.clan.herbTotal()} stored)`, action: () => this.deliverHerbs() }; return; }
+      if (den.name === 'medicine' && healer && g.clan.herbTotal() > 0) { this.current = { text: `Take herbs from the store (${g.clan.herbStore.silverleaf} silverleaf · ${g.clan.herbStore.sunpetal} sunpetal · ${g.clan.herbStore.bitterroot} bitterroot)`, action: () => this.takeHerbs() }; return; }
       if ((den.name === 'elders' || den.name === 'nursery') && pl.moss > 0) { this.current = { text: `Line the ${den.label.toLowerCase()} with fresh moss`, action: () => this.deliverMoss(den.name) }; return; }
       if (den.name === g.npcs.denFor(pc) || (den.name === 'warriors' && pc.stage === 'warrior')) {
         this.current = { text: g.time.isNight || g.time.hour > 19 ? 'Sleep until dawn' : 'Take a nap', action: () => g.sleep() };
@@ -994,7 +1011,11 @@ export class Interactions {
     const c = a.cat;
     const pl = g.player;
     const herb = (['sunpetal', 'bitterroot', 'silverleaf'] as HerbKind[]).find((k) => pl.herbs[k] > 0);
-    if (herb) { pl.herbs[herb]--; pl.updateCarryVisual(); }
+    if (!herb) {
+      g.ui.dialog({ speaker: c, text: `You have no herbs with you. Fetch some from the herb store in the medicine den (or gather fresh ones), then bring them to ${a.name}.`, options: [{ label: 'I\'ll be right back', action: done }], onClose: done });
+      return;
+    }
+    pl.herbs[herb]--; pl.updateCarryVisual();
     const skill = 0.6 + pc.skills.healing / 150 + (herb ? 0.4 : 0);
     c.injury = Math.max(0, c.injury - 30 * skill);
     c.sick = Math.max(0, c.sick - 25 * skill);
@@ -1031,6 +1052,20 @@ export class Interactions {
     const pl = g.player;
     const clan = g.clan;
     const n = pl.herbs.silverleaf + pl.herbs.sunpetal + pl.herbs.bitterroot;
+    const pcr = clan.player.role;
+    if (pcr === 'medicine' || pcr === 'medicineApprentice') {
+      for (const k of ['silverleaf', 'sunpetal', 'bitterroot'] as HerbKind[]) clan.herbStore[k] += pl.herbs[k];
+      pl.herbs = { silverleaf: 0, sunpetal: 0, bitterroot: 0 };
+      pl.updateCarryVisual();
+      g.camp.setHerbCount(clan.herbTotal());
+      g.audio.drop();
+      g.ui.toast(`You add ${n} herb${n > 1 ? 's' : ''} to the herb store (${clan.herbTotal()} stored). Take them to sick cats to heal them.`, 'good');
+      g.objectives.onHerbs(n);
+      if (!g.objectives.get('lesson')?.data?.medLesson) { g.training.medProgress('gather'); if (n >= 2) g.training.medProgress('herblore'); }
+      return;
+    }
+    for (const k of ['silverleaf', 'sunpetal', 'bitterroot'] as HerbKind[]) clan.herbStore[k] += Math.floor(pl.herbs[k] / 2);
+    g.camp.setHerbCount(clan.herbTotal());
     const sick = clan.home().filter((c) => c.sick > 0 || c.injury > 0).sort((a, b) => b.sick + b.injury - a.sick - a.injury);
     let healed = 0;
     for (let i = 0; i < pl.herbs.sunpetal + pl.herbs.bitterroot; i++) { const c = sick.find((x) => x.sick > 0); if (c) { c.sick = Math.max(0, c.sick - 35); healed++; clan.adjust(c, clan.player, 5, { text: `${clan.player.given}'s herbs helped me recover.`, weight: 3 }); } }
@@ -1043,6 +1078,8 @@ export class Interactions {
       clan.remember(clan.player, `I helped save ${displayName(kit)} from deathberry poison.`, 6, kit.id);
       clan.player.deeds++;
       g.ui.toast(`${displayName(kit)} retches up the berries. They will live!`, 'good');
+      g.objectives.complete('berry-kit');
+      if (berryEv) g.events.active.splice(g.events.active.indexOf(berryEv), 1);
     }
     pl.herbs = { silverleaf: 0, sunpetal: 0, bitterroot: 0 };
     pl.updateCarryVisual();

@@ -44,6 +44,7 @@ export class Camp {
   entrance = { x: 0, z: 17 };
   floorY = 0;
   private pileMesh: THREE.InstancedMesh;
+  private herbMesh!: THREE.InstancedMesh;
   private fireflyAnchor = new THREE.Vector3();
 
   constructor(private terrain: Terrain, scene: THREE.Scene) {
@@ -219,8 +220,30 @@ export class Camp {
     this.pileMesh.count = 0;
     this.group.add(this.pileMesh);
 
+    // Herb store inside the medicine den
+    const herbGeo = prep(new THREE.IcosahedronGeometry(0.07, 0), [1, 1, 1]);
+    this.herbMesh = new THREE.InstancedMesh(herbGeo, A.mat.static, 24);
+    const md = this.dens.medicine;
+    const hx = md.x * 0.85, hz = md.z * 0.85;
+    const hty = terrain.height(hx, hz);
+    const hcols = [[0.45, 0.7, 0.35], [0.85, 0.75, 0.3], [0.55, 0.45, 0.6], [0.35, 0.6, 0.3]];
+    for (let i = 0; i < 24; i++) {
+      const a = i * 2.39, r = 0.09 * Math.sqrt(i);
+      m.makeScale(1.3, 0.6, 1.1);
+      m.setPosition(hx + Math.cos(a) * r, hty + 0.04 + Math.floor(i / 9) * 0.05, hz + Math.sin(a) * r);
+      this.herbMesh.setMatrixAt(i, m);
+      const c = hcols[i % 4];
+      this.herbMesh.setColorAt(i, new THREE.Color(c[0], c[1], c[2]));
+    }
+    this.herbMesh.count = 0;
+    this.group.add(this.herbMesh);
+
     scene.add(this.group);
     void this.fireflyAnchor;
+  }
+
+  setHerbCount(n: number) {
+    this.herbMesh.count = Math.max(0, Math.min(24, Math.ceil(n)));
   }
 
   setPileCount(food: number) {

@@ -64,6 +64,7 @@ export interface SaveData {
     generation: number;
     lineage: string[];
     borderSafety: number;
+    herbStore?: { silverleaf: number; sunpetal: number; bitterroot: number };
     usedNames: string[];
   };
   player: { x: number; z: number; yaw: number; prey: any[]; herbs: any; moss: number; thirdPerson: boolean; lastLesson: number };
@@ -122,6 +123,7 @@ export function writeSave(g: Game): boolean {
       generation: c.generation,
       lineage: c.lineage,
       borderSafety: c.borderSafety,
+      herbStore: c.herbStore,
       usedNames: [...c.usedNames],
     },
     player: { x: p.pos.x, z: p.pos.z, yaw: p.yaw, prey: p.prey, herbs: p.herbs, moss: p.moss, thirdPerson: p.thirdPerson, lastLesson: g.training.lastLessonHour },

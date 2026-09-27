@@ -352,7 +352,7 @@ export class EventSystem {
         g.audio.alarm();
         const ka = g.npcs.agents.get(k.id);
         if (ka) { ka.activity = 'sleep'; ka.actTimer = 999; ka.target = null; ka.say('My tummy hurts…', 4); }
-        if (!clan.player.exiled) g.objectives.add({ id: 'berry-kit', kind: 'herbs', title: `Save ${displayName(k)}`, desc: `${displayName(k)} ate deathberries! Follow the compass to them. Pick any healing herb on the way, then talk to ${k.given} to make them retch the berries up.`, need: 1, deadline: g.time.totalHours + 8, reward: { rep: 10 }, data: { follow: k.id }, target: ka ? { x: ka.pos.x, z: ka.pos.z } : undefined });
+        if (!clan.player.exiled) g.objectives.add({ id: 'berry-kit', kind: 'free', title: `Save ${displayName(k)}`, desc: `${displayName(k)} ate deathberries! Follow the compass to them. Pick any healing herb on the way, then talk to ${k.given} to make them retch the berries up.`, need: 1, deadline: g.time.totalHours + 8, reward: { rep: 10 }, data: { follow: k.id }, target: ka ? { x: ka.pos.x, z: ka.pos.z } : undefined });
         g.objectives.focus?.('berry-kit');
         return true;
       }

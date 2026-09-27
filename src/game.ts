@@ -1,5 +1,6 @@
 // Game orchestrator: owns every system, runs the main loop, handles new game,
 // loading, sleeping, time skips, death and succession.
+import type { EventType } from './sim/events';
 import * as THREE from 'three';
 import { clanTitle, lore } from './lore';
 import { Bus } from './core/bus';
@@ -35,7 +36,7 @@ import { UI } from './ui/ui';
 import { Menus, NewGameSpec, Settings, loadSettings } from './ui/menus';
 import { TouchControls, isTouchDevice } from './ui/touch';
 import { SaveData, hasSave, readSave, readSaveSlot, writeSave } from './save/save';
-import { Appearance, Cat, LifeStage, displayName, LESSONS } from './cats/types';
+import { Appearance, Cat, LifeStage, displayName, pronoun, LESSONS } from './cats/types';
 import { createCat } from './cats/generate';
 import { CatModel } from './cats/model';
 
@@ -292,6 +293,7 @@ export class Game {
       c.generation = d.clan.generation;
       c.lineage = d.clan.lineage;
       c.borderSafety = d.clan.borderSafety;
+      c.herbStore = d.clan.herbStore ?? { silverleaf: 2, sunpetal: 2, bitterroot: 1 };
       c.usedNames = new Set(d.clan.usedNames);
       this.weather.kind = (d.weather.kind as any) ?? 'sunny';
       this.weather.snowCover = d.weather.snowCover ?? 0;
@@ -302,6 +304,7 @@ export class Game {
       this.chunks.setContext(this.time.season, this.time.day);
       this.chunks.primeAround(d.player.x, d.player.z);
       this.camp.setPileCount(c.food);
+      this.camp.setHerbCount(c.herbTotal());
       this.npcs.syncRoster();
       this.player.thirdPerson = d.player.thirdPerson;
       this.player.attach();
@@ -355,6 +358,8 @@ export class Game {
   }
 
   private resetSystems() {
+    this.clan.herbStore = { silverleaf: 2, sunpetal: 2, bitterroot: 1 };
+    this.pendingProphecy = null;
     this.npcs.list.forEach((a) => this.npcs.removeAgent(a.id));
     this.prey.clear();
     this.creatures.clear();
@@ -651,7 +656,57 @@ export class Game {
     this.player.stamina = 100;
     this.ui.fade(false);
     this.ui.toast(this.time.hour < 8 ? 'Dawn light filters into the den. A new moon begins.' : 'You wake, refreshed.', 'info');
+    if (this.time.hour < 9 && !c.exiled) {
+      const chance = c.role === 'medicine' || c.role === 'medicineApprentice' ? 0.5 : c.role === 'leader' ? 0.4 : 0.18;
+      if (Math.random() < chance) this.starDream();
+    }
     this.save();
+  }
+
+  pendingProphecy: { type: EventType; day: number } | null = null;
+
+  /** A dream visit from a starry-furred cat of the Long Meadow (StarClan). */
+  starDream() {
+    const clan = this.clan;
+    const p = clan.player;
+    const dead = clan.dead().filter((d) => d.clan === 'home' && d.id !== p.id);
+    const score = (d: Cat) => (p.relations[d.id]?.opinion ?? 0) + (d.relations[p.id]?.opinion ?? 0) + (clan.lineage.includes(d.id) ? 80 : 0) + (p.parents.includes(d.id) ? 60 : 0) + (d.role === 'medicine' ? 20 : 0) + (d.role === 'leader' ? 15 : 0);
+    dead.sort((a, b) => score(b) - score(a));
+    const spirit = dead.length ? dead[Math.floor(Math.random() * Math.min(3, dead.length))] : null;
+    const who = spirit ? `${displayName(spirit)}, ${spirit.id === clan.lineage[clan.lineage.length - 1] ? 'the cat you once were, ' : ''}${pronoun(spirit, 'poss')} fur glittering with stars,` : 'A starry-furred cat you have never met';
+    const r = Math.random();
+    let text: string;
+    if (r < 0.45) {
+      const omens: [EventType, string][] = [
+        ['fire', '"Beware the red beast that eats the trees. When it comes, lead the clan to the water."'],
+        ['flood', '"Water will rise and swallow the low ground. Keep the kits high and dry."'],
+        ['badger', '"A shadow with a striped face hungers for the nursery. Guard the young ones."'],
+        ['illness', '"Sickness creeps toward the camp. Fill the medicine den with herbs while you can."'],
+        ['shortage', '"The prey will hide. Hunt well now, for lean days are coming."'],
+        ['fox', '"Red fur and sharp teeth prowl near your borders. Walk carefully."'],
+        ['storm', '"The sky will roar and trees will fall. Stay close to camp."'],
+      ];
+      const [type, omen] = omens[Math.floor(Math.random() * omens.length)];
+      this.pendingProphecy = { type, day: this.time.day + 2 };
+      text = `${who} steps out of the mist. ${omen} Then the stars fade…`;
+      clan.remember(p, `I dreamed of the Long Meadow. A warning: ${omen}`, 4);
+    } else if (r < 0.75 && spirit) {
+      const close = (p.relations[spirit.id]?.opinion ?? 0) > 30 || p.parents.includes(spirit.id);
+      text = `${who} sits beside you in a field of silver grass. ${close ? `"I'm so proud of you, ${p.given}. I watch over you every night."` : `"Your clan needs you, ${p.given}. Be brave, and be kind."`} You wake with the scent of stars on your fur.`;
+      clan.remember(p, `${spirit.given} visited me in a dream from the Long Meadow.`, 5, spirit.id);
+      c_heal(p);
+    } else {
+      const hint = p.role === 'medicine' || p.role === 'medicineApprentice'
+        ? '"The healing herbs grow thickest where the water sings. Look near the streams."'
+        : p.stage === 'kit' ? '"Grow strong, little one. A great path waits for you."'
+        : '"Follow your heart, but never forget the code."';
+      text = `${who} walks with you through a forest made of starlight. ${hint}`;
+      clan.remember(p, 'I walked with the Long Meadow in a dream.', 3);
+    }
+    function c_heal(cat: Cat) { cat.health = Math.min(cat.maxHealth, cat.health + 15); }
+    clan.log('A dream from the Long Meadow.', 'memory');
+    this.audio.chime();
+    this.ui.choice('✨ A dream from the Long Meadow', text, [{ label: 'Wake up', action: () => {} }]);
   }
 
   passTime(hours: number) {
@@ -691,7 +746,18 @@ export class Game {
       } else if (c.hunger > 25 && !this.combat.playerInCombat) c.health = Math.min(c.maxHealth, c.health + (this.player.sleeping ? 8 : 3));
       if (c.health <= 0) this.clan.kill(c, 'hunger');
     }
+    this.camp.setHerbCount(this.clan.herbTotal());
+    const npcMed = this.clan.medicine;
+    if (npcMed && !npcMed.isPlayer && hour > 7 && hour < 18 && Math.random() < 0.08 && this.clan.herbTotal() < 12) {
+      const k = (['silverleaf', 'sunpetal', 'bitterroot'] as const)[Math.floor(Math.random() * 3)];
+      this.clan.herbStore[k]++;
+    }
     if (hour === 6) {
+      if (this.pendingProphecy && this.time.day >= this.pendingProphecy.day) {
+        const t = this.pendingProphecy.type;
+        this.pendingProphecy = null;
+        if (this.events.trigger(t, true)) this.ui.toast('✨ The dream from StarClan was true…', 'info');
+      }
       this.clan.tickDay();
       this.npcs.syncRoster();
       this.npcs.refreshModels();
