@@ -35,7 +35,19 @@ export interface Appearance {
   ears: EarShape;
   tail: TailShape;
   size: number;
+  /** Optional breed name chosen in the character creator. */
+  breed?: string;
+  /** Second eye colour (odd eyes). */
+  eye2?: string;
+  accessory?: Accessory;
+  accessoryColor?: string;
 }
+
+export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm';
+export const ACCESSORY_LABEL: Record<Accessory, string> = {
+  none: 'None', collar: 'Collar', bellCollar: 'Bell collar', flowerCrown: 'Flower crown', feather: 'Feather behind ear',
+  leafScarf: 'Leaf scarf', shellNecklace: 'Shell necklace', berryCharm: 'Berry charm',
+};
 
 export interface Personality {
   sociability: number;

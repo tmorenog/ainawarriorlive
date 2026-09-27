@@ -440,6 +440,51 @@ export class CatModel {
     // short, chubby neck
     part(cyl(bodyR * 0.78, bodyR * 0.92, 0.16, 14), torsoMat, [bodyLen * 0.55, 0.16, 0], -0.55);
     if (app.fur === 'long') part(sphere(bodyR * 0.95, 14, 12), torsoMat, [bodyLen * 0.5, 0.1, 0], 0, [0.8, 1, 1.15]);
+    // accessories worn around the neck
+    const acc = app.accessory ?? 'none';
+    if (acc !== 'none' && acc !== 'flowerCrown' && acc !== 'feather') {
+      const accC = col(app.accessoryColor ?? (acc === 'leafScarf' ? '#4f8a3a' : acc === 'shellNecklace' ? '#f3ead8' : '#b8323a'));
+      const accMat = new THREE.MeshLambertMaterial({ color: accC });
+      this.mats.push(accMat);
+      const neck = new THREE.Group();
+      neck.position.set(bodyLen * 0.58, 0.19, 0);
+      neck.rotation.z = -0.55;
+      bodyParts.add(neck);
+      const ringR = bodyR * 0.95;
+      if (acc === 'collar' || acc === 'bellCollar' || acc === 'berryCharm') {
+        const tg = new THREE.TorusGeometry(ringR, 0.024, 8, 22);
+        tg.rotateX(Math.PI / 2);
+        this.addMesh(neck, tg, accMat);
+        if (acc === 'bellCollar') {
+          const bellMat = new THREE.MeshPhongMaterial({ color: 0xe8c44a, shininess: 90, specular: 0xffffff });
+          this.mats.push(bellMat);
+          const b = this.addMesh(neck, new THREE.SphereGeometry(0.034, 10, 8), bellMat);
+          b.position.set(ringR + 0.02, -0.03, 0);
+        }
+        if (acc === 'berryCharm') {
+          const bm = new THREE.MeshPhongMaterial({ color: 0x7a1e5a, shininess: 60 });
+          this.mats.push(bm);
+          for (const dz of [-0.018, 0, 0.018]) { const b = this.addMesh(neck, new THREE.SphereGeometry(0.013, 8, 6), bm); b.position.set(ringR + 0.012, -0.018 - Math.abs(dz) * 0.4, dz); }
+        }
+      } else if (acc === 'leafScarf') {
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          const lg = new THREE.SphereGeometry(0.03, 6, 4);
+          lg.scale(1, 0.35, 0.6);
+          const l = this.addMesh(neck, lg, accMat);
+          l.position.set(Math.cos(a) * ringR, -0.01, Math.sin(a) * ringR);
+          l.rotation.y = -a;
+        }
+      } else if (acc === 'shellNecklace') {
+        for (let i = 0; i < 14; i++) {
+          const a = (i / 14) * Math.PI * 2;
+          const sg = new THREE.SphereGeometry(0.012, 6, 5);
+          sg.scale(1, 0.7, 1);
+          const sh2 = this.addMesh(neck, sg, accMat);
+          sh2.position.set(Math.cos(a) * ringR, -0.012, Math.sin(a) * ringR);
+        }
+      }
+    }
 
     // soft contact shadow under the cat (keeps small kits grounded visually)
     const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 24), shadowMat);
@@ -508,11 +553,12 @@ export class CatModel {
     const eyeC = col(app.eye);
     const eyeParts: THREE.BufferGeometry[] = [];
     for (const sz of [-1, 1]) {
+      const ec = sz === 1 && app.eye2 ? col(app.eye2) : eyeC;
       const eg = new THREE.SphereGeometry(0.0145, 10, 8);
       eg.scale(0.7, 1, 1);
       eyeParts.push(vc(eg.translate(0.055, 0, sz * 0.03), (x, y, z) => {
         const lz = z - sz * 0.03;
-        return x > 0.062 && Math.abs(lz) < 0.004 ? col('#111111') : x > 0.059 ? eyeC : eyeC.clone().multiplyScalar(0.7);
+        return x > 0.062 && Math.abs(lz) < 0.004 ? col('#111111') : x > 0.059 ? ec : ec.clone().multiplyScalar(0.7);
       }));
     }
     const eyeMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 120, specular: 0xffffff, emissive: eyeC.clone().multiplyScalar(0.18) });
@@ -528,6 +574,24 @@ export class CatModel {
     wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
     const wl = new THREE.LineSegments(wg, whiskerMat);
     this.head.add(wl);
+    if (app.accessory === 'flowerCrown') {
+      const fc = [0xf2a3c4, 0xf5e16a, 0xffffff, 0xb79cf0, 0xf28a6a];
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        const fm = new THREE.MeshLambertMaterial({ color: app.accessoryColor && i % 2 === 0 ? col(app.accessoryColor) : new THREE.Color(fc[i % fc.length]) });
+        this.mats.push(fm);
+        const f = this.addMesh(this.head, new THREE.SphereGeometry(0.012, 7, 5), fm);
+        f.position.set(-0.005 + Math.cos(a) * 0.045, 0.058, Math.sin(a) * 0.052);
+      }
+    } else if (app.accessory === 'feather') {
+      const fm = new THREE.MeshLambertMaterial({ color: col(app.accessoryColor ?? '#e9e2d0'), side: THREE.DoubleSide });
+      this.mats.push(fm);
+      const fg = new THREE.SphereGeometry(0.03, 8, 6);
+      fg.scale(0.35, 1.6, 0.12);
+      const f = this.addMesh(this.head, fg, fm);
+      f.position.set(-0.03, 0.07, 0.05);
+      f.rotation.set(0.3, 0, 0.7);
+    }
     this.extraGeos.push(wg);
 
     // legs

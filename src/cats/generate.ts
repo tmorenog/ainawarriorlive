@@ -60,6 +60,16 @@ export const FUR_COLORS: { name: string; hex: string }[] = [
   { name: 'Fawn', hex: '#c9a583' },
   { name: 'Cinnamon', hex: '#9b5c36' },
   { name: 'Golden', hex: '#d4a24a' },
+  { name: 'Pale ginger', hex: '#e8a86a' },
+  { name: 'Dark ginger', hex: '#b35a22' },
+  { name: 'Sandy', hex: '#d8b98a' },
+  { name: 'Tawny', hex: '#b07a45' },
+  { name: 'Dark grey', hex: '#55585e' },
+  { name: 'Smoky', hex: '#9a9da3' },
+  { name: 'Lilac', hex: '#b7a9b0' },
+  { name: 'Dark brown', hex: '#4a3222' },
+  { name: 'Russet', hex: '#8e3f22' },
+  { name: 'Pale grey', hex: '#b4b8bf' },
 ];
 export const EYE_COLORS: { name: string; hex: string }[] = [
   { name: 'Amber', hex: '#e2a02c' },
@@ -68,6 +78,32 @@ export const EYE_COLORS: { name: string; hex: string }[] = [
   { name: 'Blue', hex: '#5aa2e6' },
   { name: 'Copper', hex: '#cc6e2c' },
   { name: 'Hazel', hex: '#a39342' },
+  { name: 'Ice blue', hex: '#a9d6f2' },
+  { name: 'Deep blue', hex: '#2f5fb8' },
+  { name: 'Emerald', hex: '#2fa35a' },
+  { name: 'Gold', hex: '#f0b63c' },
+  { name: 'Orange', hex: '#e8792a' },
+  { name: 'Pale green', hex: '#b6d98a' },
+];
+
+/** Breed presets for the character creator (they only change looks). */
+export const BREEDS: { name: string; app: Partial<Appearance> }[] = [
+  { name: 'Forest cat (mixed)', app: {} },
+  { name: 'Maine Coon', app: { body: 'large', fur: 'long', ears: 'tufted', tail: 'bushy', size: 1.08, pattern: 'tabby', base: '#7a5436' } },
+  { name: 'Norwegian Forest', app: { body: 'large', fur: 'long', ears: 'tufted', tail: 'bushy', size: 1.05 } },
+  { name: 'Siamese', app: { body: 'slender', fur: 'short', ears: 'pointed', tail: 'long', pattern: 'colorpoint', base: '#e6cfa2', eye: '#5aa2e6' } },
+  { name: 'Ragdoll', app: { body: 'large', fur: 'long', ears: 'rounded', tail: 'bushy', pattern: 'colorpoint', base: '#f1eee7', eye: '#2f5fb8' } },
+  { name: 'Persian', app: { body: 'stocky', fur: 'long', ears: 'rounded', tail: 'bushy', size: 0.98 } },
+  { name: 'British Shorthair', app: { body: 'stocky', fur: 'short', ears: 'rounded', tail: 'long', pattern: 'solid', base: '#8f9aab', eye: '#cc6e2c' } },
+  { name: 'Russian Blue', app: { body: 'slender', fur: 'short', ears: 'pointed', pattern: 'solid', base: '#8f9aab', eye: '#2fa35a' } },
+  { name: 'Scottish Fold', app: { body: 'stocky', ears: 'folded', fur: 'short', eye: '#e2a02c' } },
+  { name: 'Bengal', app: { body: 'average', fur: 'short', pattern: 'spotted', base: '#d4a24a', eye: '#78c24c' } },
+  { name: 'Egyptian Mau', app: { body: 'slender', fur: 'short', pattern: 'spotted', base: '#c3c7cd', eye: '#b6d98a' } },
+  { name: 'Abyssinian', app: { body: 'slender', fur: 'short', pattern: 'ticked', base: '#b07a45', eye: '#a39342' } },
+  { name: 'Bombay', app: { body: 'average', fur: 'short', pattern: 'solid', base: '#2b2725', eye: '#cc6e2c', white: 0 } },
+  { name: 'Turkish Van', app: { body: 'average', fur: 'medium', pattern: 'bicolor', base: '#d9823b', white: 0.75 } },
+  { name: 'Manx', app: { body: 'stocky', tail: 'short', ears: 'rounded' } },
+  { name: 'Japanese Bobtail', app: { body: 'slender', tail: 'kinked', pattern: 'calico', base: '#d9823b', white: 0.5 } },
 ];
 export const PATTERNS: Pattern[] = ['solid', 'tabby', 'mackerel', 'spotted', 'ticked', 'smoke', 'bicolor', 'tuxedo', 'tortie', 'calico', 'colorpoint'];
 export const PATTERN_LABEL: Record<Pattern, string> = {

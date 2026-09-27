@@ -3,8 +3,8 @@
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import { h, esc } from './ui';
-import { Appearance, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
-import { EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
+import { ACCESSORY_LABEL, Accessory, Appearance, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
+import { BREEDS, EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
 import { RNG } from '../core/rng';
 import { CONTROLS_HTML } from './panels';
 import { HOME_CLAN_NAMES } from '../world/territory';
@@ -134,10 +134,8 @@ export class Menus {
     const form = h('div', 'form', '', s);
     const label = h('div', 'preview-label', '', s);
     const refresh = () => {
-      spec.app.second = spec.app.pattern === 'tortie' || spec.app.pattern === 'calico' || spec.app.pattern === 'colorpoint' || spec.app.pattern === 'smoke'
-        ? secondFor(spec.app.base, spec.app.pattern, rng) : spec.app.second;
       g.showPreview(spec.app, asKit ? 'kit' : 'warrior');
-      label.innerHTML = `${esc(spec.lore === 'classic' ? spec.name + (asKit ? 'kit' : 'heart') : spec.name)}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
+      label.innerHTML = `${esc(spec.lore === 'classic' ? spec.name + (asKit ? 'kit' : 'heart') : spec.name)}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${spec.app.breed ? esc(spec.app.breed) + ' · ' : ''}${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
     };
     h('h2', '', 'Your cat', form);
     h('div', '', '<span style="color:var(--ink-dim);font-size:13px">You will be born as a kit in the nursery. This is how you will look when grown.</span>', form);
@@ -163,6 +161,18 @@ export class Menus {
       }
     };
     chips<Sex>('Sex', [['tom', 'Tom'], ['she', 'She-cat']], () => spec.sex, (v) => (spec.sex = v));
+    // breed preset
+    const br = field('Breed');
+    const bs = h('select', '', '', br) as HTMLSelectElement;
+    for (const b of BREEDS) { const o = h('option', '', b.name, bs) as HTMLOptionElement; o.value = b.name; }
+    bs.value = spec.app.breed ?? BREEDS[0].name;
+    bs.onchange = () => {
+      const b = BREEDS.find((x) => x.name === bs.value)!;
+      Object.assign(spec.app, b.app);
+      spec.app.breed = b.name === BREEDS[0].name ? undefined : b.name;
+      if (b.app.pattern || b.app.base) spec.app.second = secondFor(spec.app.base, spec.app.pattern, rng);
+      this.create(spec);
+    };
     // fur colour
     const fr = field('Fur colour');
     const furEls: HTMLElement[] = [];
@@ -173,6 +183,15 @@ export class Menus {
       furEls.push(b);
       b.onclick = () => { spec.app.base = c.hex; spec.app.second = secondFor(c.hex, spec.app.pattern, rng); furEls.forEach((e) => e.classList.remove('on')); b.classList.add('on'); refresh(); };
     }
+    const colorInput = (row: HTMLElement, get: () => string, set: (v: string) => void, title: string) => {
+      const ci = h('input', 'colorpick', undefined, row) as HTMLInputElement;
+      ci.type = 'color'; ci.title = title; ci.value = get();
+      ci.oninput = () => { set(ci.value); refresh(); };
+      return ci;
+    };
+    colorInput(fr, () => spec.app.base, (v) => { spec.app.base = v; furEls.forEach((e) => e.classList.remove('on')); }, 'Any colour you like');
+    const sr2 = field('Second colour (stripes, spots, patches)');
+    colorInput(sr2, () => spec.app.second, (v) => (spec.app.second = v), 'Second colour');
     // pattern
     const pr = field('Pattern');
     const ps = h('select', '', '', pr) as HTMLSelectElement;
@@ -200,10 +219,23 @@ export class Menus {
       eyeEls.push(b);
       b.onclick = () => { spec.app.eye = c.hex; eyeEls.forEach((e) => e.classList.remove('on')); b.classList.add('on'); refresh(); };
     }
+    colorInput(er, () => spec.app.eye, (v) => { spec.app.eye = v; eyeEls.forEach((e) => e.classList.remove('on')); }, 'Any eye colour');
+    const oe = field('Odd eyes (different second eye)');
+    const oeCheck = h('input', '', undefined, oe) as HTMLInputElement;
+    oeCheck.type = 'checkbox'; oeCheck.checked = !!spec.app.eye2;
+    const oePick = colorInput(oe, () => spec.app.eye2 ?? '#5aa2e6', (v) => { spec.app.eye2 = v; oeCheck.checked = true; }, 'Second eye colour');
+    oeCheck.onchange = () => { spec.app.eye2 = oeCheck.checked ? oePick.value : undefined; refresh(); };
     chips<FurLength>('Fur length', [['short', 'Short'], ['medium', 'Medium'], ['long', 'Long']], () => spec.app.fur, (v) => (spec.app.fur = v));
     chips<BodyType>('Body type', [['slender', 'Slender'], ['average', 'Average'], ['stocky', 'Stocky'], ['large', 'Large']], () => spec.app.body, (v) => (spec.app.body = v));
     chips<EarShape>('Ears', [['pointed', 'Pointed'], ['rounded', 'Rounded'], ['tufted', 'Tufted'], ['folded', 'Folded']], () => spec.app.ears, (v) => (spec.app.ears = v));
     chips<TailShape>('Tail', [['long', 'Long'], ['bushy', 'Bushy'], ['short', 'Short'], ['kinked', 'Kinked']], () => spec.app.tail, (v) => (spec.app.tail = v));
+    const szr = field('Size');
+    const szi = h('input', '', undefined, szr) as HTMLInputElement;
+    szi.type = 'range'; szi.min = '0.85'; szi.max = '1.15'; szi.step = '0.01'; szi.value = String(spec.app.size);
+    szi.oninput = () => { spec.app.size = parseFloat(szi.value); refresh(); };
+    chips<Accessory>('Accessory', (Object.keys(ACCESSORY_LABEL) as Accessory[]).map((a) => [a, ACCESSORY_LABEL[a]] as [Accessory, string]), () => spec.app.accessory ?? 'none', (v) => (spec.app.accessory = v));
+    const acr = field('Accessory colour');
+    colorInput(acr, () => spec.app.accessoryColor ?? '#b8323a', (v) => (spec.app.accessoryColor = v), 'Accessory colour');
     const kr = field('Preview');
     const kb = h('button', 'chip', 'Show as kit', kr);
     kb.onclick = () => { asKit = !asKit; kb.classList.toggle('on', asKit); refresh(); };

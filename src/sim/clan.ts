@@ -225,13 +225,13 @@ export class ClanSim {
       attitude: r.temperament === 'hostile' ? -40 : r.temperament === 'friendly' ? 20 : r.temperament === 'proud' ? -10 : 0,
     }));
     for (const r of this.rivals) this.populateRival(r.index, rng);
-    if (isClassic()) this.seedBookCats(playerCat);
+    if (isClassic()) this.seedBookCats(playerCat, rng);
     this.log(`You were born into ${clanTitle(this.game.territories.homeName)}, the kit of ${displayName(mother)} and ${displayName(father)}.`, 'birth');
     this.log(`${displayName(leader)} leads the clan as Warden, with ${displayName(deputy)} as Second.`, 'politics');
   }
 
   /** Classic mode: famous cats from the books take their places in each clan. */
-  private seedBookCats(player: Cat) {
+  private seedBookCats(player: Cat, rng: RNG) {
     const protectedIds = new Set([player.id, ...player.parents]);
     const apply = (c: Cat, b: BookCat) => {
       c.given = b.prefix;
@@ -239,7 +239,7 @@ export class ClanSim {
       c.sex = b.sex;
       c.age = b.age;
       c.traits = b.traits.slice();
-      c.pers = personalityFrom(c.traits, simRng);
+      c.pers = personalityFrom(c.traits, rng);
       c.app = { ...c.app, ...b.app, second: b.app.second ?? c.app.second, white: b.app.white ?? (b.app.pattern ? 0 : c.app.white) };
       c.stage = b.stage ?? (b.age >= 80 && !b.role ? 'elder' : 'warrior');
       if (b.role === 'leader') c.skills.fighting = Math.max(c.skills.fighting, 70);

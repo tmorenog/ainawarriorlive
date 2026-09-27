@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { clanTitle, lore } from './lore';
 import { Bus } from './core/bus';
 import { GameTime } from './core/time';
-import { RNG, simRng } from './core/rng';
+import { RNG, hashString, simRng } from './core/rng';
 import { clamp } from './core/math';
 import { Terrain } from './world/terrain';
 import { Territories } from './world/territory';
@@ -246,7 +246,8 @@ export class Game {
       this.lastHour = Math.floor(this.time.totalHours);
       lore.mode = spec.lore;
       this.setupWorld(spec.seed, spec.clanName);
-      const rng = new RNG(spec.seed * 7 + 3);
+      // the clan's cats depend only on which clan you join, so every new cat in ThunderClan meets the same clanmates
+      const rng = new RNG(hashString(`${spec.lore}:${spec.clanName}`));
       const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: 0, rng: new RNG((Math.random() * 1e9) | 0) });
       this.clan.newClan(me, rng);
       this.weather.kind = 'sunny';
