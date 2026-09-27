@@ -69,6 +69,7 @@ export class Objectives {
     const o = this.get(id);
     if (!o) return;
     this.list = this.list.filter((x) => x.id !== id);
+    if (o.kind === 'lesson' && o.data?.mentor) this.game.training.release(this.game.npcs.agents.get(o.data.mentor));
     if (silent) return;
     const game = this.game;
     game.ui.toast(`✘ ${o.title} — failed`, 'danger');
@@ -97,7 +98,7 @@ export class Objectives {
   // ------------------------------------------------------------ hooks
   onCatch(kind: string) {
     for (const o of [...this.list]) {
-      if (o.kind === 'lesson' && (o.data?.lesson === 'hunting' || (o.data?.lesson === 'tracking' && o.data?.sniffed))) this.bump(o);
+      if (o.kind === 'lesson' && o.data?.arrived !== false && (o.data?.lesson === 'hunting' || (o.data?.lesson === 'tracking' && o.data?.sniffed))) this.bump(o);
       if (o.kind === 'mentor' && (o.data?.lesson === 'hunting' || (o.data?.lesson === 'tracking' && o.data?.sniffed))) {
         const ap = this.game.npcs.agents.get(o.targetId ?? '');
         if (ap && dist2(ap.pos.x, ap.pos.z, this.game.player.pos.x, this.game.player.pos.z) < 20) this.bump(o);

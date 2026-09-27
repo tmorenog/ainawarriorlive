@@ -860,7 +860,8 @@ export class ClanSim {
   }
 
   autoPatrols(hour: number, forced?: { kind: 'hunt' | 'border'; members: string[] }[]) {
-    const avail = this.home().filter((c) => (c.stage === 'warrior' || c.stage === 'apprentice') && c.role !== 'medicine' && c.role !== 'medicineApprentice' && c.injury < 40 && c.sick < 40 && !c.expectingUntil && !this.patrols.some((p) => p.members.includes(c.id)));
+    const busy = (c: Cat) => { const a = this.game.npcs.agents.get(c.id); return !!a && this.game.npcs.busyWithPlayer(a); };
+    const avail = this.home().filter((c) => !busy(c) && (c.stage === 'warrior' || c.stage === 'apprentice') && c.role !== 'medicine' && c.role !== 'medicineApprentice' && c.injury < 40 && c.sick < 40 && !c.expectingUntil && !this.patrols.some((p) => p.members.includes(c.id)));
     const pool = simRng.shuffle(avail.filter((c) => !c.isPlayer));
     const plans: { kind: 'hunt' | 'border'; members: string[] }[] = forced ?? [];
     if (!forced) {

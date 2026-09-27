@@ -65,50 +65,93 @@ export class TrainingSystem {
     });
   }
 
+  /** A good open spot inside the territory for a lesson. */
+  private lessonSpot(minR: number, maxR: number): { x: number; z: number } {
+    const g = this.game;
+    for (let i = 0; i < 40; i++) {
+      const a = simRng.range(0, Math.PI * 2), r = simRng.range(minR, maxR);
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const s = g.terrain.sample(x, z);
+      if (s.river > 0.05 || s.lake > 0.05 || s.stream > 0.2 || s.h < g.chunks.waterLevel + 0.3) continue;
+      if (g.territories.ownerAt(x, z) !== 'home') continue;
+      return { x, z };
+    }
+    return { x: 0, z: 40 };
+  }
+
   startLesson(lesson: Lesson, mentor: NpcAgent) {
     const g = this.game;
     const p = g.player;
     const base: Objective = {
-      id: 'lesson', kind: 'lesson', title: `Lesson: ${LESSON_LABEL[lesson]}`, desc: '', need: 1, giver: mentor.id, order: true,
-      data: { lesson, mentor: mentor.id }, reward: { rep: 2, lesson, opinion: 6 }, deadline: g.time.totalHours + 10,
+      id: 'lesson', kind: 'lesson', title: `Follow ${mentor.name}`, desc: '', need: 1, giver: mentor.id, order: true,
+      data: { lesson, mentor: mentor.id, arrived: false }, reward: { rep: 2, lesson, opinion: 6 }, deadline: g.time.totalHours + 12,
     };
-    this.follow(mentor);
+    const lead = (route: { x: number; z: number }[], where: string, onArrive: () => void, onWaypoint?: (i: number) => void) => {
+      base.desc = `${mentor.name} is leading you to ${where}. Stay close — they'll wait if you fall behind.`;
+      g.npcs.startLead(mentor, route, () => { base.data.arrived = true; onArrive(); }, onWaypoint);
+      mentor.say(simRng.pick(['Follow me.', 'This way. Keep up!', 'Come on, stay close.']), 3);
+    };
+    const arriveText = (title: string, desc: string) => {
+      const o = g.objectives.get('lesson');
+      if (!o) return;
+      o.title = title;
+      o.desc = desc;
+      g.ui.toast(`${title}: ${desc}`, 'objective');
+    };
     switch (lesson) {
       case 'hunting':
-        base.desc = `Catch any prey while ${mentor.name} watches. Crouch (C), hold Space to gather a pounce, release to leap.`;
+      case 'tracking': {
+        const spot = this.lessonSpot(45, 95);
+        if (lesson === 'tracking') base.data.sniffed = false;
+        lead([spot], 'good hunting ground', () => {
+          this.watch(mentor);
+          mentor.say(lesson === 'hunting' ? 'Here. The prey runs well here. Show me your hunter\'s crouch.' : 'Now — taste the air. What do you smell?', 4);
+          arriveText(`Lesson: ${LESSON_LABEL[lesson]}`, lesson === 'hunting'
+            ? `Catch any prey while ${mentor.name} watches. Crouch (C), hold Space to gather a pounce, release to leap.`
+            : 'Sniff (Q) to find a prey scent trail, follow it and make a catch.');
+        });
         break;
-      case 'tracking':
-        base.desc = 'Sniff (Q) to find a prey scent trail, follow it and make a catch.';
-        base.data.sniffed = false;
+      }
+      case 'fighting': {
+        const th = g.territories.landmarks.find((l) => l.kind === 'trainingHollow')!;
+        lead([{ x: th.x, z: th.z }], 'the training hollow', () => {
+          arriveText('Lesson: Fighting', `Spar with ${mentor.name}. Swipe (Left click / F), heavy pounce (Right click / R), dodge (Space). Watch for their wind-up!`);
+          mentor.activity = 'idle';
+          mentor.say('Ready? Defend yourself!', 3);
+          setTimeout(() => g.combat.engage(mentor, g.player, true), 1500);
+        });
         break;
-      case 'fighting':
-        base.desc = `Spar with ${mentor.name}. Swipe (Left click / F), heavy pounce (Right click / R), dodge (Space). Watch for their wind-up!`;
-        mentor.activity = 'idle';
-        setTimeout(() => g.combat.engage(mentor, g.player, true), 1200);
-        mentor.say('Ready? Defend yourself!', 3);
-        break;
+      }
       case 'exploring': {
         const lms = g.territories.landmarks.filter((l) => l.home && l.kind !== 'borderStone' && l.kind !== 'trainingHollow');
         const undiscovered = lms.filter((l) => !g.discoveries.has('lm:' + l.id));
         const lm = simRng.pick(undiscovered.length ? undiscovered : lms);
-        base.desc = `Lead ${mentor.name} to ${lm.name}. Follow the marker on your compass.`;
-        base.target = { x: lm.x, z: lm.z };
-        base.data.target = { x: lm.x, z: lm.z };
-        base.title = `Lesson: Find ${lm.name}`;
+        const ll = Math.hypot(lm.x, lm.z) || 1;
+        const off = lm.radius + 2.5;
+        lead([{ x: lm.x - (lm.x / ll) * off, z: lm.z - (lm.z / ll) * off }], lm.name, () => {
+          mentor.say(`This is ${lm.name}. Remember the way — every warrior must know it.`, 5);
+          g.objectives.complete('lesson');
+        });
         break;
       }
       case 'territory': {
         const stones = g.territories.landmarks.filter((l) => l.kind === 'borderStone');
         stones.sort((a, b) => dist2(a.x, a.z, p.pos.x, p.pos.z) - dist2(b.x, b.z, p.pos.x, p.pos.z));
-        const picks = [stones[0], stones[1]];
-        base.kind = 'lesson';
-        base.targets = picks.map((s) => ({ x: s.x, z: s.z }));
-        base.target = { x: picks[0].x, z: picks[0].z };
+        const picks = [stones[0], stones[1]].map((st) => ({ x: st.x * 0.96, z: st.z * 0.96 }));
         base.need = 2;
-        base.desc = 'Visit two border markers and renew the scent (walk up to each marker).';
+        lead(picks, 'the border', () => { g.objectives.complete('lesson'); }, (i) => {
+          const o = g.objectives.get('lesson');
+          if (!o) return;
+          o.progress = i + 1;
+          g.clan.borderSafety = Math.min(100, g.clan.borderSafety + 10);
+          g.audio.sniff();
+          mentor.say(i === 0 ? 'Smell that? Our scent is fading. Mark it with me.' : 'Good. Now every clan knows where our land ends.', 4);
+          g.ui.toast(`You renew the scent marker with ${mentor.name} (${i + 1}/2).`, 'objective');
+        });
         break;
       }
       case 'rules':
+        base.title = 'Lesson: Clan code';
         this.quiz(mentor, (score) => {
           g.ui.toast(`You answered ${score} of 3 correctly.`, score >= 2 ? 'good' : 'info');
           if (score >= 2) g.objectives.complete('lesson');
@@ -117,6 +160,14 @@ export class TrainingSystem {
         break;
     }
     g.objectives.add(base);
+  }
+
+  /** The mentor sits and watches the apprentice work. */
+  private watch(a: NpcAgent) {
+    a.activity = 'watch';
+    a.actTimer = 999;
+    a.target = null;
+    a.userLessonWatch = true;
   }
 
   private follow(a: NpcAgent) {
@@ -128,7 +179,10 @@ export class TrainingSystem {
 
   release(a: NpcAgent | undefined) {
     if (!a) return;
-    if (a.activity === 'follow' || a.activity === 'fight') {
+    if (a.activity === 'follow' || a.activity === 'fight' || a.activity === 'lead' || a.userLessonWatch) {
+      a.userLessonWatch = false;
+      a.userLead = undefined;
+      a.actTimer = 0;
       this.game.combat.disengage(a);
       a.activity = 'idle';
       a.followTarget = null;
@@ -167,6 +221,16 @@ export class TrainingSystem {
       if (partner.hp < partner.maxHp * 0.3) { this.sparWon(partner); return; }
       if (!fighting && o.data.started) { g.objectives.complete(o.id); this.release(partner); }
       if (fighting) o.data.started = true;
+      return;
+    }
+    if (o.kind === 'lesson') {
+      // the mentor leads; the objective marker points at them until you arrive
+      if (!o.data.arrived) {
+        o.target = { x: partner.pos.x, z: partner.pos.z };
+      } else if (partner.userLessonWatch) {
+        partner.heading = Math.atan2(p.z - partner.pos.z, p.x - partner.pos.x);
+        if (dist2(p.x, p.z, partner.pos.x, partner.pos.z) > 45 && simRng.chance(0.005)) g.ui.toast(`Stay where ${partner.name} can see you!`, 'info');
+      }
       return;
     }
     if (partner.activity !== 'follow' && partner.activity !== 'fight') this.follow(partner);

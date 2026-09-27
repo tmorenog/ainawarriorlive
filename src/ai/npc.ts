@@ -15,7 +15,7 @@ import type { Fighter } from '../player/combat';
 export type Activity =
   | 'idle' | 'wander' | 'sit' | 'sleep' | 'eat' | 'talk' | 'groom' | 'patrol' | 'hunt' | 'train' | 'play'
   | 'herbs' | 'ceremony' | 'flee' | 'fight' | 'follow' | 'shelter' | 'stranded' | 'gathering' | 'approach' | 'talkPlayer'
-  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'watch' | 'leaving' | 'shield';
+  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'watch' | 'leaving' | 'shield' | 'lead';
 
 export interface ApproachIntent {
   kind: 'training' | 'play' | 'order' | 'greet' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
@@ -79,6 +79,8 @@ export class NpcAgent implements Fighter {
   userSpar?: boolean;
   userGossip?: string | null;
   userWalkHome?: boolean;
+  userLessonWatch?: boolean;
+  userLead?: { route: { x: number; z: number }[]; idx: number; onArrive: () => void; onWaypoint?: (i: number) => void; paused: boolean; nagT: number; best: number; stuckT: number };
 
   constructor(public cat: Cat, private game: Game) {
     this.model = new CatModel(cat.app, cat.stage);
@@ -105,6 +107,19 @@ export class NpcAgent implements Fighter {
     const inA = Math.hypot(this.pos.x, this.pos.z) < 16.5;
     const inB = Math.hypot(x, z) < 16.5;
     this.route = [];
+    if (!inA && !inB) {
+      // don't cut through the bramble wall: skirt around the camp
+      const ax = this.pos.x, az = this.pos.z, dx = x - ax, dz = z - az;
+      const L2 = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, -(ax * dx + az * dz) / L2));
+      const px = ax + dx * t, pz = az + dz * t;
+      if (Math.hypot(px, pz) < 19) {
+        let l = Math.hypot(px, pz);
+        let nx = px, nz = pz;
+        if (l < 1) { nx = -dz; nz = dx; l = Math.hypot(nx, nz) || 1; }
+        this.route.push({ x: (nx / l) * 25, z: (nz / l) * 25 });
+      }
+    }
     if (inA && !inB) this.route.push(CAMP_IN, CAMP_OUT);
     else if (!inA && inB) {
       if (Math.hypot(this.pos.x - CAMP_OUT.x, this.pos.z - CAMP_OUT.z) > 2) this.route.push(CAMP_OUT);
@@ -199,7 +214,7 @@ export class NpcManager {
     for (const p of this.game.clan.patrols) {
       for (const id of p.members) {
         const a = this.agents.get(id);
-        if (a && a.activity !== 'fight' && a.activity !== 'flee' && a.patrol?.id !== p.id) {
+        if (a && !this.busyWithPlayer(a) && a.activity !== 'fight' && a.activity !== 'flee' && a.patrol?.id !== p.id) {
           this.endConvo(a);
           a.patrol = p;
           a.activity = 'patrol';
@@ -216,7 +231,7 @@ export class NpcManager {
     this.ceremonyIds = ids;
     for (const a of this.agents.values()) {
       if (a.cat.clan !== 'home') continue;
-      if (a.activity === 'fight' || a.activity === 'stranded' || a.activity === 'leaving') continue;
+      if (a.activity === 'fight' || a.activity === 'stranded' || a.activity === 'leaving' || this.busyWithPlayer(a)) continue;
       const d = Math.hypot(a.pos.x, a.pos.z);
       if (d > 60) continue;
       this.endConvo(a);
@@ -232,6 +247,11 @@ export class NpcManager {
     const leader = this.game.clan.leader;
     const la = leader ? this.agents.get(leader.id) : null;
     if (la) setTimeout(() => la.say(text, 12), 2500);
+  }
+
+  /** Leading, watching, following or shielding the player — don't pull them away. */
+  busyWithPlayer(a: NpcAgent) {
+    return a.activity === 'lead' || a.activity === 'follow' || a.activity === 'shield' || a.activity === 'talkPlayer' || !!a.userLessonWatch;
   }
 
   denFor(c: Cat): DenName {
@@ -325,6 +345,7 @@ export class NpcManager {
     if (a.activity === 'stranded') { a.mood = 'afraid'; if (simRng.chance(dt * 0.25)) a.say(simRng.pick(['Help! Help me!', 'The water is rising!', 'Someone, please!']), 3); return; }
     if (a.activity === 'follow') { this.followThink(a); return; }
     if (a.activity === 'shield') { this.shieldThink(a); return; }
+    if (a.activity === 'lead') { this.leadThink(a, dt); return; }
     if (a.activity === 'talkPlayer') { if (a.actTimer <= 0) a.activity = 'idle'; return; }
     if (a.activity === 'leaving') { if (a.actTimer <= 0 || !a.target) this.removeAgent(a.id); return; }
     if (c.clan !== 'home') { this.outsiderThink(a, dt, dPlayer); return; }
@@ -844,6 +865,69 @@ export class NpcManager {
     const s = this.shielder();
     if (!s || o === s) return false;
     return dist2(s.pos.x, s.pos.z, this.game.player.pos.x, this.game.player.pos.z) < 2.2;
+  }
+
+  // ------------------------------------------------------------------ leading the player
+  /** This cat walks a route and the player follows; it waits if they fall behind. */
+  startLead(a: NpcAgent, route: { x: number; z: number }[], onArrive: () => void, onWaypoint?: (i: number) => void) {
+    this.endConvo(a);
+    a.patrol = null;
+    a.followTarget = null;
+    a.activity = 'lead';
+    a.actTimer = 999;
+    a.userLead = { route, idx: 0, onArrive, onWaypoint, paused: false, nagT: 4, best: Infinity, stuckT: 0 };
+    a.setTarget(route[0].x, route[0].z);
+  }
+
+  private leadThink(a: NpcAgent, dt: number) {
+    const L = a.userLead;
+    const pl = this.game.player;
+    if (!L) { a.activity = 'idle'; return; }
+    const dP = dist2(a.pos.x, a.pos.z, pl.pos.x, pl.pos.z);
+    const w = L.route[L.idx];
+    const dW = dist2(a.pos.x, a.pos.z, w.x, w.z);
+    const face = () => { a.heading = Math.atan2(pl.pos.z - a.pos.z, pl.pos.x - a.pos.x); };
+    // blocked just short of the spot (tree, water)? close enough counts
+    if (!L.paused) {
+      if (dW < L.best - 0.3) { L.best = dW; L.stuckT = 0; } else L.stuckT += dt;
+    }
+    const arrived = dW < 2.2 || (dW < 7 && L.stuckT > 6);
+    if (arrived) {
+      a.target = null;
+      a.route = [];
+      if (dP < 7) {
+        L.onWaypoint?.(L.idx);
+        L.idx++;
+        if (L.idx >= L.route.length) {
+          a.userLead = undefined;
+          a.activity = 'idle';
+          a.actTimer = 0;
+          L.onArrive();
+          return;
+        }
+        const n = L.route[L.idx];
+        L.best = Infinity;
+        L.stuckT = 0;
+        a.setTarget(n.x, n.z);
+      } else face();
+      return;
+    }
+    if (dP > 10) {
+      // wait for the apprentice
+      if (!L.paused) { L.paused = true; a.target = null; a.route = []; }
+      face();
+      L.nagT -= dt;
+      if (L.nagT <= 0) {
+        L.nagT = 7;
+        a.say(simRng.pick([`Keep up, ${this.game.clan.player.given}!`, 'Over here! Don\'t dawdle.', 'Stay close to me.', 'This way!']), 2.5);
+      }
+      return;
+    }
+    if (L.paused || !a.target) {
+      L.paused = false;
+      a.setTarget(w.x, w.z);
+    }
+    a.moveSpeed = dP > 6 ? 1.4 : Math.max(2.2, pl.speed * 0.95);
   }
 
   private followThink(a: NpcAgent) {

@@ -339,8 +339,8 @@ export class Player implements Fighter {
       this.game.combat.resolveAttack(this, hostile, 1, true);
       return;
     }
-    const precision = 1 - Math.abs(p.charge - 0.75) * 1.3;
-    const caught = this.game.prey.tryCatch(this.pos.x, this.pos.z, 0.45 * scale + 0.25, precision);
+    const precision = Math.max(0.4, 1 - Math.abs(p.charge - 0.7) * 0.8);
+    const caught = this.game.prey.tryCatch(this.pos.x, this.pos.z, 0.9 * scale + 0.55, precision);
     if (caught) this.game.interactions.caughtPrey(caught.kind);
     else {
       const near = this.game.prey.nearestOfKind(this.pos.x, this.pos.z, 3);
@@ -389,7 +389,7 @@ export class Player implements Fighter {
       return;
     }
     // swipe at fish / prey in reach
-    const pr = game.prey.nearestOfKind(this.pos.x, this.pos.z, 0.7 * scale + 0.35);
+    const pr = game.prey.nearestOfKind(this.pos.x, this.pos.z, 1.0 * scale + 0.5);
     if (pr) {
       const caught = game.prey.tryCatch(pr.pos.x, pr.pos.z, 0.5, pr.kind === 'fish' ? 0.5 : 0);
       if (caught) game.interactions.caughtPrey(caught.kind);

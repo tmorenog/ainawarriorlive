@@ -13,6 +13,13 @@ On the character screen you choose between two lore modes:
 
 *Warriors* names and characters belong to their owners. This mode is an unofficial, non-commercial tribute. If you publish the game, consider making the original mode the default.
 
+## Talking to cats in your own words
+
+Every conversation has a **"Say something…"** box. Type anything and the cat answers in character. Their personality, rank and feelings toward you shape the reply, and your words change the relationship: compliments and apologies help, insults hurt.
+
+- **Built in (default, offline):** a reply engine that understands greetings, hunting, herbs, deathberries, clans, leaders, family, gossip, fighting, StarClan, jokes and more.
+- **Smarter AI replies (optional):** deploy to Vercel and add an `ANTHROPIC_API_KEY` environment variable in the project settings. The `api/chat.ts` function then lets cats reply using Claude. If the key is missing or a request fails, the game falls back to the built-in engine. You can switch between the two under **Settings → Cat replies**.
+
 ## Running it
 
 ```bash

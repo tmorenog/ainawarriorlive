@@ -288,7 +288,8 @@ export class Menus {
     const clan = g.clan;
     const s = h('div', 'screen memorial', '', this.root);
     this.screen = s;
-    h('h1', '', `${esc(displayName(dead))} walks the Long Meadow`, s);
+    this.game.ui.hideBanner();
+    h('h1', '', esc(`${displayName(dead)} walks the Long Meadow`), s);
     const kits = dead.kits.map((k) => clan.get(k)).filter((k) => k) as Cat[];
     const summary = [
       `${roleLabel({ ...dead, alive: true })} of ${clanTitle(esc(g.territories.homeName))}`,
@@ -301,6 +302,7 @@ export class Menus {
     h('div', 'epitaph', summary, s);
     const mourners = clan.home().filter((c) => (c.relations[dead.id]?.opinion ?? 0) > 40).slice(0, 5).map((c) => displayName(c));
     if (mourners.length) h('div', 'epitaph', `Mourned by ${esc(mourners.join(', '))}.`, s);
+    this.lifeCard(dead, s);
     const cands = this.successors(dead);
     const box = h('div', 'succ modal', '', s);
     if (!cands.length) {
@@ -317,6 +319,49 @@ export class Menus {
       const card = h('div', 'card', `<div class="cn">${esc(displayName(c))}</div><div class="cr">${esc(roleLabel(c))} · ${Math.floor(c.age)} moons · ${c.traits.join(', ')}</div><div class="cr" style="color:var(--accent)">${esc(why)}</div>`, cards);
       card.onclick = () => { this.clear(); g.continueAs(c); };
     }
+  }
+
+  /** A look back at the life that just ended: moons, personality, deeds. */
+  lifeCard(dead: Cat, parent: HTMLElement) {
+    const g = this.game;
+    const clan = g.clan;
+    const TRAIT_TEXT: Record<string, string> = {
+      friendly: 'warm and quick to make friends', shy: 'quiet and gentle', brave: 'fearless when it mattered', curious: 'always wondering what lay beyond the next tree',
+      serious: 'steady and dutiful', playful: 'full of mischief and fun', suspicious: 'watchful and slow to trust', aggressive: 'fierce and quick to fight',
+      loyal: 'loyal to the clan above all', ambitious: 'driven to rise higher', kind: 'kind to every cat', mischievous: 'a born troublemaker', calm: 'calm in every storm', lazy: 'fond of a long nap in the sun',
+    };
+    const stageAt = (m: number) => (m < 6 ? 'kit' : m < 12 ? 'apprentice' : 'warrior');
+    const moons = Math.floor(dead.age);
+    const mate = clan.get(dead.mate);
+    const kits = dead.kits.map((k) => clan.get(k)).filter(Boolean) as Cat[];
+    const friends = Object.entries(dead.relations).filter(([, r]) => r.opinion > 55).map(([id]) => clan.get(id)).filter((c) => c && c.clan === 'home').slice(0, 4) as Cat[];
+    const rivals = Object.entries(dead.relations).filter(([, r]) => r.opinion < -30).map(([id]) => clan.get(id)).filter(Boolean).slice(0, 3) as Cat[];
+    const best = dead.memories.slice().sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight)).slice(0, 4);
+    const skill = (n: number) => '●'.repeat(Math.max(1, Math.round(n / 20))) + '○'.repeat(5 - Math.max(1, Math.round(n / 20)));
+    const card = h('div', 'succ modal life-card', '', parent);
+    card.innerHTML = `
+      <h2>A life of ${moons} moon${moons === 1 ? '' : 's'}</h2>
+      <div class="life-grid">
+        <div class="big-moons"><div class="n">${moons}</div><div class="l">moons</div><div class="s">${esc(stageAt(0))} → ${esc(dead.stage === 'elder' ? 'elder' : stageAt(moons))}${dead.role === 'leader' ? ' → leader' : dead.role === 'deputy' ? ' → deputy' : dead.role === 'medicine' ? ' → medicine cat' : ''}</div></div>
+        <div>
+          <div class="kv">
+            <b>Personality</b><span>${dead.traits.map((t) => `<b style="color:var(--accent)">${esc(t)}</b> — ${esc(TRAIT_TEXT[t] ?? t)}`).join('<br>')}</span>
+            <b>Looks</b><span>${esc(PATTERN_LABEL[dead.app.pattern].toLowerCase())}, ${esc(dead.app.fur)} fur, ${esc(dead.app.body)} build</span>
+            <b>Reputation</b><span>${Math.round(dead.reputation)} (${dead.reputation > 40 ? 'respected' : dead.reputation > 10 ? 'trusted' : dead.reputation > -10 ? 'ordinary' : 'doubted'})</span>
+            <b>Hunting</b><span>${skill(dead.skills.hunting)}</span>
+            <b>Fighting</b><span>${skill(dead.skills.fighting)}</span>
+            <b>Tracking</b><span>${skill(dead.skills.tracking)}</span>
+            <b>Healing</b><span>${skill(dead.skills.healing)}</span>
+            ${mate ? `<b>Mate</b><span>${esc(displayName(mate))}</span>` : ''}
+            ${kits.length ? `<b>Kits</b><span>${esc(kits.map((k) => displayName(k)).join(', '))}</span>` : ''}
+            ${dead.mentored ? `<b>Apprentices</b><span>${dead.mentored} trained</span>` : ''}
+            ${friends.length ? `<b>Closest friends</b><span>${esc(friends.map((f) => displayName(f)).join(', '))}</span>` : ''}
+            ${rivals.length ? `<b>Rivals</b><span>${esc(rivals.map((f) => displayName(f)).join(', '))}</span>` : ''}
+            <b>Good deeds</b><span>${dead.deeds}</span>
+          </div>
+        </div>
+      </div>
+      ${best.length ? `<h3>Remembered moments</h3>${best.map((m) => `<div class="entry"><span class="day">Moon ${m.day + 1}</span>${m.weight > 0 ? '💛' : '🖤'} ${esc(m.text)}</div>`).join('')}` : ''}`;
   }
 
   successors(dead: Cat): [Cat, string][] {

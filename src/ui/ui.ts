@@ -147,6 +147,10 @@ export class UI {
     (this.banner as any)._t = setTimeout(() => this.banner.classList.add('hidden'), seconds * 1000);
   }
 
+  hideBanner() {
+    this.banner.classList.add('hidden');
+  }
+
   fade(on: boolean, text = '') {
     this.fadeEl.textContent = loreText(text);
     this.fadeEl.classList.toggle('on', on);
@@ -320,7 +324,7 @@ export class UI {
     if (p.charging) {
       this.pounce.classList.remove('hidden');
       const k = p.pounceCharge;
-      const sweet = k > 0.55 && k < 0.95;
+      const sweet = k > 0.35;
       this.pounce.style.background = `conic-gradient(${sweet ? '#8fd07a' : '#e8b865'} ${k * 360}deg, rgba(255,255,255,0.12) 0deg)`;
       this.pounce.style.mask = this.pounce.style.webkitMask = 'radial-gradient(circle, transparent 15px, #000 16px)';
     } else this.pounce.classList.add('hidden');

@@ -136,20 +136,20 @@ export class PreyManager {
     // --- senses
     let stim = 0;
     const noise = pl.noise * w.stealthModifier * (1 - skill * 0.004);
-    const hearR = info.hear * noise;
+    const hearR = info.hear * noise * 0.5; // easy hunting: prey are half as sharp
     if (d < hearR) stim += (1 - d / hearR) * 2.2;
     // scent: prey downwind of player
     const wind = game.windDir;
     const dx = (pr.pos.x - pl.pos.x) / Math.max(d, 0.01), dz = (pr.pos.z - pl.pos.z) / Math.max(d, 0.01);
     const downwind = dx * wind.x + dz * wind.y;
-    const smellR = info.smell * (0.4 + w.p.wind * 0.8) * (1 - w.p.rain * 0.5);
+    const smellR = info.smell * 0.5 * (0.4 + w.p.wind * 0.8) * (1 - w.p.rain * 0.5);
     if (downwind > 0.55 && d < smellR) stim += (1 - d / smellR) * 1.4;
     // sight of movement
-    const sightR = info.sight * w.visibility * (game.time.isNight ? 0.6 : 1);
+    const sightR = info.sight * 0.5 * w.visibility * (game.time.isNight ? 0.6 : 1);
     if (d < sightR && pl.speed > 0.6) stim += (pl.speed / 3) * (1 - d / sightR) * 1.5;
-    if (d < 0.7 && pr.state !== 'flee') stim += 3;
+    if (d < 0.35 && pr.state !== 'flee') stim += 3;
     if (pr.state !== 'flee') {
-      pr.awareness = clamp(pr.awareness + stim * dt - dt * 0.25, 0, 1.2);
+      pr.awareness = clamp(pr.awareness + stim * dt * 0.5 - dt * 0.4, 0, 1.2);
       if (pr.awareness >= 1) this.startFlee(pr);
       else if (pr.awareness > 0.45) {
         pr.state = 'alert';
@@ -185,7 +185,7 @@ export class PreyManager {
   startFlee(pr: Prey) {
     const pl = this.game.player;
     pr.state = 'flee';
-    pr.timer = pr.info.escape === 'fly' ? 3 : simRng.range(1.8, 3);
+    pr.timer = pr.info.escape === 'fly' ? 3 : simRng.range(2.5, 4); // runs longer before hiding: time to chase it down
     pr.heading = Math.atan2(pr.pos.z - pl.pos.z, pr.pos.x - pl.pos.x);
     if (pr.info.escape === 'climb') {
       const cols = this.game.collidersNear(pr.pos.x, pr.pos.z);
@@ -233,7 +233,7 @@ export class PreyManager {
         pr.hop = Math.abs(Math.sin(this.game.clock * 10)) * 0.12;
         break;
     }
-    this.step(pr, info.speed, dt);
+    this.step(pr, info.speed * 0.65, dt);
     if (pr.timer <= 0) {
       // bolt into cover
       pr.hidden = true;
@@ -266,7 +266,7 @@ export class PreyManager {
     }
     if (!best) return null;
     const stateBonus = best.state === 'idle' ? 0.2 : best.state === 'alert' ? 0 : -0.25;
-    const chance = clamp(0.5 + skill / 220 + stateBonus + precision * 0.15 - (bd / radius) * 0.2, 0.1, 0.97);
+    const chance = clamp(0.8 + skill / 300 + stateBonus + precision * 0.1 - (bd / radius) * 0.1, 0.65, 0.98);
     if (simRng.chance(chance)) {
       this.remove(best);
       return best;

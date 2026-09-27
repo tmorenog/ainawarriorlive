@@ -221,7 +221,7 @@ export class Game {
         this.chunks.invalidateAll();
       }
     }
-    this.prey.max = q === 'low' ? 10 : 16;
+    this.prey.max = q === 'low' ? 14 : 22;
     this.renderer.shadowMap.enabled = s.shadows;
     this.sky.setShadowQuality(q === 'low' ? 1024 : 2048, s.shadows);
     this.audio.setVolume(s.volume);
