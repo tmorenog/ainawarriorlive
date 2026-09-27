@@ -570,6 +570,15 @@ export class Game {
     clan.log(`${displayName(p)} was exiled from the clan.`, 'politics');
     clan.remember(p, 'I was exiled from my clan. I must survive alone — or find a way back.', -12);
     this.ceremony(`${clan.leader ? displayName(clan.leader) : 'The Warden'}: "${p.given}, you have broken the code too many times. You are no longer one of us. Leave, and do not return."`, [p.id]);
+    // friends grieve
+    const friends = clan.home().filter((c) => !c.isPlayer && (c.relations[p.id]?.opinion ?? 0) >= 40);
+    for (const f of friends) {
+      clan.remember(f, `${p.given} was exiled. It broke my heart.`, -6, p.id);
+      clan.adjust(f, p, 5);
+      const ag = this.npcs.agents.get(f.id);
+      if (ag) { ag.mood = 'sad'; ag.say(simRng.pick(['No... not ' + p.given + '!', 'This isn\'t fair!', '*wails softly*', 'I\'ll find you. I promise.']), 5); }
+    }
+    if (friends.length) setTimeout(() => this.ui.toast(`${friends.slice(0, 3).map((f) => f.given).join(', ')}${friends.length > 3 ? ' and others' : ''} watch you go with sorrow in their eyes. Friends may still help you in secret — and speak for your return.`, 'info'), 4000);
     this.ui.toast('You have been exiled. Leave the territory. After some time, a clanmate may speak for your return.', 'danger');
     this.objectives.add({ id: 'exile', kind: 'free', title: 'Exiled', desc: 'Leave the territory and survive. Hunt, and sleep in caves or hollows. After a few moons, ask a clanmate outside camp to speak for your return.', need: 1 });
     p.confinedUntil = this.time.day;
@@ -768,7 +777,7 @@ export class Game {
     if (this.exileT > 0) return;
     this.exileT = 1;
     if (this.territories.ownerAt(this.player.pos.x, this.player.pos.z) !== 'home') return;
-    const a = this.npcs.nearestTo(this.player.pos.x, this.player.pos.z, 14, (x) => x.cat.clan === 'home' && x.cat.stage === 'warrior' && x.activity !== 'fight' && x.activity !== 'sleep');
+    const a = this.npcs.nearestTo(this.player.pos.x, this.player.pos.z, 14, (x) => x.cat.clan === 'home' && x.cat.stage === 'warrior' && x.activity !== 'fight' && x.activity !== 'sleep' && !this.npcs.isPlayerFriend(x));
     if (!a) return;
     if (!a.warned) {
       a.warned = 1;

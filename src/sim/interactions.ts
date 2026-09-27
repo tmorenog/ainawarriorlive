@@ -131,6 +131,11 @@ export class Interactions {
     const r = clan.rel(c, pc);
     r.familiarity = clamp(r.familiarity + 2, 0, 100);
     let text = greetPlayer(c, pc, op, { night: g.time.isNight, food: clan.food, clanSize: clan.home().length, weather: g.weatherLabel(), recent: clan.lastRecent });
+    if (pc.exiled && g.npcs.isPlayerFriend(a)) text = simRng.pick([
+      `${pc.given}! *presses close* It hasn't been the same without you. I hate this.`,
+      `Oh, ${pc.given}... are you eating? Are you safe? I think about you every night.`,
+      `I told them it was wrong to drive you out. I'll keep telling them.`,
+    ]);
     const past = this.pastLifeFriend(c);
     const pkey = c.id + ':' + g.time.day;
     if (past && !this.reminisced.has(pkey) && simRng.chance(0.35)) {
@@ -190,6 +195,7 @@ export class Interactions {
 
     if (pc.exiled) {
       opts.push({ label: 'Ask to return to the clan', action: () => this.askReturn(a, done) });
+      if (g.npcs.isPlayerFriend(a) && c.stage !== 'kit') opts.push({ label: 'Ask for shelter', hint: 'in secret', action: () => this.secretShelter(a, done) });
       opts.push({ label: 'Leave', action: done });
       return opts;
     }
@@ -537,11 +543,32 @@ export class Interactions {
     g.ui.dialog({ speaker: c, text, sub: isRival ? `${clanTitle(clanName)}` : 'Loner', options: opts, onClose: done, input: (t) => this.freeTalk(a, t, done) });
   }
 
+  /** A friend secretly feeds and hides the exiled player for the night. */
+  private secretShelter(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const pc = g.clan.player;
+    g.ui.dialog({ speaker: a.cat, text: simRng.pick([
+      `Shh — follow me. There's a hollow under the old roots nobody uses. I'll bring you something to eat.`,
+      `Of course. Nobody has to know. Rest here, I'll keep watch.`,
+      `I'd never leave you out in the cold. Come, quickly, before anyone sees.`,
+    ]), options: [{ label: 'Rest in secret', action: () => {
+      done();
+      pc.hunger = 100;
+      pc.health = Math.min(pc.maxHealth, pc.health + 40);
+      pc.injury = Math.max(0, pc.injury - 30);
+      g.clan.adjust(pc, a.cat, 6, { text: `${a.cat.given} secretly sheltered me while I was exiled.`, weight: 6 });
+      g.clan.adjust(a.cat, pc, 3);
+      g.passTime(8);
+      g.ui.toast(`${a.name} hid you, shared fresh-kill and kept watch while you slept. Nobody found out.`, 'good');
+    } }, { label: 'I don\'t want to get you in trouble', action: done }], onClose: done });
+  }
+
   private askReturn(a: NpcAgent, done: () => void) {
     const g = this.game;
     const clan = g.clan;
     const pc = clan.player;
-    const ok = g.decisions.requestReturn();
+    const friend = clan.opinion(a.cat, pc) >= 40;
+    const ok = friend || g.decisions.requestReturn();
     if (ok) {
       pc.exiled = false;
       pc.clan = 'home';
@@ -549,7 +576,10 @@ export class Interactions {
       pc.infractions = 0;
       clan.log(`${displayName(pc)} was allowed to return to the clan.`, 'politics');
       clan.remember(pc, 'The clan took me back. I must earn their trust again.', 8);
-      g.ui.dialog({ speaker: a.cat, text: 'The Warden has agreed. Come home — but tread carefully.', options: [{ label: 'Thank you', action: done }], onClose: done });
+      clan.adjust(pc, a.cat, 10, { text: `${a.cat.given} spoke for me and brought me home.`, weight: 8 });
+      g.ui.dialog({ speaker: a.cat, text: friend
+        ? `I went to the leader and I didn't stop asking until they agreed. You're coming home, ${pc.given}. I missed you so much.`
+        : 'The Warden has agreed. Come home — but tread carefully.', options: [{ label: 'Thank you', action: done }], onClose: done });
       g.onPlayerRoleChange();
     } else {
       clan.adjust(a.cat, pc, -2);
