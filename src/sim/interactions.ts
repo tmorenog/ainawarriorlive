@@ -19,6 +19,8 @@ export interface Prompt { text: string; action: () => void }
 export class Interactions {
   current: Prompt | null = null;
   private lastSpoke = new Map<string, number>();
+  private reminisced = new Set<string>();
+  private remindedOf = new Set<string>();
   constructor(private game: Game) {}
 
   /** Compute the best contextual action near the player. */
@@ -128,9 +130,51 @@ export class Interactions {
     const op = clan.opinion(c, pc);
     const r = clan.rel(c, pc);
     r.familiarity = clamp(r.familiarity + 2, 0, 100);
-    const text = greetPlayer(c, pc, op, { night: g.time.isNight, food: clan.food, clanSize: clan.home().length, weather: g.weatherLabel(), recent: clan.lastRecent });
+    let text = greetPlayer(c, pc, op, { night: g.time.isNight, food: clan.food, clanSize: clan.home().length, weather: g.weatherLabel(), recent: clan.lastRecent });
+    const past = this.pastLifeFriend(c);
+    const pkey = c.id + ':' + g.time.day;
+    if (past && !this.reminisced.has(pkey) && simRng.chance(0.35)) {
+      this.reminisced.add(pkey);
+      text = this.reminiscence(c, past);
+      clan.adjust(c, pc, 3, this.remindedOf.has(c.id + ':' + past.id) ? undefined : { text: `${pc.given} reminded me of ${past.given}.`, weight: 2 });
+      this.remindedOf.add(c.id + ':' + past.id);
+    }
     const opts = this.talkOptions(a, done);
     g.ui.dialog({ speaker: c, text, options: opts, onClose: done, input: (t) => this.freeTalk(a, t, done) });
+  }
+
+  /** The most recent of the player's past lives this cat was friends with. */
+  pastLifeFriend(c: Cat): Cat | null {
+    const clan = this.game.clan;
+    for (let i = clan.lineage.length - 1; i >= 0; i--) {
+      const old = clan.get(clan.lineage[i]);
+      if (!old || old.alive || old.id === clan.player.id || old.id === c.id) continue;
+      if ((c.relations[old.id]?.opinion ?? 0) >= 40) return old;
+    }
+    return null;
+  }
+
+  private reminiscence(c: Cat, old: Cat): string {
+    const n = displayName(old);
+    const mate = c.mate === old.id;
+    const kin = isFamily(c, old);
+    const mem = c.memories.filter((m) => m.about === old.id && m.weight > 0).pop();
+    const lines = mate ? [
+      `*looks at you for a long moment* You have ${n}'s way of tilting your head... I still dream of ${pronoun(old, 'obj')} some nights.`,
+      `For a heartbeat I thought you were ${n}. ${pronoun(old, 'subj')[0].toUpperCase() + pronoun(old, 'subj').slice(1)} used to sit just like that beside me.`,
+    ] : kin ? [
+      `You remind me of ${n}. Family always carries a little of each other, I suppose.`,
+      `${n} would have been proud of you. I see ${pronoun(old, 'obj')} in you, you know.`,
+    ] : [
+      `Sometimes you remind me so much of ${n}... the way you hold your tail. I miss ${pronoun(old, 'obj')}.`,
+      `Huh. You sounded just like ${n} then. We were close, ${pronoun(old, 'subj')} and I.`,
+      `*purrs softly* ${n} used to say the exact same thing. It's like a piece of ${pronoun(old, 'obj')} is still here.`,
+      `Do you ever feel like you've walked these paths before? ${n} used to love this part of the forest.`,
+      `I was just thinking about ${n}. ${pronoun(old, 'subj')[0].toUpperCase() + pronoun(old, 'subj').slice(1)} hunts with StarClan now, but when I look at you... I don't know. It's strange.`,
+    ];
+    let line = simRng.pick(lines);
+    if (mem && simRng.chance(0.5)) line += ` I'll never forget — ${mem.text.replace(/^./, (ch) => ch.toLowerCase())}`;
+    return line;
   }
 
   private talkOptions(a: NpcAgent, done: () => void): { label: string; action: () => void; hint?: string }[] {
@@ -194,6 +238,16 @@ export class Interactions {
       const likes = c.traits.includes('playful') || c.traits.includes('mischievous');
       clan.adjust(c, pc, likes ? 4 : -5);
       g.ui.dialog({ speaker: c, text: likes ? 'Ha! You\'ll pay for that one!' : simRng.pick(['Mouse-brain.', 'Is that supposed to be funny?', 'Grow up.']), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+    } });
+    const past = this.pastLifeFriend(c);
+    if (past && this.remindedOf.has(c.id + ':' + past.id)) opts.push({ label: `Ask about ${past.given}`, hint: 'a past life', action: () => {
+      const r = c.relations[past.id];
+      const bits = [`${displayName(past)} was a ${roleLabel({ ...past, alive: true }).toLowerCase()} who lived ${Math.floor(past.age)} moons.`];
+      bits.push(r.opinion > 70 ? `There was no cat I trusted more.` : `We were good friends.`);
+      if (past.traits.length) bits.push(`${pronoun(past, 'subj')[0].toUpperCase() + pronoun(past, 'subj').slice(1)} was ${past.traits.join(' and ')}.`);
+      bits.push(`${pronoun(past, 'subj')[0].toUpperCase() + pronoun(past, 'subj').slice(1)} died of ${past.deathCause ?? 'something none of us saw coming'}. ...Thank you for asking. It's nice to say ${pronoun(past, 'poss')} name out loud.`);
+      clan.adjust(c, pc, 2);
+      g.ui.dialog({ speaker: c, text: bits.join(' '), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
     } });
     // ask the medicine cat to take you as their apprentice
     if (c.role === 'medicine' && !c.isPlayer && (pc.stage === 'kit' || pc.stage === 'apprentice') && pc.role !== 'medicineApprentice' && !(pc.stage === 'kit' && pc.medicinePath)) {
