@@ -657,7 +657,7 @@ export class Interactions {
     pc.skills.hunting = Math.min(99, pc.skills.hunting + 1.2);
     if (!pl.addPrey(kind)) {
       g.ui.toast(`You caught a ${info.name}, but your mouth is full. You gulp it down.`, 'info');
-      this.eat(info.value, true);
+      this.eat(info.value, false);
     } else {
       g.ui.toast(`You caught a ${info.name}!${pc.stage !== 'kit' && !pc.exiled ? ' Bring it to the fresh-kill pile.' : ''}`, 'good');
     }
@@ -669,9 +669,31 @@ export class Interactions {
     const g = this.game;
     const pl = g.player;
     if (!pl.prey.length) { g.ui.toast('You have nothing to eat.', 'info'); return; }
+    // warn first if eating now would break the code; pressing again within a few seconds eats anyway
+    const now = performance.now();
+    if (this.wouldBreakFeedRule(true) && now - this.eatWarnAt > 4000) {
+      this.eatWarnAt = now;
+      g.ui.toast('⚠ The code says to feed the clan first — take your catch to the fresh-kill pile. (Press again to eat anyway.)', 'danger');
+      return;
+    }
     const pr = pl.prey.shift()!;
     pl.updateCarryVisual();
     this.eat(pr.value, true);
+  }
+
+  private eatWarnAt = -1e9;
+
+  /** Would eating right now break the "feed the clan first" rule? */
+  wouldBreakFeedRule(outside: boolean): boolean {
+    const g = this.game;
+    const pc = g.clan.player;
+    if (pc.exiled || pc.stage === 'kit') return false;
+    if (outside) {
+      const clanHungry = g.clan.home().some((c) => (c.stage === 'kit' || c.stage === 'elder') && c.hunger < 45) && g.clan.food < g.clan.home().length * 0.5;
+      return pc.hunger >= 15 && (clanHungry || pc.hunger > 50);
+    }
+    const needy = g.clan.home().some((c) => !c.isPlayer && (c.stage === 'kit' || c.stage === 'elder' || c.expectingUntil !== null) && c.hunger < 40);
+    return needy && g.clan.food < 3 && pc.hunger > 25 && pc.stage !== 'elder';
   }
 
   private eat(value: number, outside: boolean) {
@@ -699,12 +721,12 @@ export class Interactions {
     g.clan.addFood(total);
     pl.prey = [];
     pl.updateCarryVisual();
-    pc.reputation = clamp(pc.reputation + n * 1.5, -100, 100);
-    g.ui.toast(`You add your catch to the pile. (+${total} food)`, 'good');
+    pc.reputation = clamp(pc.reputation + n * 3, -100, 100);
+    g.ui.toast(`You add your catch to the pile. (+${total} food, +reputation)`, 'good');
     g.audio.drop();
-    for (const w of g.npcs.witnesses(pl.pos.x, pl.pos.z, 15)) { const c = g.clan.get(w); if (c) g.clan.adjust(c, pc, 1.5); }
+    for (const w of g.npcs.witnesses(pl.pos.x, pl.pos.z, 15)) { const c = g.clan.get(w); if (c) g.clan.adjust(c, pc, 3); }
     g.objectives.onDeliverPrey(n);
-    pc.deeds += n >= 2 ? 1 : 0;
+    pc.deeds += n >= 1 ? 1 : 0;
   }
 
   eatFromPile() {
@@ -712,6 +734,12 @@ export class Interactions {
     const pc = g.clan.player;
     const clan = g.clan;
     if (pc.hunger > 80) { g.ui.toast('You\'re not hungry.', 'info'); return; }
+    const now = performance.now();
+    if (this.wouldBreakFeedRule(false) && now - this.eatWarnAt > 4000) {
+      this.eatWarnAt = now;
+      g.ui.toast('⚠ Kits and elders are hungry and the pile is low — the code says they eat first. (Press again to eat anyway.)', 'danger');
+      return;
+    }
     const before = pc.hunger;
     clan.addFood(-1);
     pc.hunger = clamp(pc.hunger + 50, 0, 100);

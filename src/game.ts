@@ -525,16 +525,16 @@ export class Game {
       return;
     }
     if (rule === 'kitLeaveCamp') return; // the leader comes to deal with kits in person
-    if (n <= 1) {
+    if (n <= 2) {
       this.ui.toast(`${eName}: "${p.given}, I know what you did. Don't let it happen again."`, 'danger');
-    } else if (n === 2) {
+    } else if (n === 3) {
       this.ui.toast(`${eName} scolds you in front of the clan and gives you extra duties.`, 'danger');
       this.objectives.add({ id: 'punish-moss', kind: 'moss', title: 'Punishment: clean the elders\' bedding', desc: 'Bring three clumps of fresh moss to the elders\' den.', need: 3, giver: enforcer?.id, order: true, deadline: this.time.totalHours + 24, reward: { rep: 3 } });
-    } else if (n === 3) {
+    } else if (n === 4) {
       p.confinedUntil = this.time.day + 2;
       this.ui.toast(`${eName}: "You are confined to camp for two moons." Leaving will make things worse.`, 'danger');
       clan.log(`${p.given} was confined to camp.`, 'rule');
-    } else if (n === 4) {
+    } else if (n === 5) {
       if (p.stage === 'apprentice') {
         const l = LESSONS.find((x) => p.training[x] > 0);
         if (l) p.training[l]--;

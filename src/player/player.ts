@@ -57,6 +57,9 @@ export class Player implements Fighter {
   kitOutFlag = false;
   dangerFlag = false;
   confineFlag = false;
+  /** Seconds spent somewhere forbidden — a grace period lets honest mistakes be undone. */
+  private graceT = { confine: 0, trespass: 0, danger: 0 };
+  private warned = { border: false, danger: false, confine: false, kit: false };
   private checkT = 0;
   sniffCd = 0;
   sleeping = false;
@@ -450,32 +453,65 @@ export class Player implements Fighter {
     if (cat.stage === 'kit' && !inCamp) {
       // clanmates who spot a wandering kit either scold them or (if friends) hide them
       if (!this.kitOutFlag) game.npcs.kitSpotted();
-    } else if (inCamp) this.kitOutFlag = false;
+    } else if (inCamp) {
+      this.kitOutFlag = false;
+      const d = Math.hypot(x, z);
+      if (cat.stage === 'kit' && !cat.exiled && d > 14 && !this.warned.kit) { this.warned.kit = true; game.ui.toast('⚠ Kits must stay inside the camp — going out breaks the code!', 'info'); }
+      else if (d < 12) this.warned.kit = false;
+    }
     if (game.clan.kitPunishPending && cat.stage === 'kit' && !this.busy) game.npcs.summonForKitPunishment();
     // confinement
-    if (cat.confinedUntil !== null && cat.confinedUntil > game.time.day && !inCamp) {
-      if (!this.confineFlag) { this.confineFlag = true; game.clan.infraction('confinement', game.npcs.witnesses(x, z, 30)); }
-    } else if (inCamp) this.confineFlag = false;
+    const confined = cat.confinedUntil !== null && cat.confinedUntil > game.time.day;
+    const campD = Math.hypot(x, z);
+    if (confined && !inCamp) {
+      this.graceT.confine += 0.5;
+      if (!this.warned.confine) { this.warned.confine = true; game.ui.toast('⚠ You are confined to camp! Turn back now and nobody will mind.', 'danger'); }
+      if (this.graceT.confine > 10 && !this.confineFlag) { this.confineFlag = true; game.clan.infraction('confinement', game.npcs.witnesses(x, z, 30)); }
+    } else if (inCamp) {
+      this.confineFlag = false; this.graceT.confine = 0;
+      if (confined && campD > 14 && !this.warned.confine) { this.warned.confine = true; game.ui.toast('⚠ You are confined to camp — don\'t go past the entrance.', 'info'); }
+      else if (campD < 12) this.warned.confine = false;
+    }
     // trespass
     if (typeof owner === 'number' && !game.events.gatheringTruce(x, z)) {
-      if (!this.trespassFlag) {
+      this.graceT.trespass += 0.5;
+      if (this.graceT.trespass === 0.5) game.ui.toast(`⚠ You crossed into ${game.territories.rivals[owner].name} territory! Step back quickly and it won't count.`, 'danger');
+      if (this.graceT.trespass > 8 && !this.trespassFlag) {
         this.trespassFlag = true;
         const w = game.npcs.witnesses(x, z, 20);
         game.clan.infraction('crossBorder', w, game.territories.rivals[owner].name);
         game.events.onTrespass(owner);
       }
-    } else if (owner === 'home') this.trespassFlag = false;
+    } else {
+      this.graceT.trespass = 0;
+      if (owner === 'home') this.trespassFlag = false;
+      // warn before the border is crossed
+      let near: number | null = null;
+      for (let i = 0; i < 8 && near === null; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const o = game.territories.ownerAt(x + Math.cos(a) * 14, z + Math.sin(a) * 14);
+        if (typeof o === 'number') near = o;
+      }
+      if (near !== null && !this.warned.border && !game.events.gatheringTruce(x, z)) {
+        this.warned.border = true;
+        game.ui.toast(`👃 Strong ${game.territories.rivals[near].name} scent — the border is right here. Don't cross it.`, 'info');
+      } else if (near === null) this.warned.border = false;
+    }
     // danger zones
     const nearHouse = game.chunks.structuresNear(x, z, 12).some((s) => s.type === 'house');
     const chunk = game.chunks.getChunkAt(x, z);
     const onRoad = chunk ? (chunk.flagAt(x, z) & 2) !== 0 : false;
+    const nearHouseWide = !nearHouse && game.chunks.structuresNear(x, z, 26).some((s) => s.type === 'house');
+    if (nearHouseWide && !this.warned.danger) { this.warned.danger = true; game.ui.toast('⚠ A Tallfolk den is close. The code says to stay away from it.', 'info'); }
+    else if (!nearHouseWide && !nearHouse) this.warned.danger = false;
     if (nearHouse || onRoad) {
-      if (!this.dangerFlag) {
+      this.graceT.danger += 0.5;
+      if (this.graceT.danger === 0.5) game.ui.toast(onRoad ? '⚠ The road is hard and smells of fumes. Get off it!' : '⚠ Too close to the Tallfolk den! Back away.', 'danger');
+      if (this.graceT.danger > 8 && !this.dangerFlag) {
         this.dangerFlag = true;
         if (cat.stage !== 'warrior' || nearHouse) game.clan.infraction('dangerZones', game.npcs.witnesses(x, z, 20));
-        if (onRoad) game.ui.toast('The road is hard and smells of fumes. Something roars in the distance...', 'danger');
       }
-    } else this.dangerFlag = false;
+    } else { this.dangerFlag = false; this.graceT.danger = 0; }
     // caves
     const cave = game.chunks.structuresNear(x, z, 0).find((s) => s.type === 'cave');
     this.inCave = cave ? 1 - clamp(dist2(x, z, cave.x, cave.z) / cave.r, 0, 1) * 0.5 : 0;

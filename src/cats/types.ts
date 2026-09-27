@@ -109,6 +109,8 @@ export interface Cat {
   expectingUntil: number | null;
   isPlayer: boolean;
   infractions: number;
+  /** Moons in a row without breaking the code. */
+  goodDays?: number;
   confinedUntil: number | null;
   deeds: number; // notable good deeds (for leadership)
   mentored: number; // number of apprentices trained

@@ -393,7 +393,19 @@ export class ClanSim {
     this.politicsTick();
     this.rivalTick();
     // infraction memory fades
-    for (const c of this.home()) if (c.infractions > 0 && rng.chance(0.3)) c.infractions--;
+    for (const c of this.home()) if (c.infractions > 0 && rng.chance(c.isPlayer ? 0.8 : 0.3)) c.infractions--;
+    // following the code is noticed and rewarded
+    const pl = this.player;
+    if (pl && !pl.exiled && pl.infractions === 0) {
+      pl.goodDays = (pl.goodDays ?? 0) + 1;
+      pl.reputation = clamp(pl.reputation + 2, -100, 100);
+      for (const c of this.home()) if (!c.isPlayer && (c.traits.includes('loyal') || c.traits.includes('serious') || c.role === 'leader' || c.role === 'deputy')) this.adjust(c, pl, 1, undefined, 0);
+      if (pl.goodDays % 5 === 0) {
+        this.game.ui.toast(`${this.leader && !this.leader.isPlayer ? displayName(this.leader) : 'The clan'} notices how well you keep the code. (+reputation)`, 'good');
+        pl.reputation = clamp(pl.reputation + 4, -100, 100);
+        this.remember(pl, 'The clan has noticed how faithfully I follow the code.', 2);
+      }
+    } else if (pl) pl.goodDays = 0;
     this.recentInfractions = Math.max(0, this.recentInfractions - 1);
     // pending decisions expire
     this.pending = this.pending.filter((p) => {
@@ -908,13 +920,20 @@ export class ClanSim {
   infraction(rule: RuleId, witnesses: string[], detail?: string) {
     const p = this.player;
     if (!p || p.exiled) return;
-    const sev = RULES[rule].severity;
+    const sev = RULES[rule].severity * 0.5;
     const seen = witnesses.length > 0;
-    const discovered = seen || simRng.chance(0.3);
-    if (!discovered) return;
+    // only what is actually seen counts — no surprise punishments
+    if (!seen) return;
+    // a cat in good standing gets the benefit of the doubt
+    if (p.reputation >= 10 && p.infractions === 0 && simRng.chance(0.7)) {
+      const w = this.get(witnesses[0]);
+      this.game.ui.toast(`${w ? displayName(w) : 'A clanmate'} saw that, but lets it go: "Just don't do it again, alright?" (${RULES[rule].text})`, 'info');
+      p.reputation = clamp(p.reputation - 1, -100, 100);
+      return;
+    }
     p.infractions++;
     this.recentInfractions++;
-    p.reputation = clamp(p.reputation - sev * (seen ? 1 : 0.6), -100, 100);
+    p.reputation = clamp(p.reputation - sev, -100, 100);
     const text = `I broke the code: ${RULES[rule].text}${detail ? ' (' + detail + ')' : ''}`;
     this.log(`${seen ? 'Seen' : 'Found out'}: ${RULES[rule].text}`, 'rule');
     for (const id of witnesses) {
@@ -922,7 +941,7 @@ export class ClanSim {
       if (!w) continue;
       const strict = w.traits.includes('loyal') || w.traits.includes('serious') || w.role === 'leader' || w.role === 'deputy';
       const lenient = w.traits.includes('mischievous') || w.traits.includes('playful');
-      this.adjust(w, p, strict ? -sev * 1.2 : lenient ? -1 : -sev * 0.6, { text: `I saw ${p.given} break the code.`, weight: -2 });
+      this.adjust(w, p, strict ? -sev : lenient ? -0.5 : -sev * 0.5, { text: `I saw ${p.given} break the code.`, weight: -2 });
     }
     this.remember(p, text, -2);
     this.game.consequence(rule);

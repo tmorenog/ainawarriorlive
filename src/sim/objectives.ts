@@ -51,7 +51,8 @@ export class Objectives {
     this.list = this.list.filter((x) => x.id !== id);
     const game = this.game;
     const p = game.clan.player;
-    if (o.reward?.rep) p.reputation = Math.min(100, p.reputation + o.reward.rep);
+    if (o.reward?.rep) p.reputation = Math.min(100, p.reputation + o.reward.rep * (o.order ? 2 : 1.5));
+    if (o.order && p.infractions > 0) { p.infractions--; game.ui.toast('Your hard work makes up for past mistakes.', 'good'); }
     const giver = game.clan.get(o.giver);
     if (giver) game.clan.adjust(giver, p, o.reward?.opinion ?? 6, o.order ? { text: `${p.given} did as I asked.`, weight: 1 } : undefined);
     game.ui.toast(`✔ ${o.title}`, 'good');
@@ -170,8 +171,16 @@ export class Objectives {
     const now = game.time.totalHours;
     for (const o of [...this.list]) {
       if (o.deadline !== undefined && now > o.deadline) {
-        this.fail(o.id, !o.order);
-        continue;
+        // orders get one extension before they count as disobeying
+        if (o.order && !o.data?.extended) {
+          o.data = { ...(o.data ?? {}), extended: true };
+          o.deadline = now + 24;
+          const giver = game.clan.get(o.giver);
+          game.ui.toast(`${giver ? displayName(giver) : 'Your clanmates'} gives you more time: "${o.title}" — no rush, just get it done.`, 'objective');
+        } else {
+          this.fail(o.id, !o.order);
+          continue;
+        }
       }
       switch (o.kind) {
         case 'visit':
