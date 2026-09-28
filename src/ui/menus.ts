@@ -353,6 +353,35 @@ export class Menus {
   }
 
   // ------------------------------------------------------------ death & succession
+  /** A friend hears that you died: a little hand-drawn animation at 2 frames per second. */
+  griefScene(friend: Cat, dead: Cat, done: () => void) {
+    this.clear();
+    const s = h('div', 'screen memorial grief', '', this.root);
+    this.screen = s;
+    this.game.ui.hideBanner();
+    const card = h('div', 'grief-card', '', s);
+    const img = h('img', 'grief-frame', undefined, card) as HTMLImageElement;
+    img.alt = `${friend.given} crying`;
+    const caption = h('div', 'epitaph', esc(`${displayName(friend)} hears the news…`), s);
+    const frames = [1, 2, 3, 4].map((n) => `grief/${n}.jpg`);
+    for (const f of frames) { const pre = new Image(); pre.src = f; }
+    // 2 fps: surprised → teary → sad → crying, then keep crying for a while
+    const seq = [0, 1, 2, 3, 2, 3, 2, 3, 3];
+    let i = 0;
+    img.src = frames[seq[0]];
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; clearInterval(timer); done(); };
+    const timer = setInterval(() => {
+      i++;
+      if (i >= seq.length) { finish(); return; }
+      img.src = frames[seq[i]];
+      if (i === 2) caption.innerHTML = esc(`"${dead.given}…? No… not ${dead.given}…"`);
+      if (i === 4) caption.innerHTML = esc(`${displayName(friend)} cries for their friend.`);
+    }, 500);
+    const skip = h('button', 'btn dim', 'Continue', s);
+    skip.onclick = finish;
+  }
+
   memorial(dead: Cat, cause: string) {
     this.clear();
     const g = this.game;

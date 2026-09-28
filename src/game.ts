@@ -548,9 +548,13 @@ export class Game {
     this.ui.fade(true, `${displayName(c)} has died.`);
     this.ui.showHud(false);
     this.touch?.show(false);
+    // the cat's closest friend grieves first
+    const friend = this.clan.home().filter((x) => !x.isPlayer && x.id !== c.id && (x.relations[c.id]?.opinion ?? 0) >= 30)
+      .sort((a, b) => (b.relations[c.id]?.opinion ?? 0) - (a.relations[c.id]?.opinion ?? 0))[0];
     setTimeout(() => {
       this.ui.fade(false);
-      this.menus.memorial(c, cause);
+      if (friend) this.menus.griefScene(friend, c, () => this.menus.memorial(c, cause));
+      else this.menus.memorial(c, cause);
     }, 3000);
   }
 
