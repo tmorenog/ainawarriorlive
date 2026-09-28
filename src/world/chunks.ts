@@ -21,10 +21,22 @@ export const HERB_INFO: Record<HerbKind, { name: string; color: [number, number,
   bitterroot: { name: 'Bitterroot', color: [0.7, 0.35, 0.8], use: 'fights sickness' },
 };
 
+export type TreasureKind = 'feather' | 'shell' | 'shinyStone' | 'acorn' | 'pinecone' | 'snailShell' | 'blueEgg' | 'mossyStick';
+export const TREASURE_INFO: Record<TreasureKind, { name: string; color: [number, number, number] }> = {
+  feather: { name: 'jay feather', color: [0.35, 0.55, 0.95] },
+  shell: { name: 'river shell', color: [0.97, 0.93, 0.85] },
+  shinyStone: { name: 'shiny stone', color: [0.8, 0.85, 0.95] },
+  acorn: { name: 'perfect acorn', color: [0.6, 0.4, 0.2] },
+  pinecone: { name: 'pinecone', color: [0.45, 0.3, 0.18] },
+  snailShell: { name: 'swirly snail shell', color: [0.9, 0.75, 0.55] },
+  blueEgg: { name: 'empty robin egg', color: [0.55, 0.8, 0.85] },
+  mossyStick: { name: 'mossy stick', color: [0.4, 0.55, 0.3] },
+};
+
 export interface Interactable {
   key: string;
-  type: 'herb' | 'moss' | 'berries';
-  kind: HerbKind | 'moss' | 'deathberry';
+  type: 'herb' | 'moss' | 'berries' | 'treasure';
+  kind: HerbKind | 'moss' | 'deathberry' | TreasureKind;
   x: number; y: number; z: number;
   mesh: THREE.InstancedMesh;
   index: number;
@@ -42,6 +54,8 @@ export interface WorldContext {
   day: number;
   seed: number;
 }
+
+const TREASURE_GEO = new THREE.IcosahedronGeometry(0.045, 0);
 
 class InstBuilder {
   mats: number[] = [];
@@ -1088,7 +1102,29 @@ export class ChunkManager {
       const k = ctx.mods.taken[key] !== undefined ? 0 : 1;
       berries.add(b.x, b.y, b.z, i * 1.7, k, k, k, [1, 1, 1]);
     });
+    // Little treasures to collect and give as gifts
+    const treasures = new InstBuilder();
+    const treasureData: { kind: TreasureKind; x: number; y: number; z: number }[] = [];
+    const trng = new RNG(hash2(chunk.cx, chunk.cz, ctx.seed + 991));
+    const nt = trng.chance(0.6) ? trng.int(1, 3) : 0;
+    const tkinds = Object.keys(TREASURE_INFO) as TreasureKind[];
+    for (let i = 0; i < nt; i++) {
+      const x = chunk.x0 + trng.range(2, CHUNK_SIZE - 2), z = chunk.z0 + trng.range(2, CHUNK_SIZE - 2);
+      const idx = chunk.nearestIndex(x, z);
+      const y = chunk.heightAt(x, z);
+      const kind = trng.pick(tkinds);
+      if (chunk.flags[idx] & 2 || y < this.waterLevel + 0.02 || Math.hypot(x, z) < 15) { trng.next(); continue; }
+      treasureData.push({ kind, x, y, z });
+    }
+    treasureData.forEach((t, i) => {
+      const key = `${chunk.cx},${chunk.cz},t${i}`;
+      const taken = ctx.mods.taken[key];
+      if (taken !== undefined && ctx.day - taken >= 12) delete ctx.mods.taken[key];
+      const k = ctx.mods.taken[key] !== undefined ? 0 : 1;
+      treasures.add(t.x, t.y + 0.03, t.z, i * 2.1, k * 1.2, k * (t.kind === 'feather' || t.kind === 'mossyStick' ? 0.35 : 0.8), k * (t.kind === 'feather' || t.kind === 'mossyStick' ? 2.2 : 1), TREASURE_INFO[t.kind].color);
+    });
     const add = (m: THREE.InstancedMesh | null) => { if (m) { (m as any).sharedGeo = true; detail.add(m); } return m; };
+    const tm = add(treasures.build(TREASURE_GEO, A.mat.static, false));
     const bm = add(berries.build(A.deathberry, A.mat.bush, false));
     add(grass.build(A.grass, A.mat.grass, false));
     add(ferns.build(A.fern, A.mat.fern, false));
@@ -1109,6 +1145,10 @@ export class ChunkManager {
     if (bm) berryData.forEach((b, i) => {
       bm.getMatrixAt(i, tmp);
       chunk.interactables.push({ key: `${chunk.cx},${chunk.cz},b${i}`, type: 'berries', kind: 'deathberry', x: b.x, y: b.y, z: b.z, mesh: bm, index: i, matrix: tmp.clone() });
+    });
+    if (tm) treasureData.forEach((t, i) => {
+      tm.getMatrixAt(i, tmp);
+      chunk.interactables.push({ key: `${chunk.cx},${chunk.cz},t${i}`, type: 'treasure', kind: t.kind, x: t.x, y: t.y, z: t.z, mesh: tm, index: i, matrix: tmp.clone() });
     });
     chunk.detail = detail;
     chunk.group.add(detail);

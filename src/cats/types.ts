@@ -125,6 +125,10 @@ export interface Cat {
   infractions: number;
   /** Moons in a row without breaking the code. */
   goodDays?: number;
+  /** Little treasures carried to give as gifts. */
+  treasures?: string[];
+  /** Day an elder last told a story. */
+  lastStory?: number;
   confinedUntil: number | null;
   deeds: number; // notable good deeds (for leadership)
   mentored: number; // number of apprentices trained

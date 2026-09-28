@@ -6,6 +6,7 @@ import type { UI } from './ui';
 import { h, esc } from './ui';
 import { Cat, LESSONS, LESSON_LABEL, displayName, roleLabel } from '../cats/types';
 import { TrainingSystem } from '../sim/training';
+import { TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { REL_COLOR, isFamily, relLabel } from '../sim/social';
 import { RULES } from '../sim/clan';
 import { PATTERN_LABEL } from '../cats/generate';
@@ -141,6 +142,10 @@ export class Panels {
           h('h3', '', 'Training progress', body);
           h('div', 'kv', LESSONS.map((l) => `<b>${LESSON_LABEL[l]}</b><span>${'●'.repeat(pc.training[l])}${'○'.repeat(3 - pc.training[l])}</span>`).join(''), body);
           h('p', '', 'Complete at least one lesson of each kind (nine in total) and be twelve moons old to take your warrior assessment.', body);
+        }
+        if (pc.treasures?.length) {
+          h('h3', '', '✨ Your treasures', body);
+          h('p', '', esc(pc.treasures.map((t) => TREASURE_INFO[t as TreasureKind].name).join(', ')) + ' — talk to a clanmate to give one as a gift.', body);
         }
         const ap = clan.get(pc.apprentice);
         if (ap) {

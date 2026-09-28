@@ -8,7 +8,7 @@ import type { PreyKind } from '../wildlife/models';
 import { PREY } from '../wildlife/prey';
 import { Cat, displayName, pronoun, roleLabel } from '../cats/types';
 import { adviceLine, greetPlayer, isFamily, relLabel } from './social';
-import { HERB_INFO, HerbKind, Interactable } from '../world/chunks';
+import { HERB_INFO, HerbKind, Interactable, TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { simRng } from '../core/rng';
 import { clamp, dist2 } from '../core/math';
 import { bearing } from '../player/scent';
@@ -216,6 +216,9 @@ export class Interactions {
         return;
       }
     }
+    // sunny rocks and starry hollows
+    const spot = g.fun.spotAction();
+    if (spot) { this.current = spot; }
     // herbs & moss
     const its = g.chunks.interactablesNear(p.x, p.z, 1.3 * Math.max(0.7, pl.scale));
     if (its.length) {
@@ -225,6 +228,7 @@ export class Interactions {
         this.current = { text: kit ? 'Taste the shiny red berries' : 'Deathberries! Eat them anyway? (deadly poison)', action: () => this.eatDeathberries(it) };
         return;
       }
+      if (it.type === 'treasure') { const ti = TREASURE_INFO[it.kind as TreasureKind]; this.current = { text: `Pick up the ${ti.name} ✨`, action: () => { if (g.fun.collectTreasure(it.kind as TreasureKind)) g.chunks.takeInteractable(it); } }; return; }
       if (it.type === 'herb') { const info = HERB_INFO[it.kind as HerbKind]; this.current = { text: `Pick ${info.name} (${info.use})`, action: () => this.collect(it) }; }
       else this.current = { text: 'Gather soft moss', action: () => this.collect(it) };
       return;
@@ -412,6 +416,23 @@ export class Interactions {
     if (!pc.exiled && Math.hypot(g.player.pos.x, g.player.pos.z) < 17.5 && g.mossBalls?.balls.length && !g.mossBalls.catchGame && c.stage !== 'elder' && (c.stage === 'kit' || c.stage === 'apprentice' || op > 15)) {
       opts.push({ label: 'Play catch with a moss ball', hint: 'whoever drops it loses', action: () => { g.ui.closeDialog(false); g.mossBalls.startCatch(a); } });
     }
+    // elders tell stories
+    if ((c.stage === 'elder' || (c.stage === 'warrior' && c.age >= 28)) && c.lastStory !== g.time.day) opts.push({ label: 'Ask for a story', hint: 'older cats know the old tales', action: () => {
+      const story = g.fun.tellStory(c);
+      clan.adjust(c, pc, 4, undefined, 3);
+      pc.skills.knowledge = Math.min(99, pc.skills.knowledge + 1);
+      for (const k of g.npcs.agents.values()) if (k.cat.stage === 'kit' && k.cat.clan === 'home' && dist2(k.pos.x, k.pos.z, a.pos.x, a.pos.z) < 12 && k.activity === 'idle') { k.setTarget(a.pos.x + simRng.range(-1, 1), a.pos.z + simRng.range(-1, 1)); clan.adjust(k.cat, c, 2); }
+      g.ui.dialog({ speaker: c, text: story, options: [{ label: 'Wow… thank you', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+    } });
+    // races
+    if (!pc.exiled && c.stage !== 'elder' && !g.fun.race && (c.stage === 'kit' || c.stage === 'apprentice' || op > 20)) {
+      opts.push({ label: 'Challenge them to a race', hint: 'first one there wins', action: () => { g.ui.closeDialog(false); g.fun.startRace(a); } });
+    }
+    // gifts
+    if (pc.treasures?.length) opts.push({ label: `Give ${pronoun(c, 'obj')} your ${TREASURE_INFO[pc.treasures[0] as TreasureKind].name} ✨`, hint: 'a gift', action: () => {
+      const line = g.fun.giveTreasure(a);
+      g.ui.dialog({ speaker: c, text: line, options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+    } });
     const young = (st: string) => st === 'kit' || st === 'apprentice';
     if (c.stage === 'kit' || (young(pc.stage) && young(c.stage))) {
       opts.push({ label: 'Play-fight', action: () => { done(); this.playFight(a); } });

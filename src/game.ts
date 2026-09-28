@@ -2,6 +2,7 @@
 // loading, sleeping, time skips, death and succession.
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
+import { FunActivities } from './sim/fun';
 import * as THREE from 'three';
 import { clanTitle, lore } from './lore';
 import { Bus } from './core/bus';
@@ -76,6 +77,7 @@ export class Game {
   training: TrainingSystem;
   decisions: DecisionSystem;
   interactions: Interactions;
+  fun: FunActivities;
   discoveries: Discoveries;
   scent: ScentSystem;
   ui: UI;
@@ -118,6 +120,7 @@ export class Game {
     this.training = new TrainingSystem(this);
     this.decisions = new DecisionSystem(this);
     this.interactions = new Interactions(this);
+    this.fun = new FunActivities(this);
     this.discoveries = new Discoveries(this);
     this.fire = new FireSystem(this);
     this.scent = new ScentSystem(this);
@@ -891,6 +894,7 @@ export class Game {
     this.combat.update(dt);
     this.fire.update(dt);
     this.mossBalls.update(dt);
+    this.fun.update(dt);
     this.events.update(dt);
     this.objectives.update();
     this.scent.update(dt);
