@@ -353,6 +353,9 @@ export class Menus {
   }
 
   // ------------------------------------------------------------ death & succession
+  /** Remove the grief overlay (but never another menu that replaced it). */
+  clearGrief() { if (this.screen?.classList.contains('grief')) this.clear(); }
+
   /** A friend hears that you died: a little hand-drawn animation at 2 frames per second. */
   griefScene(friend: Cat, dead: Cat, done: () => void) {
     this.clear();

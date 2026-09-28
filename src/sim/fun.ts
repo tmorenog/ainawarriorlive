@@ -2,6 +2,7 @@
 import type { Game } from '../game';
 import type { NpcAgent } from '../ai/npc';
 import type { Cat } from '../cats/types';
+import { CatModel } from '../cats/model';
 import { displayName } from '../cats/types';
 import { TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { simRng } from '../core/rng';
@@ -209,5 +210,79 @@ export class FunActivities {
         g.ui.toast(`${a ? a.name : 'Your clanmate'} ${what}! (${o.progress}/${o.need})`, 'good');
       }
     } else this.helpT = 0;
+  }
+}
+
+/** When a clanmate dies their body lies in camp for a vigil, and friends gather. */
+export class Vigils {
+  list: { catId: string; model: CatModel; until: number; x: number; z: number; sat: boolean }[] = [];
+  constructor(private game: Game) {}
+
+  onDeath(c: Cat, cause: string) {
+    const g = this.game;
+    if (c.clan !== 'home' || c.isPlayer) return;
+    const pc = g.clan.player;
+    if (!pc || !pc.alive) return;
+    g.ui.toast(`💔 ${displayName(c)} has died (${cause}). The clan will sit vigil in camp.`, 'danger');
+    // the body lies in the middle of camp until the next dawn
+    if (this.list.length < 3) {
+      const ang = this.list.length * 2.1;
+      const x = Math.cos(ang) * 1.6, z = 2 + Math.sin(ang) * 1.6;
+      const model = new CatModel(c.app, c.stage);
+      model.pose = 'sleep';
+      for (let i = 0; i < 30; i++) model.update(0.1);
+      model.root.position.set(x, g.groundAt(x, z), z);
+      model.root.rotation.y = simRng.range(0, Math.PI * 2);
+      g.scene.add(model.root);
+      this.list.push({ catId: c.id, model, until: g.time.day + 1, x, z, sat: false });
+      // friends and family gather around
+      for (const a of g.npcs.agents.values()) {
+        if (a.cat.clan !== 'home' || a.activity === 'fight' || a.activity === 'talkPlayer') continue;
+        const close = (a.cat.relations[c.id]?.opinion ?? 0) > 35 || a.cat.mate === c.id || c.parents.includes(a.cat.id) || a.cat.parents.includes(c.id);
+        if (!close) continue;
+        const aa = simRng.range(0, Math.PI * 2);
+        a.setTarget(x + Math.cos(aa) * 1.1, z + Math.sin(aa) * 1.1);
+        a.mood = 'sad';
+        a.say(simRng.pick(['No… not you…', '*presses nose to their fur*', 'Walk with StarClan, my friend.', '*quietly grieving*']), 4);
+      }
+    }
+    // if they were your close friend, you grieve too
+    const mine = Math.max(pc.relations[c.id]?.opinion ?? 0, (c.relations[pc.id]?.opinion ?? 0) - 10);
+    if (mine >= 40 && g.state === 'playing') {
+      g.player.frozen = true;
+      g.menus.griefScene(pc, c, () => { g.menus.clearGrief(); g.player.frozen = false; });
+    }
+  }
+
+  nearest(x: number, z: number) {
+    return this.list.find((v) => !v.sat && Math.hypot(v.x - x, v.z - z) < 1.6);
+  }
+
+  sitVigil(v: Vigils['list'][number]) {
+    const g = this.game;
+    const c = g.clan.get(v.catId);
+    const pc = g.clan.player;
+    v.sat = true;
+    if (!c) return;
+    g.clan.remember(pc, `I sat vigil for ${displayName(c)}.`, 4, c.id);
+    for (const o of g.clan.home()) if (!o.isPlayer && ((o.relations[c.id]?.opinion ?? 0) > 30 || o.mate === c.id)) g.clan.adjust(o, pc, 4);
+    g.ui.toast(`You press your nose into ${displayName(c)}'s cold fur and sit with the clan through the night. Their friends are grateful you were there.`, 'info');
+    g.passTime(3);
+  }
+
+  /** At dawn the bodies are buried by the elders. */
+  dawn() {
+    const g = this.game;
+    this.list = this.list.filter((v) => {
+      if (g.time.day < v.until) return true;
+      v.model.root.removeFromParent();
+      v.model.dispose();
+      return false;
+    });
+  }
+
+  clear() {
+    for (const v of this.list) { v.model.root.removeFromParent(); v.model.dispose(); }
+    this.list = [];
   }
 }

@@ -3,7 +3,7 @@
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
 import { BOOK_CATS } from './lore';
-import { FunActivities } from './sim/fun';
+import { FunActivities, Vigils } from './sim/fun';
 import { Quests } from './sim/quests';
 import * as THREE from 'three';
 import { clanTitle, lore } from './lore';
@@ -81,6 +81,7 @@ export class Game {
   interactions: Interactions;
   fun: FunActivities;
   quests: Quests;
+  vigils: Vigils;
   discoveries: Discoveries;
   scent: ScentSystem;
   ui: UI;
@@ -125,6 +126,7 @@ export class Game {
     this.interactions = new Interactions(this);
     this.fun = new FunActivities(this);
     this.quests = new Quests(this);
+    this.vigils = new Vigils(this);
     this.discoveries = new Discoveries(this);
     this.fire = new FireSystem(this);
     this.scent = new ScentSystem(this);
@@ -393,6 +395,7 @@ export class Game {
   }
 
   private resetSystems() {
+    this.vigils?.clear();
     this.clan.herbStore = { silverleaf: 2, sunpetal: 2, bitterroot: 1 };
     this.pendingProphecy = null;
     this.npcs.list.forEach((a) => this.npcs.removeAgent(a.id));
@@ -794,6 +797,7 @@ export class Game {
       this.clan.herbStore[k]++;
     }
     if (hour === 6) {
+      this.vigils.dawn();
       if (this.pendingProphecy && this.time.day >= this.pendingProphecy.day) {
         const t = this.pendingProphecy.type;
         this.pendingProphecy = null;

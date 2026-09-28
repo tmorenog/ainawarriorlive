@@ -438,6 +438,7 @@ export class ClanSim {
       if (c.age > 88) { p = (c.age - 88) * 0.006; cause = 'old age'; }
       if (c.sick > 85) { p += 0.3; cause = 'sickness'; }
       if (c.injury > 90) { p += 0.2; cause = 'their wounds'; }
+      if (!c.isPlayer && c.stage === 'warrior' && p === 0 && rng.chance(0.004)) { p = 1; cause = rng.pick(['a fall from a tall tree', 'a monster on the Thunderpath', 'a fox attack on patrol', 'a sudden fever', 'the river in flood']); }
       if (c.isPlayer) p *= 0.8;
       if (p > 0 && rng.chance(p)) this.kill(c, cause);
     }
@@ -704,6 +705,7 @@ export class ClanSim {
       if (!c.isPlayer) this.game.notify(`${name} has died (${cause}).`, 'death');
     }
     this.game.npcs.onCatDied(c);
+    if (!c.isPlayer) this.game.vigils?.onDeath(c, cause);
     if (c.isPlayer) this.game.onPlayerDeath(cause);
   }
 

@@ -159,6 +159,9 @@ export class Interactions {
     this.current = null;
     if (g.mossBalls?.canCatchNow()) { this.current = { text: 'Catch the moss ball!', action: () => g.mossBalls.tryCatch() }; return; }
     if (g.mossBalls?.catchGame && g.mossBalls.held) { const cg = g.mossBalls.catchGame; this.current = { text: `Toss the moss ball to ${cg.partner.name}`, action: () => { g.mossBalls.toss(cg.partner.pos.x - p.x, cg.partner.pos.z - p.z, pc.stage === 'kit' ? 3.2 : 4); g.audio.swipe(); } }; return; }
+    // vigil for a clanmate who died
+    const vg = g.vigils?.nearest(p.x, p.z);
+    if (vg) { const dc = g.clan.get(vg.catId); this.current = { text: `Sit vigil for ${dc ? displayName(dc) : 'them'}`, action: () => g.vigils.sitVigil(vg) }; return; }
     // NPC in front
     let best: NpcAgent | null = null, bs = 2.6 * Math.max(0.6, pl.scale);
     for (const a of g.npcs.agents.values()) {
