@@ -3,8 +3,8 @@
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import { Cat, LESSONS, Lesson, Relation, displayName, pronoun } from '../cats/types';
-import { createCat, epithetOptions, makeEpithet, personalityFrom, stageForAge } from '../cats/generate';
-import { BOOK_CATS, BookCat, isClassic } from '../lore';
+import { EYE_COLORS, GIVEN_NAMES, PATTERN_LABEL, createCat, epithetOptions, makeEpithet, personalityFrom, stageForAge } from '../cats/generate';
+import { BOOK_CATS, BookCat, CLASSIC_PREFIXES, isClassic } from '../lore';
 import { RNG, simRng } from '../core/rng';
 import { clamp } from '../core/math';
 import { compatibility, isFamily } from './social';
@@ -659,12 +659,28 @@ export class ClanSim {
     }
     mother.expectingUntil = null;
     const names = kits.map((k) => k.given).join(', ');
-    this.log(`${displayName(mother)} gave birth to ${n} kit${n > 1 ? 's' : ''}: ${names}.`, 'birth');
+    this.log(`${displayName(mother)} welcomed ${n} new kit${n > 1 ? "s" : ""} to the nursery: ${names}.`, 'birth');
     this.game.notify(`New kits in the nursery! ${displayName(mother)}'s litter: ${names}.`);
     this.setRecent(`${displayName(mother)} had ${n} kits!`);
     if (mother.isPlayer || father?.isPlayer) {
       const me = mother.isPlayer ? mother : father!;
       this.remember(me, `My kits were born: ${names}.`, 10);
+      // you get to name your own kits
+      const nameNext = (i: number) => {
+        if (i >= kits.length) { this.game.npcs.syncRoster(); this.game.npcs.refreshModels(); return; }
+        const k = kits[i];
+        const pool = isClassic() ? CLASSIC_PREFIXES : GIVEN_NAMES;
+        const opts = new Set<string>([k.given]);
+        while (opts.size < 3) opts.add(simRng.pick(pool));
+        this.game.ui.nameChoice(`Name your kit (${i + 1} of ${kits.length})`, `A tiny ${k.sex === 'tom' ? 'tom' : 'she-cat'} with ${PATTERN_LABEL[k.app.pattern].toLowerCase()} fur and ${(EYE_COLORS.find((e) => e.hex === k.app.eye)?.name ?? 'bright').toLowerCase()} eyes mews at you. What will you call them? (They'll be ___kit.)`,
+          [...opts].map((o) => o + 'kit'), (picked) => {
+            let nm = picked.replace(/kit$/i, '').trim();
+            nm = nm.charAt(0).toUpperCase() + nm.slice(1).toLowerCase();
+            if (nm) { this.usedNames.delete(k.given); k.given = nm; this.usedNames.add(nm); }
+            nameNext(i + 1);
+          });
+      };
+      nameNext(0);
     }
     this.game.npcs.syncRoster();
   }

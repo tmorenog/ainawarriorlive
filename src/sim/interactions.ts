@@ -279,6 +279,7 @@ export class Interactions {
         : [{ label: 'I need herbs! I\'ll find some — hold on!', action: () => g.ui.toast('Look for herbs nearby (sniff with Q / 👃), then come back.', 'objective') }] });
       return;
     }
+    if (g.codeBreakers.current?.agentId === a.id) { a.activity = 'talkPlayer'; if (g.codeBreakers.confront(a, () => {})) return; }
     if (a.activity === 'sleep') {
       g.ui.dialog({ speaker: c, text: `${a.name} is curled up fast asleep, snoring softly.`, options: [
         { label: `Nudge ${pronoun(c, 'obj')} awake`, action: () => this.wakeCat(a) },
@@ -476,6 +477,19 @@ export class Interactions {
     }
     if ((pc.role === 'medicine' || pc.role === 'medicineApprentice') && (hurt(c) || (c.stage === 'elder' && this.healedDay.get(c.id) !== g.time.day)) && c.id !== pc.id) {
       opts.push({ label: `Treat ${pronoun(c, 'poss')} ${c.sick > c.injury ? 'sickness' : 'wounds'}`, action: () => this.treatCat(a, done) });
+    }
+    // have kits with your mate
+    if (pc.mate === c.id && c.mate === pc.id && pc.stage === 'warrior' && c.stage === 'warrior' && pc.sex !== c.sex) {
+      const she = pc.sex === 'she' ? pc : c;
+      const busyKits = she.expectingUntil !== null || she.kits.some((k) => (clan.get(k)?.age ?? 99) < 6);
+      if (!busyKits) opts.push({ label: 'Ask to have kits together', hint: 'they\'d arrive in two moons', action: () => {
+        she.expectingUntil = g.time.day + 2;
+        clan.adjust(c, pc, 6, { text: `${pc.given} and I are going to have kits!`, weight: 8 });
+        clan.log(`${displayName(she)} is expecting ${displayName(she === pc ? c : pc)}'s kits.`, 'clan');
+        g.audio.purr();
+        g.ui.dialog({ speaker: c, text: she === pc ? '*purrs so loud the whole den can hear* Kits! Our kits! You should rest in the nursery, my love.' : '*eyes shining* Kits… our own kits. I\'ll move to the nursery. Will you bring me fresh-kill?', options: [{ label: '*presses close*', action: done }], onClose: done });
+        g.notify(she === pc ? 'You are expecting kits! They will arrive in two moons. You will get to name them.' : `${displayName(c)} is expecting your kits! You will get to name them.`);
+      } });
     }
     // mates
     const pr = clan.rel(c, pc);

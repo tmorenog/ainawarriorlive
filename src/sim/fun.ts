@@ -286,3 +286,104 @@ export class Vigils {
     this.list = [];
   }
 }
+
+type OffenseKind = 'sneakEat' | 'nap' | 'squabble' | 'rivalPrey' | 'bully';
+const OFFENSES: Record<OffenseKind, { see: string; say: string[]; crime: string; confess: string }> = {
+  sneakEat: { see: 'is secretly eating fresh-kill before the elders and kits have been fed', say: ['*munch* nobody will know…', '*gulps a mouse quickly*'], crime: 'ate before the elders and kits', confess: 'I was just SO hungry! Please don\'t tell…' },
+  nap: { see: 'is fast asleep when they should be on watch', say: ['*snoooore*', 'zzz… five more heartbeats…'], crime: 'slept on watch', confess: 'Wha—? I only closed my eyes for a moment!' },
+  squabble: { see: 'is hissing and swiping at a clanmate', say: ['*HISS* Take that back!', 'You mouse-brained furball!'], crime: 'picked a fight with a clanmate', confess: 'They started it! …Alright, maybe I did.' },
+  rivalPrey: { see: 'is carrying prey that smells of another clan\'s territory', say: ['*shifty eyes*', 'What? This? I found it. On OUR side. Probably.'], crime: 'hunted on rival territory', confess: 'The prey was right there over the border… it\'s not like they\'d miss one vole.' },
+  bully: { see: 'is teasing a kit until it cries', say: ['Ha! Crybaby!', 'You\'ll never be a warrior, runt!'], crime: 'bullied a kit', confess: 'I was only joking around… mostly.' },
+};
+
+/** Clanmates sometimes break the code — and you might be the one who catches them. */
+export class CodeBreakers {
+  current: { agentId: string; kind: OffenseKind; until: number; hinted: boolean } | null = null;
+  private t = 90;
+  constructor(private game: Game) {}
+
+  update(dt: number) {
+    const g = this.game;
+    const pc = g.clan.player;
+    if (!pc || !pc.alive || pc.exiled) return;
+    const cur = this.current;
+    if (cur) {
+      const a = g.npcs.agents.get(cur.agentId);
+      if (!a || g.clock > cur.until) { if (a && a.activity === 'talkPlayer') { a.activity = 'idle'; a.actTimer = 0; } this.current = null; return; }
+      a.actTimer = 999;
+      if (Math.random() < dt * 0.25) a.say(simRng.pick(OFFENSES[cur.kind].say), 2.5);
+      if (!cur.hinted && Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 9) {
+        cur.hinted = true;
+        g.ui.toast(`👀 You notice ${a.name} ${OFFENSES[cur.kind].see}! (Talk to them.)`, 'info');
+      }
+      return;
+    }
+    this.t -= dt;
+    if (this.t > 0) return;
+    this.t = simRng.range(120, 240);
+    if (g.time.isNight || g.player.busy) return;
+    const p = g.player.pos;
+    const cands = [...g.npcs.agents.values()].filter((a) => {
+      const c = a.cat;
+      if (c.clan !== 'home' || c.isPlayer || c.stage === 'kit' || c.stage === 'elder' || c.role === 'leader' || c.role === 'medicine') return false;
+      if (a.activity !== 'idle' && a.activity !== 'wander' && a.activity !== 'sit') return false;
+      const d = Math.hypot(a.pos.x - p.x, a.pos.z - p.z);
+      return d > 6 && d < 30 && (c.pers.mischief > 0.35 || c.pers.aggression > 0.5 || c.pers.loyalty < 0.45 || c.traits.includes('ambitious'));
+    });
+    if (!cands.length) return;
+    const a = simRng.pick(cands);
+    const kinds: OffenseKind[] = ['sneakEat', 'nap', 'squabble', 'rivalPrey'];
+    if (a.cat.pers.aggression > 0.5) kinds.push('bully');
+    const kind = simRng.pick(kinds);
+    a.target = null;
+    a.activity = kind === 'nap' ? 'sleep' : 'talkPlayer';
+    a.actTimer = 999;
+    this.current = { agentId: a.id, kind, until: g.clock + 90, hinted: false };
+  }
+
+  /** Talking to a cat you caught breaking the code. Returns true if it handled the talk. */
+  confront(a: NpcAgent, done: () => void): boolean {
+    const cur = this.current;
+    if (!cur || cur.agentId !== a.id) return false;
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    const off = OFFENSES[cur.kind];
+    this.current = null;
+    const finish = () => { a.activity = 'idle'; a.actTimer = 0; done(); };
+    const say = (text: string) => g.ui.dialog({ speaker: c, text, options: [{ label: 'Goodbye', action: finish }], onClose: finish });
+    const leader = clan.leader && !clan.leader.isPlayer ? clan.leader : null;
+    g.ui.dialog({ speaker: c, text: `*freezes* ${off.confess}`, options: [
+      { label: pc.role === 'leader' ? 'Judge them as leader' : `Report them to ${leader ? displayName(leader) : 'the leader'}`, hint: 'the code must be kept', action: () => {
+        c.reputation = clamp(c.reputation - 6, -100, 100);
+        c.infractions++;
+        clan.adjust(c, pc, -12, { text: `${pc.given} reported me for breaking the code.`, weight: -4 });
+        pc.reputation = clamp(pc.reputation + 3, -100, 100);
+        clan.log(`${displayName(c)} ${off.crime} — reported by ${pc.given}.`, 'rule');
+        if (pc.role === 'leader') { g.decisions.punishNpc(c, off.crime); finish(); return; }
+        if (leader) clan.adjust(leader, pc, 5, { text: `${pc.given} is loyal to the code.`, weight: 2 });
+        if (simRng.chance(0.5)) { c.confinedUntil = g.time.day + 2; g.ui.toast(`${leader ? displayName(leader) : 'The leader'} confines ${displayName(c)} to camp for two moons.`, 'info'); }
+        else g.ui.toast(`${leader ? displayName(leader) : 'The leader'} gives ${displayName(c)} extra duties.`, 'info');
+        say('*glares* Fine. I hope you\'re happy.');
+      } },
+      { label: 'Tell them to stop', hint: 'no one else needs to know', action: () => {
+        const respects = c.pers.loyalty > 0.5 || c.traits.includes('loyal');
+        clan.adjust(c, pc, respects ? 3 : -2);
+        pc.reputation = clamp(pc.reputation + 1, -100, 100);
+        say(respects ? 'You\'re right. It won\'t happen again. Thanks for not reporting me.' : 'Alright, alright! You\'re worse than my old mentor.');
+      } },
+      { label: 'Keep their secret', hint: 'risky', action: () => {
+        clan.adjust(c, pc, 8, { text: `${pc.given} kept my secret.`, weight: 3 });
+        clan.remember(pc, `I kept ${displayName(c)}'s secret: they ${off.crime}.`, -1, c.id);
+        if (simRng.chance(0.2)) {
+          pc.reputation = clamp(pc.reputation - 4, -100, 100);
+          if (leader) clan.adjust(leader, pc, -5);
+          g.ui.toast(`${leader ? displayName(leader) : 'The leader'} found out you knew about ${displayName(c)} and said nothing…`, 'danger');
+        }
+        say('*purrs* I owe you one. Really.');
+      } },
+    ], onClose: finish });
+    return true;
+  }
+}

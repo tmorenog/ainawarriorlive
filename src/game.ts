@@ -3,7 +3,7 @@
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
 import { BOOK_CATS } from './lore';
-import { FunActivities, Vigils } from './sim/fun';
+import { CodeBreakers, FunActivities, Vigils } from './sim/fun';
 import { Quests } from './sim/quests';
 import * as THREE from 'three';
 import { clanTitle, lore } from './lore';
@@ -82,6 +82,7 @@ export class Game {
   fun: FunActivities;
   quests: Quests;
   vigils: Vigils;
+  codeBreakers: CodeBreakers;
   discoveries: Discoveries;
   scent: ScentSystem;
   ui: UI;
@@ -127,6 +128,7 @@ export class Game {
     this.fun = new FunActivities(this);
     this.quests = new Quests(this);
     this.vigils = new Vigils(this);
+    this.codeBreakers = new CodeBreakers(this);
     this.discoveries = new Discoveries(this);
     this.fire = new FireSystem(this);
     this.scent = new ScentSystem(this);
@@ -911,6 +913,7 @@ export class Game {
     this.fire.update(dt);
     this.mossBalls.update(dt);
     this.fun.update(dt);
+    this.codeBreakers.update(dt);
     this.events.update(dt);
     this.objectives.update();
     this.scent.update(dt);
