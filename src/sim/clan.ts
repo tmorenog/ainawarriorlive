@@ -130,6 +130,54 @@ export class ClanSim {
 
   setRecent(text: string) { this.lastRecent = text; }
 
+  /** Make sure every den has cats in it: plenty of warriors, elders, nursing queens with kits, and a medicine apprentice. */
+  fillDens(rng: RNG = simRng) {
+    const day = this.game.time.day;
+    const add = (age: number, extra: Partial<Cat> = {}) => {
+      const c = createCat({ age, day, usedNames: this.usedNames, rng, ...(extra.sex ? { sex: extra.sex } : {}) });
+      Object.assign(c, extra);
+      c.bornDay = day - Math.floor(age);
+      this.cats[c.id] = c;
+      return c;
+    };
+    const home = () => this.home();
+    // warriors
+    let warriors = home().filter((c) => c.stage === 'warrior' && c.role !== 'medicine');
+    while (warriors.length < 12) { add(rng.range(16, 30)); warriors = home().filter((c) => c.stage === 'warrior' && c.role !== 'medicine'); }
+    // elders' den
+    let elders = home().filter((c) => c.stage === 'elder').length;
+    while (elders < 3) { add(rng.range(82, 96)); elders++; }
+    // nursery: at least two queens with young kits
+    const queens = () => home().filter((c) => c.sex === 'she' && c.kits.some((k) => this.get(k)?.stage === 'kit' && this.get(k)?.alive));
+    let guard = 0;
+    while (queens().length < 2 && guard++ < 4) {
+      const mother = home().find((c) => c.sex === 'she' && c.stage === 'warrior' && c.role === 'none' && !c.isPlayer && c.age < 45 && !c.kits.some((k) => this.get(k)?.stage === 'kit'));
+      if (!mother) break;
+      let father = this.get(mother.mate);
+      if (!father) {
+        father = home().find((c) => c.sex === 'tom' && c.stage === 'warrior' && !c.mate && !c.isPlayer && !isFamily(c, mother)) ?? undefined;
+        if (father) { mother.mate = father.id; father.mate = mother.id; this.rel(mother, father).opinion = 80; this.rel(father, mother).opinion = 80; }
+      }
+      const n = rng.int(2, 3);
+      for (let i = 0; i < n; i++) {
+        const k = createCat({ age: rng.range(0.5, 4), parents: father ? [mother, father] : [mother, mother], day, usedNames: this.usedNames, rng });
+        k.parents = father ? [mother.id, father.id] : [mother.id];
+        k.bornDay = day - Math.floor(k.age);
+        this.cats[k.id] = k;
+        mother.kits.push(k.id);
+        if (father) father.kits.push(k.id);
+        this.rel(mother, k).opinion = 90; this.rel(k, mother).opinion = 80;
+      }
+    }
+    // medicine den: an apprentice for the medicine cat
+    const med = this.medicine;
+    if (med && !med.isPlayer && !home().some((c) => c.role === 'medicineApprentice')) {
+      const ap = add(rng.range(7, 11), { role: 'medicineApprentice', medicinePath: true });
+      ap.mentor = med.id;
+      if (!med.apprentice) med.apprentice = ap.id;
+    }
+  }
+
   // ------------------------------------------------------------- creation
   newClan(playerCat: Cat, rng: RNG) {
     const day = this.game.time.day;
@@ -154,7 +202,7 @@ export class ClanSim {
     med.traits = med.traits.includes('aggressive') ? ['kind', 'calm'] : med.traits;
     this.medicineId = med.id;
     const warriors: Cat[] = [];
-    for (let i = 0; i < 9; i++) warriors.push(mk(rng.range(14, 60)));
+    for (let i = 0; i < 13; i++) warriors.push(mk(rng.range(14, 60)));
     // elders
     for (let i = 0; i < 3; i++) mk(rng.range(82, 100));
     // apprentices with mentors
@@ -235,6 +283,7 @@ export class ClanSim {
     const protectedIds = new Set([player.id, ...player.parents]);
     const apply = (c: Cat, b: BookCat) => {
       c.given = b.prefix;
+      c.bookId = b.prefix + b.suffix;
       c.epithet = b.stage === 'apprentice' ? null : b.suffix;
       c.sex = b.sex;
       c.age = b.age;

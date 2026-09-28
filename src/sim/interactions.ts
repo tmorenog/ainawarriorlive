@@ -416,6 +416,8 @@ export class Interactions {
     if (!pc.exiled && Math.hypot(g.player.pos.x, g.player.pos.z) < 17.5 && g.mossBalls?.balls.length && !g.mossBalls.catchGame && c.stage !== 'elder' && (c.stage === 'kit' || c.stage === 'apprentice' || op > 15)) {
       opts.push({ label: 'Play catch with a moss ball', hint: 'whoever drops it loses', action: () => { g.ui.closeDialog(false); g.mossBalls.startCatch(a); } });
     }
+    // famous cats from the books have quests
+    if (g.quests.available(a)) opts.push({ label: '★ Do you need help with anything?', hint: 'a quest', action: () => g.quests.offer(a, done) });
     // elders tell stories
     if ((c.stage === 'elder' || (c.stage === 'warrior' && c.age >= 28)) && c.lastStory !== g.time.day) opts.push({ label: 'Ask for a story', hint: 'older cats know the old tales', action: () => {
       const story = g.fun.tellStory(c);
@@ -785,6 +787,84 @@ export class Interactions {
   }
 
   // ---------------------------------------------------------------- NPC initiated
+  /** A clanmate walks up and starts a conversation on their own. */
+  private npcChat(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    const inCamp = Math.hypot(g.player.pos.x, g.player.pos.z) < 17.5;
+    const young = c.stage === 'kit' || c.stage === 'apprentice';
+    const others = clan.home().filter((x) => x.id !== c.id && !x.isPlayer);
+    const reply = (text: string, dOp = 0) => () => {
+      clan.adjust(c, pc, dOp, undefined, 3);
+      g.ui.dialog({ speaker: c, text, options: [{ label: 'Goodbye', action: done }], onClose: done });
+    };
+    const topics: { w: number; run: () => void }[] = [];
+    // share tongues
+    if (c.stage !== 'kit') topics.push({ w: 2, run: () => g.ui.dialog({ speaker: c, text: simRng.pick([`${pc.given}! Your fur's a mess. Want to share tongues?`, 'Share tongues with me? It\'s been a long day.']), options: [
+      { label: 'Sure!', action: () => { clan.adjust(c, pc, 4, { text: `${pc.given} and I shared tongues.`, weight: 2 }); clan.adjust(pc, c, 2); a.forcedPose = 'groom'; setTimeout(() => (a.forcedPose = null), 3000); g.audio.purr(); reply('*purrs* That\'s better.')(); } },
+      { label: 'Maybe later', action: reply('Oh. Alright then.', -1) },
+    ], onClose: done }) });
+    // eat together
+    if (inCamp && clan.food >= 1) topics.push({ w: 2, run: () => g.ui.dialog({ speaker: c, text: 'I\'m starving. Want to share a piece of fresh-kill with me?', options: [
+      { label: 'Yes, let\'s eat!', action: () => this.shareFreshKill(a, done) },
+      { label: 'I\'m not hungry', action: reply('More for me, then!') },
+    ], onClose: done }) });
+    // play
+    if (young && inCamp && g.mossBalls?.balls.length && !g.mossBalls.catchGame) topics.push({ w: 3, run: () => g.ui.dialog({ speaker: c, text: `${pc.given}! Play catch with me? Pleeease?`, options: [
+      { label: 'Okay!', action: () => { g.ui.closeDialog(false); g.mossBalls.startCatch(a); } },
+      { label: 'Not now', action: reply('Aww…', -1) },
+    ], onClose: done }) });
+    if (c.stage !== 'elder' && !g.fun.race) topics.push({ w: young ? 2 : 1, run: () => g.ui.dialog({ speaker: c, text: simRng.pick(['Bet I can beat you in a race!', 'I\'m feeling fast today. Race me?']), options: [
+      { label: 'You\'re on!', action: () => { g.ui.closeDialog(false); g.fun.startRace(a); } },
+      { label: 'No thanks', action: reply('Scared you\'ll lose? *teasing purr*') },
+    ], onClose: done }) });
+    // hunt together
+    if (c.stage === 'warrior' && (pc.stage === 'warrior' || pc.stage === 'apprentice') && pc.role !== 'medicine' && pc.role !== 'medicineApprentice') topics.push({ w: 1.5, run: () => g.ui.dialog({ speaker: c, text: 'I\'m heading out to hunt. Want to come with me?', options: [
+      { label: 'Let\'s go!', action: () => { done(); a.activity = 'follow'; a.followTarget = 'player'; g.ui.toast(`${a.name} is hunting with you. Lead the way!`, 'info'); clan.adjust(c, pc, 3); } },
+      { label: 'Another time', action: reply('Suit yourself.') },
+    ], onClose: done }) });
+    // gossip
+    const mates = others.filter((x) => x.mate && clan.get(x.mate)?.alive);
+    const foes = others.filter((x) => others.some((y) => y !== x && (x.relations[y.id]?.opinion ?? 0) < -30));
+    if (others.length > 2) topics.push({ w: c.traits.includes('mischievous') || c.pers.sociability > 0.6 ? 3 : 1.5, run: () => {
+      let line = '';
+      if (mates.length && simRng.chance(0.5)) { const m = simRng.pick(mates); line = `Have you noticed how ${displayName(m)} looks at ${displayName(clan.get(m.mate)!)}? They're always sharing tongues…`; }
+      else if (foes.length) { const f = simRng.pick(foes); const e = others.find((y) => (f.relations[y.id]?.opinion ?? 0) < -30)!; line = `Don't tell anyone, but ${displayName(f)} can't stand ${displayName(e)}. I saw them hiss at each other by the fresh-kill pile!`; }
+      else { const x = simRng.pick(others); line = `Did you hear? ${displayName(x)} ${simRng.pick(['caught a squirrel twice their size', 'fell in the stream yesterday', 'snores louder than a badger', 'has been sneaking extra fresh-kill'])}!`; }
+      g.ui.dialog({ speaker: c, text: line, options: [
+        { label: 'Really?! Tell me more!', action: reply('*whispers* I\'ve said too much already…', 2) },
+        { label: 'We shouldn\'t gossip', action: reply(c.traits.includes('mischievous') ? 'You\'re no fun.' : 'You\'re right. Forget I said anything.', c.traits.includes('loyal') ? 2 : -1) },
+      ], onClose: done });
+    } });
+    // opinion question
+    if (others.length) topics.push({ w: 1.5, run: () => {
+      const x = simRng.pick(others);
+      g.ui.dialog({ speaker: c, text: `What do you think of ${displayName(x)}?`, options: [
+        { label: 'I like them a lot', action: () => { clan.adjust(c, x, 2); reply((c.relations[x.id]?.opinion ?? 0) > 20 ? 'Me too! They\'re great.' : 'Hmm. Maybe I should give them another chance.', 1)(); } },
+        { label: 'They\'re alright', action: reply('Yeah, that\'s fair.') },
+        { label: 'Not much, honestly', action: () => { clan.adjust(c, x, -2); reply((c.relations[x.id]?.opinion ?? 0) < 0 ? 'I knew it wasn\'t just me!' : 'Oh… I think they\'re nice.', (c.relations[x.id]?.opinion ?? 0) < 0 ? 2 : -2)(); } },
+      ], onClose: done });
+    } });
+    // worries / compliments
+    topics.push({ w: 1.5, run: () => {
+      const worry = clan.food < clan.home().length * 0.5 ? 'The fresh-kill pile is so low. I\'m worried about the elders and kits.'
+        : g.events.active.length ? 'Everything that\'s been happening lately… it scares me a little.'
+        : simRng.pick([`You've been doing so well lately, ${pc.given}. The whole clan has noticed.`, 'Do you ever wonder what the Long Meadow is like?', 'I had the strangest dream last night. I was flying over the forest like a bird!']);
+      g.ui.dialog({ speaker: c, text: worry, options: [
+        { label: 'It\'ll be alright. We\'ll get through it together.', action: reply('Thanks. I feel better already.', 3) },
+        { label: 'Hmm.', action: reply('…right.') },
+      ], onClose: done });
+    } });
+    const total = topics.reduce((s2, t) => s2 + t.w, 0);
+    let r = simRng.next() * total;
+    for (const t of topics) { r -= t.w; if (r <= 0) { t.run(); return; } }
+    topics[topics.length - 1].run();
+  }
+
+  lastNpcChat = -999;
+
   npcInitiated(a: NpcAgent, intent: ApproachIntent) {
     const g = this.game;
     const clan = g.clan;
@@ -820,6 +900,10 @@ export class Interactions {
         ], onClose: done });
         return;
       }
+      case 'chat':
+        this.lastNpcChat = g.clock;
+        this.npcChat(a, done);
+        return;
       case 'greet':
       default:
         a.say(intent.text, 3);

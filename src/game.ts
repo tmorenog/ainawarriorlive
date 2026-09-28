@@ -2,7 +2,9 @@
 // loading, sleeping, time skips, death and succession.
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
+import { BOOK_CATS } from './lore';
 import { FunActivities } from './sim/fun';
+import { Quests } from './sim/quests';
 import * as THREE from 'three';
 import { clanTitle, lore } from './lore';
 import { Bus } from './core/bus';
@@ -78,6 +80,7 @@ export class Game {
   decisions: DecisionSystem;
   interactions: Interactions;
   fun: FunActivities;
+  quests: Quests;
   discoveries: Discoveries;
   scent: ScentSystem;
   ui: UI;
@@ -121,6 +124,7 @@ export class Game {
     this.decisions = new DecisionSystem(this);
     this.interactions = new Interactions(this);
     this.fun = new FunActivities(this);
+    this.quests = new Quests(this);
     this.discoveries = new Discoveries(this);
     this.fire = new FireSystem(this);
     this.scent = new ScentSystem(this);
@@ -257,6 +261,7 @@ export class Game {
       const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: 0, rng: new RNG((Math.random() * 1e9) | 0) });
       this.clan.newClan(me, rng);
       this.youngAgain();
+      this.clan.fillDens(rng);
       this.weather.kind = 'sunny';
       const nursery = this.camp.dens.nursery;
       this.chunks.primeAround(0, 0);
@@ -321,6 +326,11 @@ export class Game {
       this.player.herbs = d.player.herbs ?? { silverleaf: 0, sunpetal: 0, bitterroot: 0 };
       this.player.moss = d.player.moss ?? 0;
       this.player.updateCarryVisual();
+      // older saves: recognise the famous cats from the books so they can give quests
+      for (const cat of Object.values(c.cats)) {
+        if (cat.bookId) continue;
+        for (const list of Object.values(BOOK_CATS)) for (const b of list) if (cat.given === b.prefix && (cat.epithet === b.suffix || cat.stage === 'apprentice' || cat.role === 'leader')) cat.bookId = b.prefix + b.suffix;
+      }
       if (bornInto) { this.bornIntoClan(bornInto); return; }
       // saves from before the age reset existed get it once
       if (!d.agesReset) this.youngAgain();
@@ -347,6 +357,8 @@ export class Game {
     const old = c.player;
     if (old) old.isPlayer = false;
     this.youngAgain();
+    c.fillDens();
+    this.npcs.syncRoster();
     const home = c.home();
     const mother = home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.mate && !x.isPlayer && x.role !== 'medicine')
       ?? home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.role !== 'medicine')

@@ -129,6 +129,10 @@ export interface Cat {
   treasures?: string[];
   /** Day an elder last told a story. */
   lastStory?: number;
+  /** Which character from the books this cat is (classic mode). */
+  bookId?: string;
+  /** The book cat has already given the player their quest. */
+  questGiven?: boolean;
   confinedUntil: number | null;
   deeds: number; // notable good deeds (for leadership)
   mentored: number; // number of apprentices trained

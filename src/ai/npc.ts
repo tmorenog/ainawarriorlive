@@ -18,7 +18,7 @@ export type Activity =
   | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'watch' | 'leaving' | 'shield' | 'lead';
 
 export interface ApproachIntent {
-  kind: 'training' | 'play' | 'order' | 'greet' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
+  kind: 'training' | 'play' | 'order' | 'greet' | 'chat' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
   text: string;
   data?: any;
 }
@@ -991,6 +991,10 @@ export class NpcManager {
     // orders from leader/deputy
     if ((c.role === 'leader' || c.role === 'deputy') && (p.stage === 'warrior' || p.stage === 'apprentice') && !game.objectives.busy() && simRng.chance(0.35)) {
       return { kind: 'order', text: `${p.given}, I have a task for you.` };
+    }
+    // clanmates come over to chat on their own (not too often)
+    if (op > 0 && game.clock - game.interactions.lastNpcChat > 45 && c.stage !== 'kit' || (c.stage === 'kit' && op > 10 && game.clock - game.interactions.lastNpcChat > 45)) {
+      if (simRng.chance(op > 45 ? 0.3 : 0.14)) { game.interactions.lastNpcChat = game.clock; return { kind: 'chat', text: '' }; }
     }
     if (op > 45 && simRng.chance(0.12)) return { kind: 'greet', text: `${p.given}! There you are.` };
     return null;

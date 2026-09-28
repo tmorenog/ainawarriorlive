@@ -60,6 +60,7 @@ export class Objectives {
     if (o.data?.medLesson) game.training.medLessonComplete(o);
     else if (o.kind === 'lesson' || o.kind === 'mentor') game.training.lessonComplete(o);
     if (o.kind === 'assessment' || o.data?.medAssess) game.training.assessmentComplete();
+    if (o.data?.questOf) game.quests.complete(o);
     if (o.id === 'punish-ticks') {
       for (const c of game.clan.home()) if (c.stage === 'elder') game.clan.adjust(c, p, 3);
       game.ui.toast('Mouse bile stinks! But the elders purr with relief.', 'good');
