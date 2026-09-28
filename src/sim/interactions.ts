@@ -156,6 +156,8 @@ export class Interactions {
     const f = pl.forward();
     const pc = g.clan.player;
     this.current = null;
+    if (g.mossBalls?.canCatchNow()) { this.current = { text: 'Catch the moss ball!', action: () => g.mossBalls.tryCatch() }; return; }
+    if (g.mossBalls?.catchGame && g.mossBalls.held) { const cg = g.mossBalls.catchGame; this.current = { text: `Toss the moss ball to ${cg.partner.name}`, action: () => { g.mossBalls.toss(cg.partner.pos.x - p.x, cg.partner.pos.z - p.z, pc.stage === 'kit' ? 3.2 : 4); g.audio.swipe(); } }; return; }
     // NPC in front
     let best: NpcAgent | null = null, bs = 2.6 * Math.max(0.6, pl.scale);
     for (const a of g.npcs.agents.values()) {
@@ -407,6 +409,9 @@ export class Interactions {
     } });
     const inCamp = Math.hypot(g.player.pos.x, g.player.pos.z) < 17.5;
     if (!pc.exiled && (g.player.prey.length || (inCamp && clan.food >= 1))) opts.push({ label: 'Share fresh-kill together', hint: g.player.prey.length ? 'what you carry' : 'from the pile', action: () => this.shareFreshKill(a, done) });
+    if (!pc.exiled && Math.hypot(g.player.pos.x, g.player.pos.z) < 17.5 && g.mossBalls?.balls.length && !g.mossBalls.catchGame && c.stage !== 'elder' && (c.stage === 'kit' || c.stage === 'apprentice' || op > 15)) {
+      opts.push({ label: 'Play catch with a moss ball', hint: 'whoever drops it loses', action: () => { g.ui.closeDialog(false); g.mossBalls.startCatch(a); } });
+    }
     const young = (st: string) => st === 'kit' || st === 'apprentice';
     if (c.stage === 'kit' || (young(pc.stage) && young(c.stage))) {
       opts.push({ label: 'Play-fight', action: () => { done(); this.playFight(a); } });
