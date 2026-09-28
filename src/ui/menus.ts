@@ -135,14 +135,14 @@ export class Menus {
     const label = h('div', 'preview-label', '', s);
     const refresh = () => {
       g.showPreview(spec.app, asKit ? 'kit' : 'warrior');
-      label.innerHTML = `${esc(spec.lore === 'classic' ? spec.name + (asKit ? 'kit' : 'heart') : spec.name)}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${spec.app.breed ? esc(spec.app.breed) + ' · ' : ''}${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
+      label.innerHTML = `${esc(spec.name + (asKit ? 'kit' : 'heart'))}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${spec.app.breed ? esc(spec.app.breed) + ' · ' : ''}${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
     };
     h('h2', '', 'Your cat', form);
     h('div', '', '<span style="color:var(--ink-dim);font-size:13px">You will be born as a kit in the nursery. This is how you will look when grown.</span>', form);
 
     const field = (name: string) => { const f = h('div', 'field', `<label>${name}</label>`, form); return h('div', 'row', '', f); };
     // name
-    const nr = field(spec.lore === 'classic' ? 'Name (e.g. Fire → Firekit, Firepaw, Fireheart)' : 'Name');
+    const nr = field('Name (e.g. Mud → Mudkit, Mudpaw, then you choose: Mudfur, Mudclaw…)');
     const ni = h('input', '', undefined, nr) as HTMLInputElement;
     ni.type = 'text';
     ni.maxLength = 14;

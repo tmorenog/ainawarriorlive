@@ -29,16 +29,15 @@ export const CLASSIC_SUFFIXES = [
 
 /** Display name under the current lore mode. */
 export function loreName(c: Cat): string {
-  if (!isClassic()) {
-    if (c.stage === 'kit') return `Little ${c.given}`;
-    if (c.epithet) return `${c.given} ${c.epithet}`;
-    return c.given;
-  }
+  // Warriors-style names in every mode: Mudkit → Mudpaw → Mudfur → Mudstar
   if (c.clan === 'loner' && !c.epithet) return c.given;
   if (c.stage === 'kit') return `${c.given}kit`;
   if (c.stage === 'apprentice') return `${c.given}paw`;
   if (c.role === 'leader' && c.alive) return `${c.given}star`;
-  return `${c.given}${(c.epithet ?? 'heart').toLowerCase()}`;
+  const e = c.epithet ?? 'heart';
+  // older saves had two-part epithets ("Frosteye"); keep those readable
+  if (!isClassic() && !CLASSIC_SUFFIXES.includes(e.toLowerCase())) return `${c.given} ${e}`;
+  return `${c.given}${e.toLowerCase()}`;
 }
 
 /** Text substitutions that turn Mistwood terms into the classic ones. */

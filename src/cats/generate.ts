@@ -20,24 +20,13 @@ const EPI_PRE = ['Swift', 'Quiet', 'Bright', 'Long', 'Stone', 'Brook', 'Sun', 'M
 const EPI_SUF = ['foot', 'whisker', 'heart', 'song', 'runner', 'tail', 'claw', 'pelt', 'leap', 'eye', 'stripe', 'shade', 'watcher', 'step', 'gaze', 'fur', 'ear', 'bloom', 'strider', 'breath', 'spark', 'wing', 'fang', 'dash'];
 
 export function makeEpithet(rng: RNG, cat?: Cat): string {
-  if (isClassic()) {
-    let suf = rng.pick(CLASSIC_SUFFIXES);
-    if (cat?.app.pattern === 'tabby' && rng.chance(0.3)) suf = 'stripe';
-    if (cat && cat.pers.bravery > 0.7 && rng.chance(0.3)) suf = rng.pick(['heart', 'claw', 'storm', 'fang']);
-    if (cat && cat.pers.kindness > 0.7 && rng.chance(0.3)) suf = rng.pick(['heart', 'flower', 'song', 'leaf']);
-    if (cat && CLASSIC_PREFIXES.includes(cat.given) && cat.given.toLowerCase() === suf) suf = 'heart';
-    return suf;
-  }
-  let pre = rng.pick(EPI_PRE);
-  let suf = rng.pick(EPI_SUF);
-  if (cat) {
-    // lean the epithet toward the cat's strengths
-    if (cat.skills.hunting > 60 && rng.chance(0.4)) suf = rng.pick(['leap', 'claw', 'strider', 'dash']);
-    if (cat.pers.kindness > 0.7 && rng.chance(0.4)) suf = rng.pick(['heart', 'song', 'bloom']);
-    if (cat.pers.bravery > 0.7 && rng.chance(0.4)) pre = rng.pick(['Storm', 'Thorn', 'Ember', 'Keen']);
-    if (cat.app.pattern === 'tabby' || cat.app.pattern === 'mackerel') if (rng.chance(0.3)) suf = 'stripe';
-  }
-  return pre + suf;
+  // warrior-name suffixes (…fur, …claw, …pelt) in every mode
+  let suf = rng.pick(CLASSIC_SUFFIXES);
+  if (cat?.app.pattern === 'tabby' && rng.chance(0.3)) suf = 'stripe';
+  if (cat && cat.pers.bravery > 0.7 && rng.chance(0.3)) suf = rng.pick(['heart', 'claw', 'storm', 'fang']);
+  if (cat && cat.pers.kindness > 0.7 && rng.chance(0.3)) suf = rng.pick(['heart', 'flower', 'song', 'leaf']);
+  if (cat && cat.given.toLowerCase() === suf) suf = 'heart';
+  return suf;
 }
 
 export function epithetOptions(cat: Cat, n = 3): string[] {

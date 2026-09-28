@@ -179,7 +179,35 @@ export class FunActivities {
     g.clan.remember(pc, 'I watched the stars of the Long Meadow.', 1);
   }
 
+  private boredT = 15;
+  private helpT = 0;
+
   update(dt: number) {
     this.updateRace(dt);
+    const g = this.game;
+    // now and then a clanmate nearby grumbles that they're bored (talk to them!)
+    this.boredT -= dt;
+    if (this.boredT <= 0) {
+      this.boredT = simRng.range(25, 50);
+      if (!g.time.isNight) {
+        const p = g.player.pos;
+        const idle = [...g.npcs.agents.values()].filter((a) => a.cat.clan === 'home' && a.cat.stage !== 'kit' && a.activity === 'idle' && Math.hypot(a.pos.x - p.x, a.pos.z - p.z) < 20);
+        if (idle.length) simRng.pick(idle).say(simRng.pick(['*sigh* I\'m so bored…', 'Nothing to do today…', '*yawns* Borrring.', 'Someone find me something to do!']), 3);
+      }
+    }
+    // a clanmate doing a job with you pitches in
+    const o = g.objectives.list.find((x) => x.data?.companion);
+    if (o) {
+      this.helpT += dt;
+      if (this.helpT > 40 && !o.data.helped && (o.progress ?? 0) < o.need - 1) {
+        o.data.helped = true;
+        o.progress = (o.progress ?? 0) + 1;
+        const a = g.npcs.agents.get(o.data.companion);
+        const what = o.kind === 'herbs' ? 'found a herb' : o.kind === 'hunt' ? 'caught some prey' : 'marked a border stone';
+        if (o.kind === 'hunt') g.clan.addFood(1);
+        a?.say(simRng.pick(['Look what I got!', 'Got one!', 'Here, this counts too!']), 2.5);
+        g.ui.toast(`${a ? a.name : 'Your clanmate'} ${what}! (${o.progress}/${o.need})`, 'good');
+      }
+    } else this.helpT = 0;
   }
 }

@@ -342,7 +342,7 @@ export class TrainingSystem {
   assessmentComplete() {
     const g = this.game;
     const p = g.clan.player;
-    const classic = isClassic();
+    const classic = true; void isClassic;
     const opts = g.clan.epithetChoices(p).map((e) => (classic ? p.given + e.toLowerCase() : e));
     g.ui.nameChoice(
       'Your warrior ceremony',
