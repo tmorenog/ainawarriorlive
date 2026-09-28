@@ -61,10 +61,19 @@ export class Objectives {
     else if (o.kind === 'lesson' || o.kind === 'mentor') game.training.lessonComplete(o);
     if (o.kind === 'assessment' || o.data?.medAssess) game.training.assessmentComplete();
     if (o.data?.questOf) game.quests.complete(o);
+    if (o.data?.companion) this.releaseCompanion(o, true);
     if (o.id === 'punish-ticks') {
       for (const c of game.clan.home()) if (c.stage === 'elder') game.clan.adjust(c, p, 3);
       game.ui.toast('Mouse bile stinks! But the elders purr with relief.', 'good');
     }
+  }
+
+  /** A clanmate who was doing something with you goes back to their own business. */
+  private releaseCompanion(o: Objective, success: boolean) {
+    const a = this.game.npcs.agents.get(o.data.companion);
+    if (!a) return;
+    if (a.activity === 'follow') { a.activity = 'idle'; a.actTimer = 0; a.followTarget = null; }
+    a.say(success ? ['That was fun! Thanks, I\'m not bored anymore.', 'Best day in moons!', 'We make a good team!'][Math.floor(Math.random() * 3)] : 'Oh well. Maybe another time.', 3);
   }
 
   fail(id: string, silent = false) {
@@ -72,6 +81,7 @@ export class Objectives {
     if (!o) return;
     this.list = this.list.filter((x) => x.id !== id);
     if (o.kind === 'lesson' && o.data?.mentor) this.game.training.release(this.game.npcs.agents.get(o.data.mentor));
+    if (o.data?.companion) this.releaseCompanion(o, false);
     if (silent) return;
     const game = this.game;
     game.ui.toast(`✘ ${o.title} — failed`, 'danger');

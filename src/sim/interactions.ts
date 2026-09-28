@@ -22,6 +22,7 @@ export class Interactions {
   private lastSpoke = new Map<string, number>();
   private reminisced = new Set<string>();
   private healedDay = new Map<string, number>();
+  private boredAsked = new Set<string>();
   private remindedOf = new Set<string>();
   /** Prey the player has dropped on the ground; it can be picked up again. */
   dropped: { kind: PreyKind; mesh: THREE.Mesh; x: number; z: number }[] = [];
@@ -305,6 +306,13 @@ export class Interactions {
     const op = clan.opinion(c, pc);
     const r = clan.rel(c, pc);
     r.familiarity = clamp(r.familiarity + 2, 0, 100);
+    // sometimes a clanmate is just bored
+    const boredKey = c.id + ':' + g.time.day;
+    if (!pc.exiled && !g.time.isNight && c.stage !== 'kit' && !this.boredAsked.has(boredKey) && simRng.chance(0.18) && !g.objectives.list.some((o) => o.data?.companion)) {
+      this.boredAsked.add(boredKey);
+      this.boredTalk(a, done);
+      return;
+    }
     let text = greetPlayer(c, pc, op, { night: g.time.isNight, food: clan.food, clanSize: clan.home().length, weather: g.weatherLabel(), recent: clan.lastRecent });
     if (pc.exiled && g.npcs.isPlayerFriend(a)) text = simRng.pick([
       `${pc.given}! *presses close* It hasn't been the same without you. I hate this.`,
@@ -861,6 +869,41 @@ export class Interactions {
     let r = simRng.next() * total;
     for (const t of topics) { r -= t.w; if (r <= 0) { t.run(); return; } }
     topics[topics.length - 1].run();
+  }
+
+
+  /** A bored clanmate: leave them be, or find something to do together. */
+  private boredTalk(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    const healer = pc.role === 'medicine' || pc.role === 'medicineApprentice';
+    const together = (kind: 'herbs' | 'hunt' | 'markBorder', title: string, desc: string, need: number, extra: any = {}) => {
+      done();
+      a.activity = 'follow';
+      a.followTarget = 'player';
+      a.actTimer = 999;
+      g.objectives.add({ id: 'together', kind, title, desc, need, giver: c.id, reward: { rep: 2, opinion: 8 }, deadline: g.time.totalHours + 10, data: { companion: a.id }, ...extra });
+      g.objectives.focus('together');
+      a.say(simRng.pick(['Finally, something to do!', 'Let\'s go!', 'Lead the way!']), 2.5);
+    };
+    const opts: { label: string; action: () => void; hint?: string }[] = [
+      { label: 'Leave them be', action: () => { a.say('*yawns*', 2); done(); } },
+      { label: 'Look for herbs together', hint: 'they follow you', action: () => together('herbs', `Find herbs with ${displayName(c)} (2)`, `Gather two herbs with ${a.name} and bring them to the medicine den.`, 2) },
+    ];
+    if (pc.stage !== 'kit' && !healer) opts.push({ label: 'Hunt together', hint: 'they follow you', action: () => together('hunt', `Hunt with ${displayName(c)} (2)`, `Hunt with ${a.name} and bring two pieces of prey to the fresh-kill pile.`, 2) });
+    if (pc.stage !== 'kit') {
+      const stones = g.territories.landmarks.filter((l) => l.kind === 'borderStone')
+        .sort((u, v) => Math.hypot(u.x - g.player.pos.x, u.z - g.player.pos.z) - Math.hypot(v.x - g.player.pos.x, v.z - g.player.pos.z)).slice(0, 2);
+      if (stones.length) opts.push({ label: 'Go on patrol together', hint: 'mark the border', action: () => together('markBorder', `Patrol with ${displayName(c)}`, `Walk the border with ${a.name} and renew ${stones.length} border markers.`, stones.length, { targets: stones.map((x) => ({ x: x.x, z: x.z })), target: { x: stones[0].x, z: stones[0].z } }) });
+    }
+    g.ui.dialog({ speaker: c, text: simRng.pick([
+      `*sighs dramatically* I'm soooo bored, ${pc.given}. There's nothing to do.`,
+      'Ugh. I\'ve counted every leaf on that bush twice. I\'m SO bored.',
+      '*flops over* Is it just me, or is today the most boring day ever?',
+      'I\'m bored out of my whiskers. Want to do something?',
+    ]), options: opts, onClose: done });
   }
 
   lastNpcChat = -999;
