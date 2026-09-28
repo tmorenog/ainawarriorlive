@@ -36,7 +36,7 @@ const LANDMARK_NAMES: [LandmarkKind, string[]][] = [
   ['pond', ['Frog Pool', 'Stillwater Pond', 'Moon Puddle']],
 ];
 
-export const HOME_CLAN_NAMES = ['Mistwood', 'Fernbrook', 'Emberglen', 'Willowmere', 'Thornvale'];
+export const HOME_CLAN_NAMES = ['ThunderClan', 'WindClan', 'RiverClan', 'ShadowClan', 'SkyClan'];
 const RIVAL_NAMES = ['Ashpine', 'Reedwater', 'Stonehollow', 'Frostridge', 'Brightmoor', 'Duskfen', 'Cindergrove'];
 const RIVAL_COLORS = ['#c86a3c', '#4f8fb8', '#8b8578', '#a8c8e8', '#e0b84a', '#6e5a8a', '#b8483a'];
 
