@@ -41,7 +41,7 @@ import { Menus, NewGameSpec, Settings, loadSettings } from './ui/menus';
 import { TouchControls, isTouchDevice } from './ui/touch';
 import { SaveData, hasSave, readSave, readSaveSlot, writeSave } from './save/save';
 import { Appearance, Cat, LifeStage, displayName, pronoun, LESSONS } from './cats/types';
-import { createCat } from './cats/generate';
+import { personalityFrom, createCat } from './cats/generate';
 import { CatModel } from './cats/model';
 
 export type GameState = 'loading' | 'title' | 'create' | 'playing' | 'paused' | 'dead';
@@ -208,9 +208,51 @@ export class Game {
   notify(text: string, kind = 'info') { this.ui.toast(text, kind); }
 
   ceremony(text: string, ids: string[]) {
-    this.ui.showBanner(text, 11);
+    const pc = this.clan.player;
+    this.ui.showBanner('📣 ' + text, 14);
     this.npcs.startCeremony(text, ids);
     this.audio.chime();
+    setTimeout(() => this.audio.chime(), 450);
+    // everyone must come to the High Rock for a clan meeting
+    const hr = this.camp.highRock;
+    if (pc && pc.alive && !pc.exiled && this.state === 'playing' && !this.objectives.has('meeting')) {
+      const d = Math.hypot(this.player.pos.x - hr.x, this.player.pos.z - hr.z);
+      if (d > 8) {
+        this.ui.toast('📣 CLAN MEETING! Everyone gather beneath the Highrock — follow the compass!', 'objective');
+        this.objectives.add({ id: 'meeting', kind: 'visit', title: '📣 Clan meeting at the Highrock', desc: 'The leader has called the clan together. Get beneath the Highrock before the meeting ends — missing meetings earns a strike!', target: { x: hr.x, z: hr.z + 3 }, radius: 7, need: 1, deadline: this.time.totalHours + 2.5 + d / 70, reward: { rep: 1 }, data: { meeting: true } });
+        this.objectives.focus('meeting');
+      }
+    }
+    // the clan chants the honoured cat's name
+    const honoured = this.clan.get(ids[0]);
+    if (honoured && honoured.clan === 'home' && honoured.alive && !honoured.exiled && !/no longer one of us/.test(text)) {
+      const nm = displayName(honoured);
+      setTimeout(() => {
+        if (this.state !== 'playing') return;
+        let i = 0;
+        for (const a of this.npcs.agents.values()) {
+          if (a.activity !== 'ceremony' || a.id === honoured.id) continue;
+          const delay = 200 + (i++) * 180;
+          setTimeout(() => a.say(`${nm}! ${nm}!`, 3.5), delay);
+        }
+        this.ui.toast(`🎉 The clan chants: "${nm}! ${nm}!"`, 'good');
+        this.audio.purr();
+        const where = honoured.isPlayer ? this.player.pos : this.npcs.agents.get(honoured.id)?.pos;
+        if (where) for (let k = 0; k < 5; k++) setTimeout(() => this.combat.puff(where, 14, 0.35), k * 300);
+      }, 6500);
+    }
+  }
+
+  /** You didn't come to a clan meeting: a strike, and every third strike breaks the code. */
+  missedMeeting() {
+    const pc = this.clan.player;
+    if (!pc || pc.exiled) return;
+    pc.meetingStrikes = (pc.meetingStrikes ?? 0) + 1;
+    const n = pc.meetingStrikes;
+    this.ui.toast(`⚠ Strike ${((n - 1) % 3) + 1} of 3: you missed the clan meeting!`, 'danger');
+    const leader = this.clan.leader;
+    if (leader && !leader.isPlayer) this.clan.adjust(leader, pc, -3, { text: `${pc.given} didn't come to the clan meeting.`, weight: -1 });
+    if (n % 3 === 0) this.clan.infraction('obeyOrders', leader && !leader.isPlayer ? [leader.id] : [], 'missed three clan meetings');
   }
 
   resize() {
@@ -263,6 +305,7 @@ export class Game {
       // the clan's cats depend only on which clan you join, so every new cat in ThunderClan meets the same clanmates
       const rng = new RNG(hashString(`${spec.lore}:${spec.clanName}`));
       const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: 0, rng: new RNG((Math.random() * 1e9) | 0) });
+      if (spec.traits?.length) { me.traits = spec.traits.slice(0, 2); me.pers = personalityFrom(me.traits, new RNG((Math.random() * 1e9) | 0)); }
       this.clan.newClan(me, rng);
       this.youngAgain();
       this.clan.fillDens(rng);
@@ -369,6 +412,7 @@ export class Game {
       ?? home.find((x) => x.stage !== 'kit');
     const father = mother ? c.get(mother.mate) : null;
     const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: this.time.day, usedNames: c.usedNames, rng: new RNG((Math.random() * 1e9) | 0) });
+    if (spec.traits?.length) { me.traits = spec.traits.slice(0, 2); me.pers = personalityFrom(me.traits, new RNG((Math.random() * 1e9) | 0)); }
     me.bornDay = this.time.day - 3;
     me.isPlayer = true;
     c.cats[me.id] = me;

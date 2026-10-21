@@ -160,7 +160,7 @@ export function inheritAppearance(a: Appearance, b: Appearance, rng: RNG): Appea
   };
 }
 
-const TRAITS: Trait[] = ['friendly', 'shy', 'brave', 'curious', 'serious', 'playful', 'suspicious', 'aggressive', 'loyal', 'ambitious', 'kind', 'mischievous', 'calm', 'lazy'];
+export const TRAITS: Trait[] = ['friendly', 'shy', 'brave', 'curious', 'serious', 'playful', 'suspicious', 'aggressive', 'loyal', 'ambitious', 'kind', 'mischievous', 'calm', 'lazy'];
 const CONFLICTS: [Trait, Trait][] = [
   ['friendly', 'suspicious'], ['shy', 'brave'], ['serious', 'playful'], ['aggressive', 'kind'], ['calm', 'aggressive'], ['lazy', 'ambitious'], ['shy', 'friendly'],
 ];

@@ -3,8 +3,8 @@
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import { h, esc } from './ui';
-import { ACCESSORY_LABEL, Accessory, Appearance, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
-import { BREEDS, EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
+import { ACCESSORY_LABEL, Accessory, Appearance, Trait, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
+import { BREEDS, TRAITS, EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
 import { RNG } from '../core/rng';
 import { CONTROLS_HTML } from './panels';
 import { HOME_CLAN_NAMES } from '../world/territory';
@@ -35,7 +35,7 @@ export function saveSettings(s: Settings) {
   try { localStorage.setItem('mistwood-settings', JSON.stringify(s)); } catch { /* ignore */ }
 }
 
-export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string; lore: LoreMode; joinSlot?: number }
+export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string; lore: LoreMode; joinSlot?: number; traits?: Trait[] }
 
 export class Menus {
   private screen: HTMLElement | null = null;
@@ -225,6 +225,21 @@ export class Menus {
     oeCheck.type = 'checkbox'; oeCheck.checked = !!spec.app.eye2;
     const oePick = colorInput(oe, () => spec.app.eye2 ?? '#5aa2e6', (v) => { spec.app.eye2 = v; oeCheck.checked = true; }, 'Second eye colour');
     oeCheck.onchange = () => { spec.app.eye2 = oeCheck.checked ? oePick.value : undefined; refresh(); };
+    // personality: pick up to two traits
+    const pr2 = field('Personality (pick two)');
+    spec.traits = spec.traits ?? [];
+    const traitEls: HTMLElement[] = [];
+    for (const t of TRAITS) {
+      const b = h('button', `chip ${spec.traits.includes(t) ? 'on' : ''}`, t.charAt(0).toUpperCase() + t.slice(1), pr2);
+      traitEls.push(b);
+      b.onclick = () => {
+        const list = spec.traits!;
+        const i = list.indexOf(t);
+        if (i >= 0) list.splice(i, 1);
+        else { list.push(t); if (list.length > 2) list.shift(); }
+        TRAITS.forEach((x, k) => traitEls[k].classList.toggle('on', list.includes(x)));
+      };
+    }
     chips<FurLength>('Fur length', [['short', 'Short'], ['medium', 'Medium'], ['long', 'Long']], () => spec.app.fur, (v) => (spec.app.fur = v));
     chips<BodyType>('Body type', [['slender', 'Slender'], ['average', 'Average'], ['stocky', 'Stocky'], ['large', 'Large']], () => spec.app.body, (v) => (spec.app.body = v));
     chips<EarShape>('Ears', [['pointed', 'Pointed'], ['rounded', 'Rounded'], ['tufted', 'Tufted'], ['folded', 'Folded']], () => spec.app.ears, (v) => (spec.app.ears = v));

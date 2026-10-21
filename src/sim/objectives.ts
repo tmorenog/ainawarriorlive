@@ -181,6 +181,7 @@ export class Objectives {
     const p = game.player.pos;
     const now = game.time.totalHours;
     for (const o of [...this.list]) {
+      if (o.deadline !== undefined && now > o.deadline && o.data?.meeting) { this.fail(o.id, true); game.missedMeeting(); continue; }
       if (o.deadline !== undefined && now > o.deadline) {
         // orders get one extension before they count as disobeying
         if (o.order && !o.data?.extended) {

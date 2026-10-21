@@ -15,6 +15,15 @@ export interface CarriedPrey { kind: PreyKind; value: number; slots: number; col
 
 const STAGE_SPEED: Record<LifeStage, number> = { kit: 0.62, apprentice: 0.88, warrior: 1, elder: 0.78 };
 
+export const GAITS: { name: string; speed: number }[] = [
+  { name: 'Crouch', speed: 0.6 },
+  { name: 'Crawl', speed: 1.0 },
+  { name: 'Walk', speed: 1.9 },
+  { name: 'Trot', speed: 3.4 },
+  { name: 'Canter', speed: 5.0 },
+  { name: 'Sprint', speed: 7.2 },
+];
+
 export class Player implements Fighter {
   kind: 'player' = 'player';
   faction: 'home' = 'home';
@@ -57,6 +66,16 @@ export class Player implements Fighter {
   kitOutFlag = false;
   dangerFlag = false;
   confineFlag = false;
+  /** 0 crouch · 1 crawl · 2 walk · 3 trot · 4 canter (Shift = sprint) */
+  gait = 3;
+  private wheel = 0;
+  setGait(g: number) {
+    const n = Math.max(0, Math.min(4, g));
+    if (n === this.gait) return;
+    this.gait = n;
+    this.crouchToggle = n <= 1;
+    this.game.ui.floatText(GAITS[n].name, '#e8d9a8');
+  }
   /** Seconds spent somewhere forbidden — a grace period lets honest mistakes be undone. */
   private graceT = { confine: 0, trespass: 0, danger: 0 };
   private warned = { border: false, danger: false, confine: false, kit: false };
@@ -65,7 +84,9 @@ export class Player implements Fighter {
   sleeping = false;
   poison = 0; // deathberry poisoning, 0..1
 
-  constructor(private game: Game) {}
+  constructor(private game: Game) {
+    window.addEventListener('wheel', (e) => { if (game.state === 'playing' && !game.ui.isBusy()) this.wheel = Math.sign(e.deltaY); }, { passive: true });
+  }
 
   get cat(): Cat { return this.game.clan.player; }
   get id() { return this.cat.id; }
@@ -155,15 +176,19 @@ export class Player implements Fighter {
 
     // --- movement input
     const ax = controllable ? input.moveAxis() : { x: 0, y: 0 };
-    if (controllable && input.pressed('KeyC')) this.crouchToggle = !this.crouchToggle;
-    this.crouching = controllable && (this.crouchToggle || input.isDown('ControlLeft') || input.isDown('ControlRight')) && !this.swimming;
-    const wantsSprint = controllable && input.isDown('ShiftLeft') && (ax.x !== 0 || ax.y !== 0) && !this.crouching;
+    if (controllable && input.pressed('KeyC')) { this.crouchToggle = !this.crouchToggle; if (!this.crouchToggle && this.gait < 2) this.gait = 3; if (this.crouchToggle) this.gait = 0; }
+    // gaits: Z / mouse wheel down = slower, T / wheel up = faster
+    if (controllable && (input.pressed('KeyZ') || this.wheel > 0)) this.setGait(this.gait - 1);
+    if (controllable && (input.pressed('KeyT') || this.wheel < 0)) this.setGait(this.gait + 1);
+    this.wheel = 0;
+    this.crouching = controllable && (this.crouchToggle || this.gait <= 1 || input.isDown('ControlLeft') || input.isDown('ControlRight')) && !this.swimming;
+    const wantsSprint = controllable && input.isDown('ShiftLeft') && (ax.x !== 0 || ax.y !== 0) && !(this.crouchToggle && this.gait <= 1);
     this.sprinting = wantsSprint && this.stamina > 2;
-    let target = 2.0;
-    if (this.crouching) target = 0.75;
-    else if (this.sprinting) target = 7.2;
-    else if (controllable && input.isDown('AltLeft')) target = 1.1;
-    else target = 4.2;
+    let target: number;
+    if (this.sprinting) { target = GAITS[5].speed; this.crouching = false; }
+    else if (controllable && input.isDown('AltLeft')) target = GAITS[2].speed;
+    else if (this.crouching && this.gait > 1) target = GAITS[0].speed;
+    else target = GAITS[this.gait].speed;
     target *= stageSpeed;
     if (this.swimming) target = 1.4 * Math.max(0.6, stageSpeed);
     if (ax.y < 0 && !this.sprinting) target *= 0.7;

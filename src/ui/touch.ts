@@ -68,11 +68,16 @@ export class TouchControls {
     hold('⤴', 'jump/pounce', 'Space');
     const dropBtn = h('div', 'tbtn', '⤵<small>drop</small>', btns);
     dropBtn.addEventListener('touchstart', (e) => { game.interactions.drop(); e.preventDefault(); }, { passive: false });
-    this.sprintBtn = h('div', 'tbtn', '💨<small>sprint</small>', btns);
+    this.sprintBtn = h('div', 'tbtn', '💨<small>trot</small>', btns);
+    const names = ['crouch', 'crawl', 'walk', 'trot', 'canter', 'sprint'];
     this.sprintBtn.addEventListener('touchstart', (e) => {
-      this.sprint = !this.sprint;
+      // cycle walk → trot → canter → sprint → walk
+      const pl = game.player;
+      if (this.sprint) { this.sprint = false; input.virtualUp('ShiftLeft'); pl.setGait(2); }
+      else if (pl.gait >= 4) { this.sprint = true; }
+      else pl.setGait(Math.max(2, pl.gait + 1));
       this.sprintBtn.classList.toggle('on', this.sprint);
-      if (!this.sprint) input.virtualUp('ShiftLeft');
+      this.sprintBtn.innerHTML = `💨<small>${this.sprint ? 'sprint' : names[pl.gait]}</small>`;
       e.preventDefault();
     }, { passive: false });
     const top = h('div', 'ttop', '', this.el);

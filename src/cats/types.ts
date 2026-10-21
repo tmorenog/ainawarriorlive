@@ -133,6 +133,8 @@ export interface Cat {
   bookId?: string;
   /** The book cat has already given the player their quest. */
   questGiven?: boolean;
+  /** Clan meetings missed (every third is a broken rule). */
+  meetingStrikes?: number;
   confinedUntil: number | null;
   deeds: number; // notable good deeds (for leadership)
   mentored: number; // number of apprentices trained

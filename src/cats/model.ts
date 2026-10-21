@@ -703,7 +703,7 @@ export class CatModel {
     const pose = this.pose;
     const sp = this.speed / Math.max(0.3, this.scale);
     const moving = sp > 0.05 && (pose === 'walk' || pose === 'crouch' || pose === 'stand' || pose === 'fight' || pose === 'swim');
-    const running = sp > 3.2;
+    const running = sp > 4.4;
     this.phase += dt * (moving ? Math.min(16, 3 + sp * 2.1) : 0);
 
     // target pose values (pitch > 0 = nose up; tailUp < 0 = tail raised; legs > 0 = paw forward)
@@ -770,7 +770,8 @@ export class CatModel {
     this.body.rotation.x = pb.roll + sway;
     // legs: FL, FR, BL, BR. Cats walk in a lateral sequence (back-left, front-left, back-right, front-right)
     // and gallop with the front pair and back pair together.
-    const offs = running ? [0, 0.45, Math.PI, Math.PI + 0.45] : [Math.PI / 2, Math.PI * 1.5, 0, Math.PI];
+    const trotting = !running && sp > 1.6;
+    const offs = running ? [0, 0.45, Math.PI, Math.PI + 0.45] : trotting ? [0, Math.PI, Math.PI, 0] : [Math.PI / 2, Math.PI * 1.5, 0, Math.PI];
     const p = pb.pitch;
     for (let i = 0; i < 4; i++) {
       const front = i < 2;
