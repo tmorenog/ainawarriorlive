@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Accessory, Appearance, LifeStage } from './types';
 import { RNG, hashString } from '../core/rng';
+import { clamp } from '../core/math';
 
 export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim';
 export type Mood = 'neutral' | 'happy' | 'angry' | 'afraid' | 'alert' | 'sad';
@@ -313,7 +314,7 @@ export class CatModel {
   legLen = 0.16;
   shoulderY = 0.26;
   eyeHeight = 0.3;
-  private poseBlend = { bodyY: 0, pitch: 0, legF: 0, legB: 0, headP: 0, tailUp: 0, lie: 0 };
+  private poseBlend = { bodyY: 0, pitch: 0, legF: 0, legB: 0, headP: 0, tailUp: 0, lie: 0, curl: 0, roll: 0 };
   private stage: LifeStage;
   private app: Appearance;
 
@@ -705,23 +706,30 @@ export class CatModel {
     const running = sp > 3.2;
     this.phase += dt * (moving ? Math.min(16, 3 + sp * 2.1) : 0);
 
-    // target pose values
-    let bodyY = 0, pitch = 0, legF = 0, legB = 0, headP = 0, tailUp = -0.45, lie = 0;
+    // target pose values (pitch > 0 = nose up; tailUp < 0 = tail raised; legs > 0 = paw forward)
+    let bodyY = 0, pitch = 0, legF = 0, legB = 0, headP = 0, tailUp = -0.35, lie = 0, curl = 0, roll = 0;
     switch (pose) {
       case 'crouch':
-        bodyY = -this.legLen * 0.38; legF = 0.75; legB = -0.75; headP = -0.1; tailUp = 0.05;
+        // stalking: belly low, shoulders up, head low and forward, tail straight out behind
+        bodyY = -this.legLen * 0.42; pitch = 0.04; legF = 0.55; legB = -0.6; headP = -0.05; tailUp = 0.12;
         break;
       case 'pounce':
         bodyY = 0.02; pitch = 0.25; legF = 1.0; legB = -1.0; tailUp = -0.1;
         break;
       case 'sit':
-        pitch = 0.62; bodyY = -this.legLen * 0.38; legF = -0.62; legB = -1.3; headP = -0.45; tailUp = 0.25;
-        break;
-      case 'lie': case 'sleep':
-        bodyY = -this.legLen * 0.95; legF = 1.45; legB = -1.45; headP = pose === 'sleep' ? 0.45 : 0.05; tailUp = 0.3; lie = 1;
+        // upright on the haunches, front legs straight, tail curled around the paws
+        pitch = 0.82; bodyY = -this.legLen * 0.5; legF = 0; legB = 0.25; headP = -0.1; tailUp = -0.7; curl = 0.42;
         break;
       case 'groom':
-        pitch = 0.5; bodyY = -this.legLen * 0.38; legF = -0.5; legB = -1.3; headP = 0.8; tailUp = 0.25;
+        pitch = 0.75; bodyY = -this.legLen * 0.5; legF = 0; legB = 0.25; headP = 0.9; tailUp = -0.65; curl = 0.38;
+        break;
+      case 'lie':
+        // loaf: paws tucked, tail wrapped along the side
+        bodyY = -this.legLen * 0.95; legF = 1.45; legB = -1.45; headP = 0.05; tailUp = 0.2; lie = 1; curl = 0.3;
+        break;
+      case 'sleep':
+        // curled up: body rolled onto its side a little, head tucked, tail over the nose
+        bodyY = -this.legLen * 0.98; legF = 1.45; legB = -1.45; headP = 0.55; tailUp = 0.25; lie = 1; curl = 0.55; roll = 0.28;
         break;
       case 'eat':
         bodyY = -this.legLen * 0.3; legF = 0.5; legB = -0.5; headP = 0.8; pitch = -0.1;
@@ -732,9 +740,14 @@ export class CatModel {
       case 'swim':
         bodyY = -this.legLen * 0.8; headP = -0.3; tailUp = 0.1;
         break;
+      default:
+        // walking cats carry the tail up like a question mark; standing cats let it hang in a soft curve
+        if (moving && !running) { tailUp = -0.85; headP = 0.12; }
+        else if (running) tailUp = -0.2;
+        else tailUp = 0.55; // relaxed: tail hangs down and curves up at the end
     }
-    if (this.mood === 'afraid') tailUp = 0.3;
-    if (this.mood === 'happy' && pose !== 'sleep' && pose !== 'lie') tailUp = -1.1;
+    if (this.mood === 'afraid') tailUp = 0.45;
+    if (this.mood === 'happy' && pose !== 'sleep' && pose !== 'lie' && pose !== 'sit') tailUp = -1.15;
     const pb = this.poseBlend;
     const k = 1 - Math.exp(-dt * 8);
     pb.bodyY += (bodyY - pb.bodyY) * k;
@@ -744,31 +757,60 @@ export class CatModel {
     pb.headP += (headP - pb.headP) * k;
     pb.tailUp += (tailUp - pb.tailUp) * k;
     pb.lie += (lie - pb.lie) * k;
+    pb.curl = (pb.curl ?? 0) + (curl - (pb.curl ?? 0)) * k;
+    pb.roll = (pb.roll ?? 0) + (roll - (pb.roll ?? 0)) * k;
 
-    const swingAmp = moving ? Math.min(0.9, 0.35 + sp * 0.12) * (pose === 'crouch' ? 0.5 : 1) : 0;
+    const swingAmp = moving ? Math.min(0.75, 0.32 + sp * 0.1) * (pose === 'crouch' ? 0.45 : 1) : 0;
     const ph = this.phase;
-    const bob = moving ? Math.abs(Math.sin(ph)) * 0.012 * Math.min(1, sp / 2) : Math.sin(this.t * 1.6) * 0.002;
+    // breathing when still; a soft rise and fall with each step when walking
+    const bob = moving ? Math.abs(Math.sin(ph)) * 0.01 * Math.min(1, sp / 2) : Math.sin(this.t * 1.6) * (pb.lie > 0.5 ? 0.003 : 0.0018);
     this.body.position.y = this.shoulderY + pb.bodyY + bob;
-    this.body.rotation.z = pb.pitch + (running ? Math.sin(ph) * 0.08 : 0);
-    // legs: FL, FR, BL, BR
-    const offs = running ? [0, 0.4, Math.PI, Math.PI + 0.4] : [0, Math.PI, Math.PI, 0];
+    const sway = moving && !running ? Math.sin(ph) * 0.035 : 0; // shoulder roll of a walking cat
+    this.body.rotation.z = pb.pitch + (running ? Math.sin(ph) * 0.09 : 0);
+    this.body.rotation.x = pb.roll + sway;
+    // legs: FL, FR, BL, BR. Cats walk in a lateral sequence (back-left, front-left, back-right, front-right)
+    // and gallop with the front pair and back pair together.
+    const offs = running ? [0, 0.45, Math.PI, Math.PI + 0.45] : [Math.PI / 2, Math.PI * 1.5, 0, Math.PI];
+    const p = pb.pitch;
     for (let i = 0; i < 4; i++) {
       const front = i < 2;
-      const base = front ? pb.legF - pb.pitch * (pose === 'sit' || pose === 'groom' ? 1 : 0) : pb.legB;
-      this.legs[i].rotation.z = base + Math.sin(ph + offs[i]) * swingAmp;
+      const leg = this.legs[i];
+      const base = front ? pb.legF - p : pb.legB - (pose === 'sit' || pose === 'groom' ? 0 : 0);
+      const swing = Math.sin(ph + offs[i]) * swingAmp;
+      leg.rotation.z = base + swing;
+      let scaleY = 1;
+      if (moving) {
+        // lift the paw while it swings forward
+        scaleY = 1 - Math.max(0, Math.cos(ph + offs[i])) * (running ? 0.28 : 0.18);
+      } else if (pb.lie < 0.5) {
+        // keep paws planted: stretch or fold the leg so it reaches the ground
+        const px = leg.position.x, py = leg.position.y;
+        const hipY = this.body.position.y + px * Math.sin(p) + py * Math.cos(p);
+        const refY = this.shoulderY + py;
+        const worldAng = p + leg.rotation.z;
+        scaleY = clamp((hipY / Math.max(0.01, refY)) / Math.max(0.35, Math.cos(worldAng)), 0.3, 1.5);
+      }
+      leg.scale.y += (scaleY - leg.scale.y) * Math.min(1, dt * 14);
     }
-    // head
+    // head: steady and level (cats keep their head still while the body moves)
     const hy = this.lookYaw;
     this.headPivot.rotation.y += (hy - this.headPivot.rotation.y) * k;
-    const hpTarget = -pb.headP - this.lookPitch - (pose === 'sit' ? -pb.pitch * 0.6 : 0) + (moving ? Math.sin(ph * 2) * 0.03 : 0);
+    const hpTarget = -pb.headP - this.lookPitch - (pose === 'sit' || pose === 'groom' ? -pb.pitch * 0.8 : 0) + (moving ? Math.sin(ph * 2) * 0.015 : 0);
     this.headPivot.rotation.z += (hpTarget - this.headPivot.rotation.z) * k;
     // tail
-    const sway = Math.sin(this.t * (this.mood === 'angry' ? 5 : 1.4)) * (this.mood === 'angry' ? 0.35 : 0.18);
-    this.tailPivot.rotation.z = pb.tailUp;
+    const angry = this.mood === 'angry';
+    const swish = Math.sin(this.t * (angry ? 5 : 1.4)) * (angry ? 0.35 : pb.curl > 0.2 ? 0.05 : 0.16);
+    // when sitting the tail lies on the ground behind the cat before curling forward
+    this.tailPivot.rotation.z = pose === 'sit' || pose === 'groom' ? -pb.pitch + 0.12 : pb.tailUp;
+    const walkCurl = moving && !running && pose !== 'crouch';
+    const twitch = pose === 'crouch' ? Math.sin(this.t * 9) * 0.25 : 0;
     this.tailSegs.forEach((seg, i) => {
       const f = i / this.tailSegs.length;
-      seg.rotation.y = sway * (0.3 + f) + (pb.lie > 0.5 ? 0.35 : 0);
-      seg.rotation.z = (running ? 0.02 : -0.12 + f * 0.1) + (seg.userData.kink ?? 0) + (pb.lie > 0.5 ? 0.05 : 0);
+      const tip = f > 0.6;
+      seg.rotation.y = swish * (0.3 + f) + pb.curl * (0.6 + f) + (tip ? twitch : 0);
+      const relaxed = !moving && (pose === 'stand' || pose === 'walk') && this.mood !== 'happy' && this.mood !== 'afraid';
+      seg.rotation.z = (running ? 0.02 : relaxed ? -0.16 - f * 0.06 : -0.1 + f * 0.08) + (seg.userData.kink ?? 0) + (pb.lie > 0.5 ? 0.04 : 0)
+        + (walkCurl && tip ? -0.32 : 0) + (pose === 'sit' || pose === 'groom' ? 0.03 : 0);
     });
     // ears
     this.earT -= dt;
