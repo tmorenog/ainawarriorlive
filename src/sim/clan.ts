@@ -136,6 +136,7 @@ export class ClanSim {
     const look = (c: Cat) => {
       c.given = 'Clover';
       c.epithet = 'Ashshade';
+      c.bookId = 'CloverAshshade';
       c.sex = 'she';
       c.stage = 'warrior';
       c.role = 'medicine';

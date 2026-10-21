@@ -14,6 +14,11 @@ interface QuestDef {
 const lm = (g: Game, kind: string) => g.territories.landmarks.find((l) => l.kind === kind);
 
 export const QUESTS: Record<string, QuestDef> = {
+  CloverAshshade: {
+    ask: 'Oh! Just who I was hoping to see. My herb store is running low and I can\'t leave the sick cats. Could you bring me two herbs? I\'ll teach you what each one does.',
+    make: () => ({ kind: 'herbs', title: 'Herbs for Clover Ashshade (2)', desc: 'Find two healing herbs and bring them to the medicine den for Clover.', need: 2 }),
+    end: 'Silverleaf for wounds, sunpetal for fever, bitterroot for sickness… you\'re a natural! Come and visit me any time — I mean it.',
+  },
   Bluefur: {
     ask: 'Walk with me to Fourtrees, young one. There is something I must tell you under the Great Oaks.',
     make: (g) => ({ kind: 'visit', title: 'Walk with Bluestar to Fourtrees', desc: 'Travel to Fourtrees, where the four clans meet.', target: { x: g.territories.council.x, z: g.territories.council.z }, radius: 14, need: 1 }),

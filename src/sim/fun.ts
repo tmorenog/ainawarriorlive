@@ -182,6 +182,7 @@ export class FunActivities {
   }
 
   private boredT = 15;
+  private cloverT = 20;
   private helpT = 0;
 
   update(dt: number) {
@@ -195,6 +196,26 @@ export class FunActivities {
         const p = g.player.pos;
         const idle = [...g.npcs.agents.values()].filter((a) => a.cat.clan === 'home' && a.cat.stage !== 'kit' && a.activity === 'idle' && Math.hypot(a.pos.x - p.x, a.pos.z - p.z) < 20);
         if (idle.length) simRng.pick(idle).say(simRng.pick(['*sigh* I\'m so bored…', 'Nothing to do today…', '*yawns* Borrring.', 'Someone find me something to do!']), 3);
+      }
+    }
+    // Clover Ashshade wanders over to keep you company
+    this.cloverT -= dt;
+    if (this.cloverT <= 0) {
+      this.cloverT = simRng.range(35, 70);
+      const clover = [...g.npcs.agents.values()].find((a) => a.cat.given === 'Clover' && a.cat.epithet === 'Ashshade');
+      const pc = g.clan.player;
+      if (clover && pc && !pc.exiled && !g.time.isNight && (clover.activity === 'idle' || clover.activity === 'wander' || clover.activity === 'sit')) {
+        const p = g.player.pos;
+        const d = Math.hypot(clover.pos.x - p.x, clover.pos.z - p.z);
+        if (d > 4 && d < 70) clover.setTarget(p.x + simRng.range(-2.5, 2.5), p.z + simRng.range(-2.5, 2.5));
+        clover.say(simRng.pick([
+          `${pc.given}! There you are. *purrs*`,
+          'Have you seen any bitterroot? I\'m running low…',
+          'Remember: never eat the red berries!',
+          'You look well today. Eating properly?',
+          'The blossoms smell lovely this time of year.',
+          'Come by the medicine den later — I saved you something.',
+        ]), 4);
       }
     }
     // a clanmate doing a job with you pitches in

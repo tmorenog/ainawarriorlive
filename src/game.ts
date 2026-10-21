@@ -382,6 +382,7 @@ export class Game {
         for (const list of Object.values(BOOK_CATS)) for (const b of list) if (cat.given === b.prefix && (cat.epithet === b.suffix || cat.stage === 'apprentice' || cat.role === 'leader')) cat.bookId = b.prefix + b.suffix;
       }
       // keep the famous cats looking like they do in the books
+      for (const cat of Object.values(c.cats)) if (cat.given === 'Clover' && cat.epithet === 'Ashshade' && !cat.bookId) cat.bookId = 'CloverAshshade';
       for (const cat of Object.values(c.cats)) {
         if (!cat.bookId) continue;
         for (const list of Object.values(BOOK_CATS)) for (const b of list) if (b.prefix + b.suffix === cat.bookId) cat.app = { ...cat.app, ...b.app };

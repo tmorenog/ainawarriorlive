@@ -992,6 +992,11 @@ export class NpcManager {
     if ((c.role === 'leader' || c.role === 'deputy') && (p.stage === 'warrior' || p.stage === 'apprentice') && !game.objectives.busy() && simRng.chance(0.35)) {
       return { kind: 'order', text: `${p.given}, I have a task for you.` };
     }
+    // Clover Ashshade likes to check on you
+    if (c.given === 'Clover' && c.epithet === 'Ashshade' && game.clock - game.interactions.lastNpcChat > 25 && simRng.chance(0.45)) {
+      game.interactions.lastNpcChat = game.clock;
+      return { kind: 'chat', text: '' };
+    }
     // clanmates come over to chat on their own (not too often)
     if (op > 0 && game.clock - game.interactions.lastNpcChat > 45 && c.stage !== 'kit' || (c.stage === 'kit' && op > 10 && game.clock - game.interactions.lastNpcChat > 45)) {
       if (simRng.chance(op > 45 ? 0.3 : 0.14)) { game.interactions.lastNpcChat = game.clock; return { kind: 'chat', text: '' }; }
