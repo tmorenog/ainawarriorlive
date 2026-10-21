@@ -385,6 +385,8 @@ export class Game {
       // keep the famous cats looking like they do in the books
       c.dedupeClover();
       for (const cat of Object.values(c.cats)) if (cat.given === 'Clover' && cat.epithet === 'Ashshade') { cat.bookId = 'CloverAshshade'; cat.app = { ...cat.app, ...CLOVER_APP }; }
+      // make sure every cat on screen shows its (possibly updated) coat
+      for (const a of this.npcs.agents.values()) a.model.setAppearance({ ...a.cat.app });
       for (const cat of Object.values(c.cats)) {
         if (!cat.bookId) continue;
         for (const list of Object.values(BOOK_CATS)) for (const b of list) if (b.prefix + b.suffix === cat.bookId) cat.app = { ...cat.app, ...b.app };

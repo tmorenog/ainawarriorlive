@@ -3,7 +3,7 @@
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import { Cat, LESSONS, Lesson, Relation, displayName, pronoun } from '../cats/types';
-import { EYE_COLORS, GIVEN_NAMES, PATTERN_LABEL, createCat, epithetOptions, makeEpithet, personalityFrom, stageForAge } from '../cats/generate';
+import { EYE_COLORS, GIVEN_NAMES, PATTERN_LABEL, createCat, randomAppearance, epithetOptions, makeEpithet, personalityFrom, stageForAge } from '../cats/generate';
 import { BOOK_CATS, BookCat, CLASSIC_PREFIXES, isClassic } from '../lore';
 import { RNG, simRng } from '../core/rng';
 import { clamp } from '../core/math';
@@ -148,6 +148,16 @@ export class ClanSim {
       this.usedNames.add(nm);
     }
     this.usedNames.add('Clover');
+    // nobody else wears Clover's striped slate coat
+    const isCloverCoat = (c: Cat) => c.app.pattern === 'mackerel' && ['#535c73', '#4d5568'].includes(c.app.base) && c.app.second === '#15171c';
+    const oldCoat = (c: Cat) => c.app.pattern === 'tabby' && c.app.base === '#9a9da3' && c.app.second === '#45474d';
+    for (const c of Object.values(this.cats)) {
+      if (c === keep || c.isPlayer || (c.given === 'Clover' && c.epithet === 'Ashshade')) continue;
+      if (isCloverCoat(c) || oldCoat(c)) {
+        const fresh = randomAppearance(simRng);
+        c.app = { ...fresh, accessories: c.app.accessories, accessory: c.app.accessory };
+      }
+    }
   }
 
   /** Clover Ashshade, the striped she-cat medicine cat, lives in every clan. */
