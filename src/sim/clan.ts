@@ -130,6 +130,31 @@ export class ClanSim {
 
   setRecent(text: string) { this.lastRecent = text; }
 
+  /** Clover Ashshade, the striped she-cat medicine cat, lives in every clan. */
+  ensureClover(rng: RNG = simRng) {
+    if (Object.values(this.cats).some((c) => c.given === 'Clover' && c.epithet === 'Ashshade')) return;
+    const look = (c: Cat) => {
+      c.given = 'Clover';
+      c.epithet = 'Ashshade';
+      c.sex = 'she';
+      c.stage = 'warrior';
+      c.role = 'medicine';
+      c.age = Math.min(Math.max(c.age, 24), 30);
+      c.traits = ['kind', 'calm'];
+      c.pers = personalityFrom(c.traits, rng);
+      c.skills.healing = Math.max(c.skills.healing, 80);
+      c.app = { ...c.app, pattern: 'tabby', base: '#9a9da3', second: '#45474d', white: 0, eye: '#78c24c', fur: 'medium', body: 'slender' };
+      this.usedNames.add('Clover');
+    };
+    const med = this.medicine;
+    if (med && !med.bookId && !med.isPlayer) { look(med); return; }
+    // the clan already has a famous medicine cat: Clover joins as a second healer
+    const c = createCat({ age: 28, day: this.game.time.day, usedNames: this.usedNames, rng, sex: 'she' });
+    this.cats[c.id] = c;
+    look(c);
+    if (!this.medicineId) this.medicineId = c.id;
+  }
+
   /** Make sure every den has cats in it: plenty of warriors, elders, nursing queens with kits, and a medicine apprentice. */
   fillDens(rng: RNG = simRng) {
     const day = this.game.time.day;

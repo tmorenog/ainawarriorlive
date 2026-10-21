@@ -36,7 +36,7 @@ export function loreName(c: Cat): string {
   if (c.role === 'leader' && c.alive) return `${c.given}star`;
   const e = c.epithet ?? 'heart';
   // older saves had two-part epithets ("Frosteye"); keep those readable
-  if (!isClassic() && !CLASSIC_SUFFIXES.includes(e.toLowerCase())) return `${c.given} ${e}`;
+  if (/^[A-Z]/.test(e) && !CLASSIC_SUFFIXES.includes(e.toLowerCase())) return `${c.given} ${e}`;
   return `${c.given}${e.toLowerCase()}`;
 }
 

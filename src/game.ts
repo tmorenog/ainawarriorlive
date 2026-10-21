@@ -311,6 +311,7 @@ export class Game {
       this.clan.newClan(me, rng);
       this.youngAgain();
       this.clan.fillDens(rng);
+      this.clan.ensureClover(rng);
       this.weather.kind = 'sunny';
       const nursery = this.camp.dens.nursery;
       this.chunks.primeAround(0, 0);
@@ -407,6 +408,7 @@ export class Game {
     if (old) old.isPlayer = false;
     this.youngAgain();
     c.fillDens();
+    c.ensureClover();
     this.npcs.syncRoster();
     const home = c.home();
     const mother = home.find((x) => x.sex === 'she' && x.stage === 'warrior' && x.mate && !x.isPlayer && x.role !== 'medicine')
