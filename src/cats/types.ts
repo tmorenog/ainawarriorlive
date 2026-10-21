@@ -44,11 +44,16 @@ export interface Appearance {
   accessoryColor?: string;
 }
 
-export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm' | 'bow' | 'flowerEar' | 'clawNecklace';
+export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm' | 'bow' | 'flowerEar' | 'clawNecklace'
+  | 'witchHat' | 'pumpkinCollar' | 'batWings' | 'spiderNecklace' | 'candyCharm';
+/** Halloween accessories cost clan coins (🪙). */
+export const ACCESSORY_PRICE: Partial<Record<Accessory, number>> = { witchHat: 30, pumpkinCollar: 20, batWings: 40, spiderNecklace: 25, candyCharm: 15 };
+
 export const ACCESSORY_LABEL: Record<Accessory, string> = {
   none: 'None', collar: 'Collar', bellCollar: 'Bell collar', flowerCrown: 'Flower crown', feather: 'Feather behind ear',
   leafScarf: 'Leaf scarf', shellNecklace: 'Shell necklace', berryCharm: 'Berry charm',
   bow: 'Bow', flowerEar: 'Flower behind ear', clawNecklace: 'Claw necklace',
+  witchHat: '🎃 Witch hat', pumpkinCollar: '🎃 Pumpkin collar', batWings: '🦇 Bat wings', spiderNecklace: '🕷 Spider necklace', candyCharm: '🍬 Candy-corn charm',
 };
 
 export interface Personality {
@@ -135,6 +140,12 @@ export interface Cat {
   questGiven?: boolean;
   /** Clan meetings missed (every third is a broken rule). */
   meetingStrikes?: number;
+  /** Flowers carried to smell or give away. */
+  flowers?: string[];
+  /** Clan coins earned by helping the clan (spent on special accessories). */
+  coins?: number;
+  /** Special accessories bought with clan coins. */
+  unlocked?: string[];
   confinedUntil: number | null;
   deeds: number; // notable good deeds (for leadership)
   mentored: number; // number of apprentices trained

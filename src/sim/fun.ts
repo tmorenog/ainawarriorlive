@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 // Little things to do around the territory: races, elders' stories, treasures, basking and stargazing.
 import type { Game } from '../game';
 import type { NpcAgent } from '../ai/npc';
@@ -386,4 +387,59 @@ export class CodeBreakers {
     ], onClose: finish });
     return true;
   }
+}
+
+/** Bees buzz around some flower patches in warm seasons — get too close and you'll be stung. */
+export class Bees {
+  private mesh: THREE.InstancedMesh;
+  private lastSting = -99;
+  private scanT = 0;
+  private patches: { x: number; y: number; z: number }[] = [];
+  private m = new THREE.Matrix4();
+  constructor(private game: Game) {
+    const geo = new THREE.SphereGeometry(0.018, 6, 4);
+    geo.scale(1.4, 1, 1);
+    this.mesh = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xf2c230 }), 80);
+    this.mesh.count = 0;
+    this.mesh.frustumCulled = false;
+    game.scene.add(this.mesh);
+  }
+
+  update(dt: number) {
+    const g = this.game;
+    const p = g.player.pos;
+    const warm = g.time.season !== 'winter' && g.time.season !== 'autumn' && !g.time.isNight && g.weather.kind !== 'rain' && g.weather.kind !== 'heavyRain' && g.weather.kind !== 'snow';
+    this.scanT -= dt;
+    if (this.scanT <= 0) {
+      this.scanT = 1;
+      this.patches = warm ? g.chunks.interactablesNear(p.x, p.z, 40).filter((i) => i.type === 'flower' && i.bees).slice(0, 16) : [];
+    }
+    let n = 0;
+    const t = g.clock;
+    for (const b of this.patches) {
+      for (let k = 0; k < 5 && n < 80; k++) {
+        const a = t * (2.2 + k * 0.4) + k * 1.3;
+        this.m.makeTranslation(b.x + Math.cos(a) * (0.35 + k * 0.08), b.y + 0.35 + Math.sin(a * 1.7) * 0.12, b.z + Math.sin(a * 1.2) * (0.35 + k * 0.06));
+        this.mesh.setMatrixAt(n++, this.m);
+      }
+      // too close? Bzzz — ouch!
+      const d = Math.hypot(b.x - p.x, b.z - p.z);
+      if (d < 1.6 && t - this.lastSting > 2.5 && Math.random() < dt * 1.5) this.sting();
+    }
+    this.mesh.count = n;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  sting() {
+    const g = this.game;
+    const pc = g.clan.player;
+    this.lastSting = g.clock;
+    pc.health = Math.max(1, pc.health - 6);
+    g.audio.hit(false);
+    g.ui.floatText('🐝 Ouch!', '#ffd24a');
+    g.ui.toast('🐝 A bee stung you! Back away from the flowers.', 'danger');
+  }
+
+  /** Smelling a patch with bees on it is asking for trouble. */
+  nearBees(x: number, z: number) { return this.patches.some((b) => Math.hypot(b.x - x, b.z - z) < 2); }
 }

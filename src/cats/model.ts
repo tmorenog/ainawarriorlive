@@ -478,6 +478,28 @@ export class CatModel {
           l.position.set(Math.cos(an) * ringR, -0.01, Math.sin(an) * ringR);
           l.rotation.y = -an;
         }
+      } else if (acc === 'pumpkinCollar' || acc === 'spiderNecklace') {
+        const big = acc === 'pumpkinCollar';
+        for (let i = 0; i < (big ? 10 : 12); i++) {
+          const an = (i / (big ? 10 : 12)) * Math.PI * 2;
+          const sg = new THREE.SphereGeometry(big ? 0.022 : 0.009, 8, 6);
+          if (big) sg.scale(1.2, 0.85, 1.2);
+          const m2 = this.addMesh(neck, sg, accMat);
+          m2.position.set(Math.cos(an) * ringR, -0.012, Math.sin(an) * ringR);
+        }
+        if (!big) { const sp = this.addMesh(neck, new THREE.SphereGeometry(0.022, 8, 6), accMat); sp.position.set(ringR + 0.015, -0.035, 0); }
+      } else if (acc === 'candyCharm') {
+        const tg = new THREE.TorusGeometry(ringR, 0.016, 8, 22);
+        tg.rotateX(Math.PI / 2);
+        this.addMesh(neck, tg, accMat);
+        const cols = [0xf2c230, 0xf07a1a, 0xffffff];
+        cols.forEach((cc, j) => {
+          const cm = new THREE.MeshLambertMaterial({ color: cc });
+          this.mats.push(cm);
+          const cg = new THREE.CylinderGeometry(0.006 + (2 - j) * 0.008, 0.006 + (3 - j) * 0.008, 0.016, 8);
+          const c2 = this.addMesh(neck, cg, cm);
+          c2.position.set(ringR + 0.02, -0.03 - (2 - j) * 0.015, 0);
+        });
       } else if (acc === 'shellNecklace' || acc === 'clawNecklace') {
         for (let i = 0; i < 14; i++) {
           const an = (i / 14) * Math.PI * 2;
@@ -603,6 +625,26 @@ export class CatModel {
         }
         const k = this.addMesh(this.head, new THREE.SphereGeometry(0.009, 6, 5), bm);
         k.position.set(-0.01, 0.07, -0.04);
+      } else if (acc === 'witchHat') {
+        const hm = headMatOf(app.accessoryColor && !accList.some((x) => NECK_ITEMS.includes(x)) ? app.accessoryColor : ACC_DEFAULT_COLOR.witchHat);
+        const brim = this.addMesh(this.head, new THREE.CylinderGeometry(0.075, 0.075, 0.006, 20), hm);
+        brim.position.set(-0.005, 0.072, 0);
+        const cone = new THREE.ConeGeometry(0.042, 0.11, 16);
+        const cm = this.addMesh(this.head, cone, hm);
+        cm.position.set(-0.015, 0.13, 0);
+        cm.rotation.z = 0.35;
+        const band = this.addMesh(this.head, new THREE.CylinderGeometry(0.043, 0.044, 0.012, 16), headMatOf('#f07a1a'));
+        band.position.set(-0.007, 0.082, 0);
+      } else if (acc === 'batWings') {
+        // little bat wings on the back
+        const wm = headMatOf(ACC_DEFAULT_COLOR.batWings);
+        for (const sz of [-1, 1]) {
+          const wg = new THREE.ConeGeometry(0.09, 0.16, 3);
+          wg.scale(1, 1, 0.12);
+          const w = this.addMesh(bodyParts, wg, wm);
+          w.position.set(bodyLen * 0.15, bodyR * 1.05, sz * bodyR * 0.55);
+          w.rotation.set(sz * 1.1, 0, -0.4);
+        }
       } else if (acc === 'flowerEar') {
         const petals = headMatOf(ACC_DEFAULT_COLOR.flowerEar);
         const centre = headMatOf('#f2c94c');
@@ -835,10 +877,11 @@ export class CatModel {
   }
 }
 
-const NECK_ITEMS: Accessory[] = ['collar', 'bellCollar', 'berryCharm', 'leafScarf', 'shellNecklace', 'clawNecklace'];
+const NECK_ITEMS: Accessory[] = ['collar', 'bellCollar', 'berryCharm', 'leafScarf', 'shellNecklace', 'clawNecklace', 'pumpkinCollar', 'spiderNecklace', 'candyCharm'];
 const ACC_DEFAULT_COLOR: Record<Accessory, string> = {
   none: '#ffffff', collar: '#b8323a', bellCollar: '#2f5fb8', berryCharm: '#6b4a2b', leafScarf: '#4f8a3a', shellNecklace: '#f3ead8',
   clawNecklace: '#efe6d2', flowerCrown: '#f2a3c4', feather: '#e9e2d0', bow: '#e05c8a', flowerEar: '#ffffff',
+  witchHat: '#2a1f3a', pumpkinCollar: '#f07a1a', batWings: '#2a2230', spiderNecklace: '#1a1a1a', candyCharm: '#f4f1ea',
 };
 /** Everything a cat is wearing (supports old single-accessory saves). */
 export function accessoriesOf(app: Appearance): Accessory[] {

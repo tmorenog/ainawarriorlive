@@ -4,7 +4,8 @@ import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import type { UI } from './ui';
 import { h, esc } from './ui';
-import { Cat, LESSONS, LESSON_LABEL, displayName, roleLabel } from '../cats/types';
+import { ACCESSORY_LABEL, ACCESSORY_PRICE, Accessory, Cat, LESSONS, LESSON_LABEL, displayName, roleLabel } from '../cats/types';
+import { GUIDE_HTML } from './guide';
 import { TrainingSystem } from '../sim/training';
 import { TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { REL_COLOR, isFamily, relLabel } from '../sim/social';
@@ -68,7 +69,7 @@ export class Panels {
     }
     this.kind = kind;
     if (tab) this.tab = tab;
-    else if (kind === 'journal' && !['duties', 'events', 'memories', 'relations', 'clan', 'code', 'discoveries', 'help'].includes(this.tab)) this.tab = 'duties';
+    else if (kind === 'journal' && !['duties', 'events', 'memories', 'relations', 'clan', 'code', 'discoveries', 'help', 'wardrobe', 'guide'].includes(this.tab)) this.tab = 'duties';
     else if (kind === 'leader') this.tab = 'council';
     g.player.busy = true;
     g.input.unlock();
@@ -108,7 +109,7 @@ export class Panels {
   // ------------------------------------------------------------ journal
   private renderJournal() {
     const g = this.game;
-    this.header('Journal', [['duties', 'Duties'], ['events', 'Clan history'], ['memories', 'Memories'], ['relations', 'Relationships'], ['clan', 'Clan'], ['code', 'The code'], ['discoveries', 'Discoveries'], ['help', 'Controls']]);
+    this.header('Journal', [['duties', 'Duties'], ['events', 'Clan history'], ['memories', 'Memories'], ['relations', 'Relationships'], ['clan', 'Clan'], ['code', 'The code'], ['discoveries', 'Discoveries'], ['wardrobe', 'Wardrobe'], ['guide', 'Guide book'], ['help', 'Controls']]);
     const body = h('div', 'body', '', this.el!);
     const clan = g.clan;
     const pc = clan.player;
@@ -185,6 +186,34 @@ export class Panels {
         for (const e of list) h('div', 'entry discovery', `<span class="day">Moon ${e.day + 1}</span>${esc(e.text)}`, body);
         break;
       }
+      case 'wardrobe': {
+        h('p', '', `Change what you wear any time. Earn 🪙 clan coins by finishing duties and quests and by feeding the clan, then spend them on special accessories. You have <b>🪙 ${pc.coins ?? 0}</b>.`, body);
+        pc.app.accessories = pc.app.accessories ?? (pc.app.accessory && pc.app.accessory !== 'none' ? [pc.app.accessory] : []);
+        const grid = h('div', 'row', '', body);
+        grid.style.flexWrap = 'wrap';
+        for (const a of (Object.keys(ACCESSORY_LABEL) as Accessory[]).filter((x) => x !== 'none')) {
+          const price = ACCESSORY_PRICE[a];
+          const owned = !price || (pc.unlocked ?? []).includes(a);
+          const wearing = pc.app.accessories.includes(a);
+          const b = h('button', `chip ${wearing ? 'on' : ''}`, `${ACCESSORY_LABEL[a]}${owned ? '' : ` — 🪙 ${price}`}`, grid);
+          b.onclick = () => {
+            if (!owned) {
+              if ((pc.coins ?? 0) < price!) { g.ui.toast(`You need 🪙 ${price} for that. Help your clan to earn more!`, 'info'); return; }
+              pc.coins = (pc.coins ?? 0) - price!;
+              pc.unlocked = [...(pc.unlocked ?? []), a];
+              g.ui.toast(`Unlocked ${ACCESSORY_LABEL[a]}!`, 'good');
+            }
+            const list = pc.app.accessories!;
+            const i = list.indexOf(a);
+            if (i >= 0) list.splice(i, 1); else list.push(a);
+            pc.app.accessory = undefined;
+            g.player.model.setAppearance({ ...pc.app });
+            this.render();
+          };
+        }
+        break;
+      }
+      case 'guide': h('div', 'guide', GUIDE_HTML, body); break;
       case 'help': h('div', '', CONTROLS_HTML, body); break;
     }
   }

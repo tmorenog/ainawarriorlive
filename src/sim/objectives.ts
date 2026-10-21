@@ -55,7 +55,9 @@ export class Objectives {
     if (o.order && p.infractions > 0) { p.infractions--; game.ui.toast('Your hard work makes up for past mistakes.', 'good'); }
     const giver = game.clan.get(o.giver);
     if (giver) game.clan.adjust(giver, p, o.reward?.opinion ?? 6, o.order ? { text: `${p.given} did as I asked.`, weight: 1 } : undefined);
-    game.ui.toast(`✔ ${o.title}`, 'good');
+    const coins = o.data?.questOf ? 12 : o.order ? 6 : 4;
+    p.coins = (p.coins ?? 0) + coins;
+    game.ui.toast(`✔ ${o.title}  +${coins} 🪙`, 'good');
     game.audio.success();
     if (o.data?.medLesson) game.training.medLessonComplete(o);
     else if (o.kind === 'lesson' || o.kind === 'mentor') game.training.lessonComplete(o);

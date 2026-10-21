@@ -68,6 +68,8 @@ export class Player implements Fighter {
   confineFlag = false;
   /** 0 crouch · 1 crawl · 2 walk · 3 trot · 4 canter (Shift = sprint) */
   gait = 3;
+  /** After smelling flowers you stay calm for a while. */
+  calmUntil = -1;
   private wheel = 0;
   setGait(g: number) {
     const n = Math.max(0, Math.min(4, g));

@@ -3,7 +3,7 @@
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import { h, esc } from './ui';
-import { ACCESSORY_LABEL, Accessory, Appearance, Trait, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
+import { ACCESSORY_LABEL, ACCESSORY_PRICE, Accessory, Appearance, Trait, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
 import { BREEDS, TRAITS, EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
 import { RNG } from '../core/rng';
 import { CONTROLS_HTML } from './panels';
@@ -249,9 +249,9 @@ export class Menus {
     szi.type = 'range'; szi.min = '0.85'; szi.max = '1.15'; szi.step = '0.01'; szi.value = String(spec.app.size);
     szi.oninput = () => { spec.app.size = parseFloat(szi.value); refresh(); };
     // accessories: tap to add or remove — wear as many as you like
-    const axr = field('Accessories (tap to wear several)');
+    const axr = field('Accessories (tap to wear several — 🎃 Halloween ones are in the Journal → Wardrobe)');
     spec.app.accessories = spec.app.accessories ?? (spec.app.accessory && spec.app.accessory !== 'none' ? [spec.app.accessory] : []);
-    for (const a of (Object.keys(ACCESSORY_LABEL) as Accessory[]).filter((x) => x !== 'none')) {
+    for (const a of (Object.keys(ACCESSORY_LABEL) as Accessory[]).filter((x) => x !== 'none' && !ACCESSORY_PRICE[x])) {
       const b = h('button', `chip ${spec.app.accessories.includes(a) ? 'on' : ''}`, ACCESSORY_LABEL[a], axr);
       b.onclick = () => {
         const list = spec.app.accessories!;

@@ -8,7 +8,7 @@ import type { PreyKind } from '../wildlife/models';
 import { PREY } from '../wildlife/prey';
 import { Cat, displayName, pronoun, roleLabel } from '../cats/types';
 import { adviceLine, greetPlayer, isFamily, relLabel } from './social';
-import { HERB_INFO, HerbKind, Interactable, TREASURE_INFO, TreasureKind } from '../world/chunks';
+import { FLOWER_INFO, FlowerKind, HERB_INFO, HerbKind, Interactable, TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { simRng } from '../core/rng';
 import { clamp, dist2 } from '../core/math';
 import { bearing } from '../player/scent';
@@ -138,6 +138,22 @@ export class Interactions {
     g.ui.dialog({ speaker: kit, text: `You make ${a.name} chew the ${herb ?? 'herbs'}. A moment later ${pronoun(kit, 'subj')} retches up the deathberries. "Th-thank you… I'll never eat those again!"`, options: [{ label: 'You\'re safe now', action: () => {} }] });
   }
 
+  /** Breathe in the scent of flowers: it calms you, and you can carry one away to give. */
+  private smellFlower(it: Interactable) {
+    const g = this.game;
+    const pc = g.clan.player;
+    const fi = FLOWER_INFO[it.kind as FlowerKind];
+    g.audio.purr();
+    pc.health = Math.min(pc.maxHealth, pc.health + 5);
+    g.player.stamina = Math.min(100, g.player.stamina + 30);
+    g.player.calmUntil = g.clock + 60;
+    pc.flowers = pc.flowers ?? [];
+    let picked = false;
+    if (pc.flowers.length < 3) { pc.flowers.push(it.kind as string); picked = true; g.chunks.takeInteractable(it); }
+    g.ui.toast(`🌸 You breathe in the sweet scent of the ${fi.name}s. Any anger melts away — you feel calm.${picked ? ` You pick one to carry (${pc.flowers.length}/3). Give it to a clanmate to cheer them up — or calm them down!` : ''}`, 'good');
+    if (it.bees && Math.random() < 0.7) setTimeout(() => g.bees.sting(), 600);
+  }
+
   private pickUp(i: number) {
     const g = this.game;
     const d = this.dropped[i];
@@ -230,6 +246,11 @@ export class Interactions {
       if (it.type === 'berries') {
         const kit = pc.stage === 'kit';
         this.current = { text: kit ? 'Taste the shiny red berries' : 'Deathberries! Eat them anyway? (deadly poison)', action: () => this.eatDeathberries(it) };
+        return;
+      }
+      if (it.type === 'flower') {
+        const fi = FLOWER_INFO[it.kind as FlowerKind];
+        this.current = { text: `Smell the ${fi.name}s 🌸`, action: () => this.smellFlower(it) };
         return;
       }
       if (it.type === 'treasure') { const ti = TREASURE_INFO[it.kind as TreasureKind]; this.current = { text: `Pick up the ${ti.name} ✨`, action: () => { if (g.fun.collectTreasure(it.kind as TreasureKind)) g.chunks.takeInteractable(it); } }; return; }
@@ -442,6 +463,15 @@ export class Interactions {
     if (!pc.exiled && c.stage !== 'elder' && !g.fun.race && (c.stage === 'kit' || c.stage === 'apprentice' || op > 20)) {
       opts.push({ label: 'Challenge them to a race', hint: 'first one there wins', action: () => { g.ui.closeDialog(false); g.fun.startRace(a); } });
     }
+    // flowers calm angry cats (and cheer up happy ones)
+    if (pc.flowers?.length) opts.push({ label: `Give ${pronoun(c, 'obj')} a ${FLOWER_INFO[pc.flowers[0] as FlowerKind].name} 🌸`, hint: a.mood === 'angry' || op < 0 ? 'it might calm them down' : 'a little gift', action: () => {
+      const fl = FLOWER_INFO[pc.flowers!.shift() as FlowerKind].name;
+      const wasAngry = a.mood === 'angry' || op < 0;
+      a.mood = 'neutral';
+      clan.adjust(c, pc, wasAngry ? 15 : 6, { text: `${pc.given} gave me a ${fl}.`, weight: 2 });
+      g.audio.purr();
+      g.ui.dialog({ speaker: c, text: wasAngry ? `*sniffs the ${fl}… and their fur slowly flattens* …Alright. I'm not angry anymore. Thank you.` : simRng.pick([`A ${fl}! It smells wonderful. Thank you!`, `*tucks the ${fl} behind an ear* How do I look?`, `You picked this for me? *purrs*`]), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+    } });
     // gifts
     if (pc.treasures?.length) opts.push({ label: `Give ${pronoun(c, 'obj')} your ${TREASURE_INFO[pc.treasures[0] as TreasureKind].name} ✨`, hint: 'a gift', action: () => {
       const line = g.fun.giveTreasure(a);
@@ -1102,7 +1132,8 @@ export class Interactions {
     pl.prey = [];
     pl.updateCarryVisual();
     pc.reputation = clamp(pc.reputation + n * 3, -100, 100);
-    g.ui.toast(`You add your catch to the pile. (+${total} food, +reputation)`, 'good');
+    pc.coins = (pc.coins ?? 0) + n * 2;
+    g.ui.toast(`You add your catch to the pile. (+${total} food, +reputation, +${n * 2} 🪙)`, 'good');
     g.audio.drop();
     for (const w of g.npcs.witnesses(pl.pos.x, pl.pos.z, 15)) { const c = g.clan.get(w); if (c) g.clan.adjust(c, pc, 3); }
     g.objectives.onDeliverPrey(n);

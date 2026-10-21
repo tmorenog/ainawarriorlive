@@ -351,10 +351,11 @@ export class UI {
     if (p.moss) inv.push(`🌿 moss ×${p.moss}`);
     for (const [k, v] of Object.entries(p.herbs)) if (v) inv.push(`🍃 ${k} ×${v}`);
     const hp = (c.health / 100) * 100;
+    const coinStr = `🪙 ${c.coins ?? 0}`;
     const extra = [c.sick > 20 ? '🤒 sick' : '', c.injury > 25 ? '🩹 injured' : '', c.expectingUntil !== null ? '🍼 expecting' : '', c.confinedUntil !== null && c.confinedUntil > g.time.day ? '⛓ confined' : ''].filter(Boolean).join(' ');
     this.status.innerHTML = `
       <div class="hud-name">${esc(displayName(c))}</div>
-      <div class="hud-sub">${esc(roleLabel(c))} · ${Math.floor(c.age)} moons · ${g.clan.playerReputationLabel()}${extra ? ' · ' + extra : ''}</div>
+      <div class="hud-sub">${esc(roleLabel(c))} · ${Math.floor(c.age)} moons · ${g.clan.playerReputationLabel()} · ${coinStr}${extra ? ' · ' + extra : ''}</div>
       <div class="bar-label"><span>Health</span><span>${Math.round(c.health)}</span></div><div class="bar health"><i style="width:${hp}%"></i></div>
       <div class="bar-label"><span>Hunger</span><span>${c.hunger < 20 ? 'starving' : c.hunger < 45 ? 'hungry' : 'fed'}</span></div><div class="bar hunger"><i style="width:${c.hunger}%"></i></div>
       <div class="bar stamina"><i style="width:${p.stamina}%"></i></div>

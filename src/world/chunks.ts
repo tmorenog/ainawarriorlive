@@ -33,10 +33,21 @@ export const TREASURE_INFO: Record<TreasureKind, { name: string; color: [number,
   mossyStick: { name: 'mossy stick', color: [0.4, 0.55, 0.3] },
 };
 
+export type FlowerKind = 'daisy' | 'bluebell' | 'poppy' | 'primrose' | 'blossom';
+export const FLOWER_INFO: Record<FlowerKind, { name: string; color: [number, number, number] }> = {
+  daisy: { name: 'daisy', color: [1, 1, 0.95] },
+  bluebell: { name: 'bluebell', color: [0.45, 0.55, 1] },
+  poppy: { name: 'poppy', color: [0.95, 0.25, 0.2] },
+  primrose: { name: 'primrose', color: [1, 0.92, 0.45] },
+  blossom: { name: 'cherry blossom', color: [1, 0.72, 0.86] },
+};
+
 export interface Interactable {
   key: string;
-  type: 'herb' | 'moss' | 'berries' | 'treasure';
-  kind: HerbKind | 'moss' | 'deathberry' | TreasureKind;
+  type: 'herb' | 'moss' | 'berries' | 'treasure' | 'flower';
+  kind: HerbKind | 'moss' | 'deathberry' | TreasureKind | FlowerKind;
+  /** A flower patch busy with bees. */
+  bees?: boolean;
   x: number; y: number; z: number;
   mesh: THREE.InstancedMesh;
   index: number;
@@ -271,7 +282,8 @@ export class ChunkManager {
   takeInteractable(it: Interactable) {
     this.ctx.mods.taken[it.key] = this.ctx.day;
     const m = new THREE.Matrix4().makeScale(0, 0, 0);
-    it.mesh.setMatrixAt(it.index, m);
+    const n = it.type === 'flower' ? 4 : 1;
+    for (let j = 0; j < n; j++) it.mesh.setMatrixAt(it.index + j, m);
     it.mesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -1127,6 +1139,31 @@ export class ChunkManager {
     });
     const add = (m: THREE.InstancedMesh | null) => { if (m) { (m as any).sharedGeo = true; detail.add(m); } return m; };
     const tm = add(treasures.build(TREASURE_GEO, A.mat.static, false));
+    // Flower patches to smell and pick (some buzzing with bees)
+    const flowerPatches = new InstBuilder();
+    const flowerData: { kind: FlowerKind; x: number; y: number; z: number; bees: boolean }[] = [];
+    if (season !== 'winter') {
+      const frng = new RNG(hash2(chunk.cx, chunk.cz, ctx.seed + 4242));
+      const nf = frng.chance(0.75) ? frng.int(1, 3) : 0;
+      const fk: FlowerKind[] = season === 'blossom' ? ['blossom', 'blossom', 'daisy', 'primrose'] : ['daisy', 'bluebell', 'poppy', 'primrose'];
+      for (let i = 0; i < nf; i++) {
+        const x = chunk.x0 + frng.range(2, CHUNK_SIZE - 2), z = chunk.z0 + frng.range(2, CHUNK_SIZE - 2);
+        const idx = chunk.nearestIndex(x, z);
+        const y = chunk.heightAt(x, z);
+        const kind = frng.pick(fk);
+        const bees = frng.chance(0.3);
+        if (chunk.flags[idx] & 2 || y < this.waterLevel + 0.02 || Math.hypot(x, z) < 15) continue;
+        flowerData.push({ kind, x, y, z, bees });
+      }
+      flowerData.forEach((f, i) => {
+        const key = `${chunk.cx},${chunk.cz},f${i}`;
+        const taken = ctx.mods.taken[key];
+        if (taken !== undefined && ctx.day - taken >= 3) delete ctx.mods.taken[key];
+        const k = ctx.mods.taken[key] !== undefined ? 0 : 1;
+        for (let j = 0; j < 4; j++) flowerPatches.add(f.x + Math.cos(j * 1.7) * 0.18 * j, f.y, f.z + Math.sin(j * 1.7) * 0.18 * j, j * 1.3, k * 2.4, k * 2.4, k * 2.4, FLOWER_INFO[f.kind].color);
+      });
+    }
+    const fm = add(flowerPatches.build(A.flower, A.mat.flower, false));
     const bm = add(berries.build(A.deathberry, A.mat.bush, false));
     add(grass.build(A.grass, A.mat.grass, false));
     add(ferns.build(A.fern, A.mat.fern, false));
@@ -1147,6 +1184,10 @@ export class ChunkManager {
     if (bm) berryData.forEach((b, i) => {
       bm.getMatrixAt(i, tmp);
       chunk.interactables.push({ key: `${chunk.cx},${chunk.cz},b${i}`, type: 'berries', kind: 'deathberry', x: b.x, y: b.y, z: b.z, mesh: bm, index: i, matrix: tmp.clone() });
+    });
+    if (fm) flowerData.forEach((f, i) => {
+      fm.getMatrixAt(i * 4, tmp);
+      chunk.interactables.push({ key: `${chunk.cx},${chunk.cz},f${i}`, type: 'flower', kind: f.kind, x: f.x, y: f.y, z: f.z, mesh: fm, index: i * 4, matrix: tmp.clone(), bees: f.bees });
     });
     if (tm) treasureData.forEach((t, i) => {
       tm.getMatrixAt(i, tmp);
