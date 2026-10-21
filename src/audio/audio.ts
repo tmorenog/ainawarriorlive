@@ -171,7 +171,7 @@ export class AudioEngine {
     const muff = env.underwater ? 500 : env.snow > 0.3 ? 5000 : 18000;
     this.muffle.frequency.setTargetAtTime(muff, this.ctx.currentTime, 0.4);
     // crickets at night in warm seasons
-    const warm = env.season === 'summer' ? 1 : env.season === 'spring' ? 0.6 : env.season === 'autumn' ? 0.4 : 0;
+    const warm = env.season === 'summer' ? 1 : env.season === 'spring' || env.season === 'blossom' ? 0.7 : env.season === 'autumn' ? 0.4 : 0;
     if (this.cricketGain) this.cricketGain.gain.setTargetAtTime(env.night * warm * (1 - env.rain) * 0.012 * outside, this.ctx.currentTime, 1);
     if (this.cricketOsc) this.cricketOsc.frequency.setTargetAtTime(4200 + Math.sin(time * 0.2) * 300, this.ctx.currentTime, 0.5);
 

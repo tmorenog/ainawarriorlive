@@ -41,7 +41,7 @@ export class EventSystem {
 
   preyAbundance(): number {
     const s = this.game.time.season;
-    let a = s === 'spring' ? 1 : s === 'summer' ? 1.1 : s === 'autumn' ? 0.9 : 0.7;
+    let a = s === 'spring' || s === 'blossom' ? 1 : s === 'summer' ? 1.1 : s === 'autumn' ? 0.9 : 0.7;
     if (this.isActive('drought')) a *= 0.45;
     if (this.isActive('shortage')) a *= 0.5;
     if (this.isActive('coldSnap')) a *= 0.7;

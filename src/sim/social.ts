@@ -96,7 +96,7 @@ export function conversation(ctx: Ctx, topic: Topic): { lines: [Cat, string][]; 
       lines = [
         [a, pick([
           `${w === 'Rain' || w === 'Heavy rain' ? 'This rain soaks right to the skin.' : w === 'Snow' ? 'The snow makes every pawstep loud.' : w === 'Fog' ? "I can barely see my own tail in this fog." : w === 'Thunderstorm' ? 'Stay close to the dens tonight — that sky is angry.' : w === 'Strong wind' ? "Wind like this carries every scent away." : "Warm sun on my back. I could nap for a whole moon."}`,
-          `Smell that? ${ctx.season === 'autumn' ? 'Leaf-drop is here for sure.' : ctx.season === 'winter' ? 'Frost again.' : ctx.season === 'spring' ? 'Everything is budding.' : 'High-sun and fat prey.'}`,
+          `Smell that? ${ctx.season === 'autumn' ? 'Leaf-drop is here for sure.' : ctx.season === 'winter' ? 'Frost again.' : ctx.season === 'spring' ? 'Everything is budding.' : ctx.season === 'blossom' ? 'The blossoms are out — the whole forest smells sweet.' : 'High-sun and fat prey.'}`,
         ])],
         [b, pick(['Mm. Let\'s hope it holds.', 'You always notice these things.', 'I felt it in my whiskers this morning.', 'At least the dens are dry.'])],
       ];

@@ -815,7 +815,7 @@ export class Game {
     if (t.season !== this.seasonKey) {
       this.seasonKey = t.season;
       this.chunks.setContext(t.season, t.day);
-      this.ui.toast(`The season turns: ${t.season === 'spring' ? 'Budding season — new life stirs.' : t.season === 'summer' ? 'High-sun season — long warm days.' : t.season === 'autumn' ? 'Leaf-drop season — the forest turns to gold.' : 'Frost season — the forest sleeps under frost.'}`, 'event');
+      this.ui.toast(`The season turns: ${t.season === 'spring' ? 'Budding season — new life stirs.' : t.season === 'blossom' ? 'Blossom season — pink petals drift through the forest.' : t.season === 'summer' ? 'High-sun season — long warm days.' : t.season === 'autumn' ? 'Leaf-drop season — the forest turns to gold.' : 'Frost season — the forest sleeps under frost.'}`, 'event');
       this.clan.log(`A new season began: ${t.season}.`, 'event');
     }
   }

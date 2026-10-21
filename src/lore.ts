@@ -68,6 +68,7 @@ const SUBS: [RegExp, string][] = [
   [/\bhealer\b/g, 'medicine cat'],
   [/\bhealers\b/g, 'medicine cats'],
   [/Budding season/g, 'Newleaf'],
+  [/Blossom season/g, 'Rose-leaf'],
   [/High-sun season/g, 'Greenleaf'],
   [/Leaf-drop season/g, 'Leaf-fall'],
   [/Frost season/g, 'Leaf-bare'],

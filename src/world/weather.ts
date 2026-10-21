@@ -35,6 +35,7 @@ const TARGETS: Record<WeatherKind, Params> = {
 
 const SEASON_WEIGHTS: Record<Season, [WeatherKind, number][]> = {
   spring: [['sunny', 4], ['cloudy', 3], ['rain', 3], ['heavyRain', 1], ['thunderstorm', 0.6], ['fog', 1.5], ['windy', 1]],
+  blossom: [['sunny', 6], ['cloudy', 2.5], ['rain', 1.5], ['fog', 0.8], ['windy', 1.5]],
   summer: [['sunny', 7], ['cloudy', 2], ['rain', 1], ['thunderstorm', 1.2], ['fog', 0.3], ['windy', 1]],
   autumn: [['sunny', 3], ['cloudy', 4], ['rain', 3], ['heavyRain', 1.5], ['thunderstorm', 0.5], ['fog', 2.5], ['windy', 2.5]],
   winter: [['sunny', 2.5], ['cloudy', 4], ['snow', 4], ['fog', 1.5], ['windy', 1.5], ['rain', 0.7]],
@@ -144,7 +145,7 @@ export class Weather {
       this.kind = simRng.weighted(weights);
       this.hoursLeft = simRng.range(3, 10);
     }
-    const baseTemp = { spring: 12, summer: 22, autumn: 10, winter: -1 }[season];
+    const baseTemp = { spring: 12, blossom: 16, summer: 22, autumn: 10, winter: -1 }[season];
     this.temperature = baseTemp - this.p.rain * 4 - this.p.snow * 3 - this.p.wind * 2 + (droughtActive ? 8 : 0) - (coldSnap ? 9 : 0);
   }
 

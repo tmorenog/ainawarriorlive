@@ -19,6 +19,7 @@ export class Ambient {
     uFire: { value: 0 },
     uMote: { value: 0 },
     uLeaf: { value: 0 },
+    uPetal: { value: 0 },
     uGround: { value: 0 },
     uWind: { value: 0 },
   };
@@ -60,7 +61,7 @@ export class Ambient {
     scene.add(motes);
 
     const leaves = particleLayer(220, `
-      uniform float uTime; uniform vec3 uCam; uniform float uLeaf; uniform float uWind; varying float vA; varying vec3 vC;
+      uniform float uTime; uniform vec3 uCam; uniform float uLeaf; uniform float uWind; uniform float uPetal; varying float vA; varying vec3 vC;
       void main(){
         vec3 box = vec3(30.0, 12.0, 30.0);
         vec3 p = position * box;
@@ -70,7 +71,7 @@ export class Ambient {
         p.x = mod(p.x - uCam.x, box.x); p.z = mod(p.z + cos(t + position.x * 10.0) * 0.5 - uCam.z, box.z);
         vec3 w = vec3(uCam.x + p.x - box.x * 0.5, uCam.y + p.y - box.y * 0.2, uCam.z + p.z - box.z * 0.5);
         vA = step(position.x, uLeaf);
-        vC = mix(vec3(0.9, 0.45, 0.12), vec3(0.95, 0.75, 0.2), position.y);
+        vC = mix(mix(vec3(0.9, 0.45, 0.12), vec3(0.95, 0.75, 0.2), position.y), mix(vec3(1.0, 0.72, 0.84), vec3(1.0, 0.88, 0.94), position.y), uPetal);
         vec4 mv = viewMatrix * vec4(w, 1.0);
         gl_PointSize = 70.0 / -mv.z;
         gl_Position = projectionMatrix * mv;
@@ -84,9 +85,10 @@ export class Ambient {
     this.u.uCam.value.copy(cam);
     this.u.uGround.value = ground;
     this.u.uWind.value = opts.wind;
-    const warm = opts.season === 'summer' ? 1 : opts.season === 'spring' ? 0.6 : opts.season === 'autumn' ? 0.2 : 0;
+    const warm = opts.season === 'summer' ? 1 : opts.season === 'spring' || opts.season === 'blossom' ? 0.75 : opts.season === 'autumn' ? 0.2 : 0;
     this.u.uFire.value = opts.night * warm * (1 - opts.rain);
     this.u.uMote.value = (1 - opts.night) * (1 - opts.rain) * (opts.season === 'winter' ? 0.2 : 1);
-    this.u.uLeaf.value = opts.season === 'autumn' && opts.inForest ? 0.5 + opts.wind * 0.5 : 0;
+    this.u.uLeaf.value = (opts.season === 'autumn' || opts.season === 'blossom') && opts.inForest ? 0.5 + opts.wind * 0.5 : 0;
+    this.u.uPetal.value = opts.season === 'blossom' ? 1 : 0;
   }
 }

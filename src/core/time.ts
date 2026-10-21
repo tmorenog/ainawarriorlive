@@ -1,7 +1,9 @@
 import { Season, SEASONS } from '../world/worldState';
 
-/** One in-game day is a "moon" of a cat's life. Three moons per season. */
+/** One in-game day is a "moon" of a cat's life. */
 export const MOONS_PER_SEASON = 3;
+/** Each season lasts 5 real minutes (in game hours, at normal speed). */
+export const SEASON_SECONDS = 300;
 
 export class GameTime {
   totalHours = 7; // start at morning
@@ -10,8 +12,9 @@ export class GameTime {
 
   get hour() { return ((this.totalHours % 24) + 24) % 24; }
   get day() { return Math.floor(this.totalHours / 24); }
-  get season(): Season { return SEASONS[Math.floor(this.day / MOONS_PER_SEASON) % 4]; }
-  get seasonProgress() { return (this.day % MOONS_PER_SEASON + this.hour / 24) / MOONS_PER_SEASON; }
+  private get seasonHours() { return (SEASON_SECONDS / this.daySeconds) * 24; }
+  get season(): Season { return SEASONS[Math.floor(this.totalHours / this.seasonHours) % SEASONS.length]; }
+  get seasonProgress() { return (this.totalHours / this.seasonHours) % 1; }
   get isNight() { const h = this.hour; return h < 5.5 || h > 20.5; }
   get isDusk() { const h = this.hour; return h > 18.5 && h <= 20.5; }
   get isDawn() { const h = this.hour; return h >= 5 && h < 7.5; }
