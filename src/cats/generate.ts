@@ -6,7 +6,7 @@ import {
 } from './types';
 
 export const GIVEN_NAMES = [
-  'Wren', 'Moss', 'Ember', 'Fern', 'Rowan', 'Sorrel', 'Thistle', 'Juniper', 'Pebble', 'Finch', 'Heather', 'Clover',
+  'Wren', 'Moss', 'Ember', 'Fern', 'Rowan', 'Sorrel', 'Thistle', 'Juniper', 'Pebble', 'Finch', 'Heather',
   'Aspen', 'Hazel', 'Cinder', 'Marigold', 'Nettle', 'Quill', 'Sage', 'Tansy', 'Umber', 'Vetch', 'Yarrow', 'Alder',
   'Basil', 'Cedar', 'Dune', 'Elm', 'Flint', 'Gorse', 'Iris', 'Kestrel', 'Larch', 'Maple', 'Pinecone', 'Reed',
   'Slate', 'Teasel', 'Willow', 'Lark', 'Robin', 'Sparrow', 'Otter', 'Minnow', 'Pike', 'Shale', 'Dusk', 'Drizzle',

@@ -3,6 +3,7 @@
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
 import { BOOK_CATS } from './lore';
+import { CLOVER_APP } from './sim/clan';
 import { Bees, CodeBreakers, FunActivities, Vigils } from './sim/fun';
 import { Quests } from './sim/quests';
 import * as THREE from 'three';
@@ -382,7 +383,8 @@ export class Game {
         for (const list of Object.values(BOOK_CATS)) for (const b of list) if (cat.given === b.prefix && (cat.epithet === b.suffix || cat.stage === 'apprentice' || cat.role === 'leader')) cat.bookId = b.prefix + b.suffix;
       }
       // keep the famous cats looking like they do in the books
-      for (const cat of Object.values(c.cats)) if (cat.given === 'Clover' && cat.epithet === 'Ashshade' && !cat.bookId) cat.bookId = 'CloverAshshade';
+      c.dedupeClover();
+      for (const cat of Object.values(c.cats)) if (cat.given === 'Clover' && cat.epithet === 'Ashshade') { cat.bookId = 'CloverAshshade'; cat.app = { ...cat.app, ...CLOVER_APP }; }
       for (const cat of Object.values(c.cats)) {
         if (!cat.bookId) continue;
         for (const list of Object.values(BOOK_CATS)) for (const b of list) if (b.prefix + b.suffix === cat.bookId) cat.app = { ...cat.app, ...b.app };

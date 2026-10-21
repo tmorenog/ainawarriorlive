@@ -48,6 +48,9 @@ export const RULES: Record<RuleId, { text: string; severity: number }> = {
 
 export const RIVAL_CAT_COUNT = 10;
 
+/** Clover Ashshade: dark slate-blue tabby with black stripes, a white chest and green eyes. */
+export const CLOVER_APP = { pattern: 'mackerel' as const, base: '#535c73', second: '#15171c', white: 0.16, eye: '#78c24c', fur: 'medium' as const, body: 'average' as const };
+
 export class ClanSim {
   cats: Record<string, Cat> = {};
   leaderId: string | null = null;
@@ -130,8 +133,26 @@ export class ClanSim {
 
   setRecent(text: string) { this.lastRecent = text; }
 
+  /** Only one cat may be called Clover: extra Clovers (and extra Clover Ashshades) get new names. */
+  dedupeClover() {
+    const clovers = Object.values(this.cats).filter((c) => c.given === 'Clover' && !c.isPlayer);
+    const ash = clovers.filter((c) => c.epithet === 'Ashshade' && c.alive);
+    const keep = ash.find((c) => c.role === 'medicine') ?? ash.find((c) => c.bookId === 'CloverAshshade') ?? ash[0] ?? null;
+    for (const c of clovers) {
+      if (c === keep || (keep === null && c === clovers[0] && c.epithet === 'Ashshade')) continue;
+      let nm = simRng.pick(GIVEN_NAMES), guard = 0;
+      while ((nm === 'Clover' || this.usedNames.has(nm)) && guard++ < 50) nm = simRng.pick(GIVEN_NAMES);
+      c.given = nm;
+      if (c.epithet === 'Ashshade') c.epithet = makeEpithet(simRng, c);
+      if (c.bookId === 'CloverAshshade') c.bookId = undefined;
+      this.usedNames.add(nm);
+    }
+    this.usedNames.add('Clover');
+  }
+
   /** Clover Ashshade, the striped she-cat medicine cat, lives in every clan. */
   ensureClover(rng: RNG = simRng) {
+    this.dedupeClover();
     if (Object.values(this.cats).some((c) => c.given === 'Clover' && c.epithet === 'Ashshade')) return;
     const look = (c: Cat) => {
       c.given = 'Clover';
@@ -144,7 +165,7 @@ export class ClanSim {
       c.traits = ['kind', 'calm'];
       c.pers = personalityFrom(c.traits, rng);
       c.skills.healing = Math.max(c.skills.healing, 80);
-      c.app = { ...c.app, pattern: 'tabby', base: '#9a9da3', second: '#45474d', white: 0, eye: '#78c24c', fur: 'medium', body: 'slender' };
+      c.app = { ...c.app, ...CLOVER_APP };
       this.usedNames.add('Clover');
     };
     const med = this.medicine;
