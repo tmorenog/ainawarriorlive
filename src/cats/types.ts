@@ -142,6 +142,9 @@ export interface Cat {
   questGiven?: boolean;
   /** Clan meetings missed (every third is a broken rule). */
   meetingStrikes?: number;
+  /** A kit allowed outside camp until this game hour (and who said yes). */
+  outsideUntil?: number;
+  outsideBy?: string;
   /** Flowers carried to smell or give away. */
   flowers?: string[];
   /** Clan coins earned by helping the clan (spent on special accessories). */

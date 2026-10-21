@@ -316,7 +316,8 @@ export class Interactions {
     a.heading = Math.atan2(g.player.pos.z - a.pos.z, g.player.pos.x - a.pos.x);
     const done = () => { if (a.activity === 'talkPlayer') { a.activity = prev === 'follow' || prev === 'shield' ? prev : 'idle'; a.actTimer = 0; } };
     if (c.clan !== 'home') return this.talkOutsider(a, done);
-    if (pc.stage === 'kit' && Math.hypot(g.player.pos.x, g.player.pos.z) > 17.5 && c.stage !== 'kit' && !pc.exiled) {
+    const permitted = pc.stage === 'kit' && (pc.outsideUntil ?? -1) > g.time.totalHours;
+    if (pc.stage === 'kit' && Math.hypot(g.player.pos.x, g.player.pos.z) > 17.5 && c.stage !== 'kit' && !pc.exiled && !permitted) {
       if (prev === 'shield' || g.npcs.isPlayerFriend(a)) {
         g.ui.dialog({ speaker: c, text: 'Shh! Get behind me — if anyone sees you out here you\'ll be in big trouble!', options: [
           { label: 'Hide behind them', action: () => { g.npcs.startShield(a); } },
@@ -451,6 +452,29 @@ export class Interactions {
     }
     // famous cats from the books have quests
     if (g.quests.available(a)) opts.push({ label: '★ Do you need help with anything?', hint: 'a quest', action: () => g.quests.offer(a, done) });
+    // kits can ask a grown cat for permission to go outside camp
+    if (pc.stage === 'kit' && !pc.exiled && c.stage !== 'kit' && c.stage !== 'apprentice' && !((pc.outsideUntil ?? -1) > g.time.totalHours)) {
+      opts.push({ label: 'Can I go outside the camp?', hint: 'ask permission', action: () => {
+        const strict = c.traits.includes('serious') || c.traits.includes('suspicious');
+        const soft = c.traits.includes('kind') || c.traits.includes('friendly') || c.traits.includes('playful') || c.role === 'medicine' || c.kits.includes(pc.id);
+        let p = 0.45 + op / 150 + (soft ? 0.25 : 0) - (strict ? 0.25 : 0);
+        if (g.time.isNight) p = 0.05;
+        if (g.events.active.some((e) => ['fire', 'flood', 'badger', 'fox', 'dog'].includes(e.type))) p = 0;
+        if (pc.confinedUntil !== null && pc.confinedUntil > g.time.day) p = 0;
+        if (simRng.chance(clamp(p, 0, 0.95))) {
+          pc.outsideUntil = g.time.totalHours + 4;
+          pc.outsideBy = c.id;
+          g.ui.dialog({ speaker: c, text: simRng.pick([
+            'Alright, little one. You may go outside — but stay close to camp, and be back before long!',
+            'Yes, you can explore for a while. Stay away from the Thunderpath and the borders!',
+            '*purrs* Go on then. If anyone asks, tell them I said it was fine.',
+          ]), options: [{ label: 'Thank you! ★', action: done }], onClose: done });
+          g.ui.toast(`✅ ${displayName(c)} gave you permission to go outside camp for a while. No one will scold you.`, 'good');
+        } else {
+          g.ui.dialog({ speaker: c, text: g.time.isNight ? 'At night? Absolutely not. Back to the nursery with you.' : simRng.pick(['No. Kits stay in camp — it\'s the code.', 'Not today. It\'s too dangerous out there.', 'Ask me again when you\'re a little bigger.']), options: [{ label: 'Aww…', action: done }], onClose: done });
+        }
+      } });
+    }
     // elders tell stories
     if ((c.stage === 'elder' || (c.stage === 'warrior' && c.age >= 28)) && c.lastStory !== g.time.day) opts.push({ label: 'Ask for a story', hint: 'older cats know the old tales', action: () => {
       const story = g.fun.tellStory(c);

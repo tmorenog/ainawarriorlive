@@ -80,7 +80,7 @@ export class Player implements Fighter {
   }
   /** Seconds spent somewhere forbidden — a grace period lets honest mistakes be undone. */
   private graceT = { confine: 0, trespass: 0, danger: 0 };
-  private warned = { border: false, danger: false, confine: false, kit: false };
+  private warned = { border: false, danger: false, confine: false, kit: false, permit: false };
   private checkT = 0;
   sniffCd = 0;
   sleeping = false;
@@ -478,16 +478,19 @@ export class Player implements Fighter {
     }
     if (cat.exiled) return;
     // kit outside camp
-    if (cat.stage === 'kit' && !inCamp) {
+    const permitted = cat.stage === 'kit' && (cat.outsideUntil ?? -1) > game.time.totalHours;
+    if (permitted && !inCamp && (cat.outsideUntil! - game.time.totalHours) < 0.6 && !this.warned.permit) { this.warned.permit = true; game.ui.toast('⏳ Your time outside is almost up — head back to camp!', 'info'); }
+    if (!permitted) this.warned.permit = false;
+    if (cat.stage === 'kit' && !inCamp && !permitted) {
       // clanmates who spot a wandering kit either scold them or (if friends) hide them
       if (!this.kitOutFlag) game.npcs.kitSpotted();
     } else if (inCamp) {
       this.kitOutFlag = false;
       const d = Math.hypot(x, z);
-      if (cat.stage === 'kit' && !cat.exiled && d > 14 && !this.warned.kit) { this.warned.kit = true; game.ui.toast('⚠ Kits must stay inside the camp — going out breaks the code!', 'info'); }
+      if (cat.stage === 'kit' && !cat.exiled && d > 14 && !this.warned.kit && !permitted) { this.warned.kit = true; game.ui.toast('⚠ Kits must stay inside the camp — going out breaks the code!', 'info'); }
       else if (d < 12) this.warned.kit = false;
     }
-    if (game.clan.kitPunishPending && cat.stage === 'kit' && !this.busy) game.npcs.summonForKitPunishment();
+    if (game.clan.kitPunishPending && cat.stage === 'kit' && !this.busy && !permitted) game.npcs.summonForKitPunishment();
     // confinement
     const confined = cat.confinedUntil !== null && cat.confinedUntil > game.time.day;
     const campD = Math.hypot(x, z);
