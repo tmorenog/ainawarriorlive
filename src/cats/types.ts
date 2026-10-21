@@ -42,6 +42,8 @@ export interface Appearance {
   accessory?: Accessory;
   accessories?: Accessory[];
   accessoryColor?: string;
+  /** Paw colour override (e.g. Blackfoot's black paws). */
+  paws?: string;
 }
 
 export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm' | 'bow' | 'flowerEar' | 'clawNecklace'

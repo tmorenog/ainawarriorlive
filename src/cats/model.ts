@@ -664,7 +664,7 @@ export class CatModel {
     // legs
     const legR = 0.022 * (app.body === 'stocky' || app.body === 'large' ? 1.15 : 1) * (app.fur === 'long' ? 1.1 : 1);
     const hipX = bodyLen * 0.42 * K, hipZ = bodyR * 0.55 * K * widthK;
-    const pawC = app.white > 0.05 || app.pattern === 'tuxedo' ? '#f4f1ea' : app.pattern === 'colorpoint' ? app.second : app.base;
+    const pawC = app.paws ?? (app.white > 0.05 || app.pattern === 'tuxedo' ? '#f4f1ea' : app.pattern === 'colorpoint' ? app.second : app.base);
     const pawMat = new THREE.MeshLambertMaterial({ color: col(pawC) });
     this.mats.push(pawMat);
     const legLocal = legLen + torsoH * 0.45;

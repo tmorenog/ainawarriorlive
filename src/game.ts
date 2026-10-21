@@ -382,9 +382,10 @@ export class Game {
         for (const list of Object.values(BOOK_CATS)) for (const b of list) if (cat.given === b.prefix && (cat.epithet === b.suffix || cat.stage === 'apprentice' || cat.role === 'leader')) cat.bookId = b.prefix + b.suffix;
       }
       // keep the famous cats looking like they do in the books
-      const spotted = Object.values(c.cats).find((x) => x.bookId === 'Spottedleaf');
-      const sb = BOOK_CATS.ThunderClan.find((b) => b.prefix === 'Spotted');
-      if (spotted && sb) spotted.app = { ...spotted.app, ...sb.app };
+      for (const cat of Object.values(c.cats)) {
+        if (!cat.bookId) continue;
+        for (const list of Object.values(BOOK_CATS)) for (const b of list) if (b.prefix + b.suffix === cat.bookId) cat.app = { ...cat.app, ...b.app };
+      }
       if (bornInto) { this.bornIntoClan(bornInto); return; }
       // saves from before the age reset existed get it once
       if (!d.agesReset) this.youngAgain();
