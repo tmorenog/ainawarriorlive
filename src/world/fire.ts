@@ -72,9 +72,24 @@ export class FireSystem {
   tickHour() {
     const w = this.game.weather;
     for (const f of [...this.fires]) {
-      const growth = (4 + w.p.wind * 6) * (1 - w.p.rain);
+      const growth = (7 + w.p.wind * 9) * (1 - w.p.rain);
       if (f.r < f.maxR && f.dying === 0) f.r = Math.min(f.maxR, f.r + growth);
       else f.burnHours++;
+      // embers blow ahead on the wind and start new fires
+      if (f.dying === 0 && f.r > 8 && this.fires.length < 4 && Math.random() < 0.35 + w.p.wind * 0.3) {
+        const d = f.r + 8 + Math.random() * 14;
+        const wx = this.game.windDir.x, wz = this.game.windDir.y;
+        const a = Math.atan2(wz, wx) + (Math.random() - 0.5) * 1.2;
+        const nx = f.x + Math.cos(a) * d, nz = f.z + Math.sin(a) * d;
+        if (this.game.chunks.waterDepthAt(nx, nz) <= 0) {
+          this.fires.push({ x: nx, z: nz, r: 2, maxR: f.maxR * 0.6, burnHours: 0, dying: 0 });
+          this.game.ui.toast('🔥 Embers on the wind — a new fire has started ahead of the flames!', 'danger');
+        }
+      }
+      // trees inside the flames are already stripped bare and falling
+      this.game.mods.burned.push({ x: f.x, z: f.z, r: f.r * 0.85, day: this.game.time.day });
+      if (this.game.mods.burned.length > 80) this.game.mods.burned.splice(0, this.game.mods.burned.length - 80);
+      this.game.chunks.invalidateArea(f.x, f.z, f.r + 4);
       if (w.p.rain > 0.4) f.dying += w.p.rain * 0.5;
       if (f.burnHours > 3) f.dying += 0.35;
       if (f.dying >= 1) this.extinguish(f);
@@ -141,9 +156,14 @@ export class FireSystem {
       this.light.intensity = (2 + Math.sin(t * 17) * 0.4 + Math.sin(t * 7) * 0.4) * 8;
     } else this.light.intensity = 0;
     this.nearestDist = nearest;
+    // thick smoke near the flames chokes you and wears you out
+    if (nearest < 14 && game.player.alive) {
+      game.player.stamina = Math.max(0, game.player.stamina - dt * (14 - Math.max(0, nearest)) * 1.2);
+      if (simRng.chance(dt * 0.3)) game.ui.toast('*cough* The smoke stings your eyes and lungs — find the way out!', 'danger');
+    }
     if (nearest < -0.5 && game.player.alive) {
       const c = game.clan.player;
-      c.health -= dt * 9;
+      c.health -= dt * 14;
       game.player.shake = Math.max(game.player.shake, 0.4);
       if (simRng.chance(dt * 1.5)) game.ui.toast('The flames scorch your fur — get out!', 'danger');
       if (c.health <= 0) game.clan.kill(c, 'the fire');

@@ -750,10 +750,16 @@ export class ChunkManager {
         if (s.campDist < 40) pDecid += 0.25;
         const rot = rng.range(0, Math.PI * 2);
         const lean = rng.range(-0.05, 0.05);
-        if (burn > 0.4 && r0 < pDecid + pPine + pBirch) {
+        if (burn > 0.25 && r0 < (pDecid + pPine + pBirch) * 1.4) {
+          // burnt forest: bare blackened trunks, many of them fallen into logs
           const hgt = rng.range(6, 12);
-          dead.add(x, y - 0.1, z, rot, hgt * 0.9, hgt, hgt * 0.9, [0.16, 0.13, 0.12], lean, lean);
-          chunk.colliders.push({ x, z, r: 0.35 });
+          if (rng.chance(0.4)) {
+            dead.add(x, y + 0.25, z, rot, hgt * 0.9, hgt * 0.7, hgt * 0.9, [0.14, 0.11, 0.1], 1.5, 0);
+            chunk.colliders.push({ x, z, r: 0.5 });
+          } else {
+            dead.add(x, y - 0.1, z, rot, hgt * 0.9, hgt, hgt * 0.9, [0.16, 0.13, 0.12], lean, lean);
+            chunk.colliders.push({ x, z, r: 0.35 });
+          }
           continue;
         }
         if (r0 < pDecid) {

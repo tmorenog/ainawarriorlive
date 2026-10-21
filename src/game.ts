@@ -246,6 +246,25 @@ export class Game {
     }
   }
 
+  /** The clan was warned by an understood StarClan dream: the danger is smaller. */
+  prophecyPrepared(t: EventType, byId?: string) {
+    const pc = this.clan.player;
+    const by = this.clan.get(byId);
+    switch (t) {
+      case 'fire': for (const f of this.fire.fires) f.maxR *= 0.5; break;
+      case 'illness': this.clan.herbStore.sunpetal += 3; this.clan.herbStore.bitterroot += 3; break;
+      case 'shortage': this.clan.addFood(8); break;
+      case 'badger': case 'fox': case 'dog': for (const cr of this.creatures.list) { cr.hp *= 0.5; } break;
+      case 'flood': for (const k of this.clan.home()) if (k.stage === 'kit') k.health = k.maxHealth; break;
+      default: break;
+    }
+    pc.reputation = Math.min(100, pc.reputation + 6);
+    pc.coins = (pc.coins ?? 0) + 10;
+    if (by) this.clan.adjust(by, pc, 6);
+    this.ui.toast(`✨ Because you shared your StarClan dream${by ? ` with ${displayName(by)}` : ''}, the clan was ready! The danger is far smaller. (+🪙10)`, 'good');
+    this.clan.log('A StarClan warning came true, and the clan was ready for it.', 'event');
+  }
+
   /** You didn't come to a clan meeting: a strike, and every third strike breaks the code. */
   missedMeeting() {
     const pc = this.clan.player;
@@ -760,14 +779,14 @@ export class Game {
     this.ui.fade(false);
     this.ui.toast(this.time.hour < 8 ? 'Dawn light filters into the den. A new moon begins.' : 'You wake, refreshed.', 'info');
     if (this.time.hour < 9 && !c.exiled) {
-      const chance = c.role === 'medicine' || c.role === 'medicineApprentice' ? 0.5 : c.role === 'leader' ? 0.4 : 0.18;
+      const chance = c.role === 'medicine' || c.role === 'medicineApprentice' ? 0.65 : c.role === 'leader' ? 0.5 : 0.32;
       if (Math.random() < chance) this.starDream();
     }
     this.save();
   }
 
   mossBalls!: MossBalls;
-  pendingProphecy: { type: EventType; day: number } | null = null;
+  pendingProphecy: { type: EventType; day: number; omen?: string; solved?: boolean; by?: string } | null = null;
 
   /** A dream visit from a starry-furred cat of the Long Meadow (StarClan). */
   starDream() {
@@ -780,19 +799,21 @@ export class Game {
     const who = spirit ? `${displayName(spirit)}, ${spirit.id === clan.lineage[clan.lineage.length - 1] ? 'the cat you once were, ' : ''}${pronoun(spirit, 'poss')} fur glittering with stars,` : 'A starry-furred cat you have never met';
     const r = Math.random();
     let text: string;
-    if (r < 0.45) {
-      const omens: [EventType, string][] = [
-        ['fire', '"Beware the red beast that eats the trees. When it comes, lead the clan to the water."'],
-        ['flood', '"Water will rise and swallow the low ground. Keep the kits high and dry."'],
-        ['badger', '"A shadow with a striped face hungers for the nursery. Guard the young ones."'],
-        ['illness', '"Sickness creeps toward the camp. Fill the medicine den with herbs while you can."'],
-        ['shortage', '"The prey will hide. Hunt well now, for lean days are coming."'],
-        ['fox', '"Red fur and sharp teeth prowl near your borders. Walk carefully."'],
-        ['storm', '"The sky will roar and trees will fall. Stay close to camp."'],
+    if (r < 0.55) {
+      // omens are riddles — a medicine cat can help you understand them
+      const riddles: [EventType, string][] = [
+        ['fire', '"A red beast with hungry teeth will run through the trees, and the sky will turn to ash."'],
+        ['flood', '"The quiet stream will forget its banks, and the hollows will drink until they are full."'],
+        ['badger', '"Black and white will come in the dark, and the smallest will need the strongest."'],
+        ['illness', '"A cold breath will creep from den to den, and the leaves of healing will be precious."'],
+        ['shortage', '"The forest will hold its breath; the small ones will hide beneath the earth."'],
+        ['fox', '"Red fur slips through the shadows of the border, sharp of tooth and quiet of paw."'],
+        ['storm', '"The sky will roar like a lion, and the great trees will kneel."'],
       ];
+      const omens = riddles;
       const [type, omen] = omens[Math.floor(Math.random() * omens.length)];
-      this.pendingProphecy = { type, day: this.time.day + 2 };
-      text = `${who} steps out of the mist. ${omen} Then the stars fade…`;
+      this.pendingProphecy = { type, day: this.time.day + 2, omen, solved: false };
+      text = `${who} steps out of the mist. ${omen} Then the stars fade… (A medicine cat might know what it means.)`;
       clan.remember(p, `I dreamed of the Long Meadow. A warning: ${omen}`, 4);
     } else if (r < 0.75 && spirit) {
       const close = (p.relations[spirit.id]?.opinion ?? 0) > 30 || p.parents.includes(spirit.id);
@@ -859,9 +880,13 @@ export class Game {
     if (hour === 6) {
       this.vigils.dawn();
       if (this.pendingProphecy && this.time.day >= this.pendingProphecy.day) {
-        const t = this.pendingProphecy.type;
+        const pr = this.pendingProphecy;
+        const t = pr.type;
         this.pendingProphecy = null;
-        if (this.events.trigger(t, true)) this.ui.toast('✨ The dream from StarClan was true…', 'info');
+        if (this.events.trigger(t, true)) {
+          if (pr.solved) this.prophecyPrepared(t, pr.by);
+          else this.ui.toast('✨ The dream from StarClan was true… if only someone had understood it in time.', 'info');
+        }
       }
       this.clan.tickDay();
       this.npcs.syncRoster();

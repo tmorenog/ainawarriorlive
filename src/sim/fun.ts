@@ -92,6 +92,67 @@ export class FunActivities {
     }
   }
 
+  // ------------------------------------------------------------ hide-and-seek & chase
+  game2: { kind: 'hide' | 'chase'; a: NpcAgent; until: number; spot?: { x: number; z: number } } | null = null;
+
+  startHide(a: NpcAgent) {
+    const g = this.game;
+    const p = g.player.pos;
+    const inCamp = Math.hypot(p.x, p.z) < 17.5;
+    const spots = inCamp
+      ? Object.values(g.camp.dens).map((d) => ({ x: d.x * 1.08, z: d.z * 1.08 })).concat([{ x: g.camp.highRock.x + 2, z: g.camp.highRock.z - 1 }, { x: g.camp.pile.x - 2, z: g.camp.pile.z + 1 }])
+      : Array.from({ length: 6 }, (_, i) => ({ x: p.x + Math.cos(i) * 14, z: p.z + Math.sin(i) * 14 }));
+    const spot = simRng.pick(spots.filter((s2) => Math.hypot(s2.x - p.x, s2.z - p.z) > 5)) ?? spots[0];
+    a.activity = 'talkPlayer'; a.actTimer = 999; a.moveSpeed = 3.2; a.setTarget(spot.x, spot.z);
+    this.game2 = { kind: 'hide', a, until: g.clock + 75, spot };
+    a.say('Close your eyes and count to ten! No peeking!', 3);
+    g.ui.toast(`🙈 Hide-and-seek! ${a.name} is hiding. Find them before time runs out (no compass this time)!`, 'objective');
+  }
+
+  startChase(a: NpcAgent) {
+    const g = this.game;
+    a.activity = 'talkPlayer'; a.actTimer = 999;
+    this.game2 = { kind: 'chase', a, until: g.clock + 35 };
+    a.say('Bet you can\'t catch me!', 2.5);
+    g.ui.toast(`🏃 Chase! Catch ${a.name} before time runs out (sprint with Shift / 💨)!`, 'objective');
+  }
+
+  private updateGames() {
+    const gm = this.game2;
+    if (!gm) return;
+    const g = this.game;
+    const a = gm.a;
+    if (!g.npcs.agents.has(a.id)) { this.game2 = null; return; }
+    a.actTimer = 999;
+    const p = g.player.pos;
+    const d = Math.hypot(a.pos.x - p.x, a.pos.z - p.z);
+    const pc = g.clan.player;
+    const end = (won: boolean, text: string) => {
+      this.game2 = null;
+      a.activity = 'idle'; a.actTimer = 0; a.moveSpeed = 1.35;
+      g.clan.adjust(a.cat, pc, 5, { text: `${pc.given} played with me.`, weight: 2 });
+      if (won) pc.coins = (pc.coins ?? 0) + 2;
+      a.say(text, 3);
+      g.ui.toast(won ? `🏆 You win!${won ? ' (+🪙2)' : ''}` : `${a.name} wins this round!`, won ? 'good' : 'info');
+    };
+    if (gm.kind === 'hide') {
+      if (!a.target) a.forcedPose = 'crouch';
+      if (d < 2.2 && !a.target) return end(true, simRng.pick(['Aww, you found me!', 'How did you know I was here?!', '*giggles* Found me!']));
+      if (g.clock > gm.until) return end(false, 'Ha! You never found me! Over here!');
+    } else {
+      // run away from the player, staying near where we started
+      if (!a.target || Math.hypot(a.target.x - a.pos.x, a.target.z - a.pos.z) < 1) {
+        const ang = Math.atan2(a.pos.z - p.z, a.pos.x - p.x) + simRng.range(-0.9, 0.9);
+        let tx = a.pos.x + Math.cos(ang) * 6, tz = a.pos.z + Math.sin(ang) * 6;
+        if (Math.hypot(tx, tz) > 14 && Math.hypot(p.x, p.z) < 17.5) { tx *= 0.6; tz *= 0.6; }
+        a.setTarget(tx, tz);
+      }
+      a.moveSpeed = d < 4 ? 4.4 * (a.cat.stage === 'kit' ? 0.7 : 1) : 2.6;
+      if (d < 1.3) return end(true, simRng.pick(['Got me! You\'re fast!', 'Noooo! Again!', '*panting* Okay, you win!']));
+      if (g.clock > gm.until) return end(false, 'Too slow! *sticks tongue out*');
+    }
+  }
+
   // ------------------------------------------------------------ elders' stories
   tellStory(elder: Cat): string {
     const g = this.game;
@@ -146,9 +207,18 @@ export class FunActivities {
   }
 
   // ------------------------------------------------------------ basking & stargazing
+  private emoteCd = 0;
+
   spotAction(): { text: string; action: () => void } | null {
     const g = this.game;
     const p = g.player.pos;
+    if (g.clock > this.emoteCd && !g.player.swimming) {
+      const hr = g.camp.highRock;
+      const wk = g.weather.kind;
+      if (g.time.isDusk && Math.hypot(p.x - hr.x, p.z - hr.z) < 5) return { text: 'Watch the sunset from the Highrock 🌅', action: () => this.emote('sunset') };
+      if ((wk === 'rain' || wk === 'heavyRain' || wk === 'thunderstorm') && g.camp.denAt(p.x, p.z) === null) return { text: 'Splash in a puddle 💦', action: () => this.emote('puddle') };
+      if ((wk === 'snow' || (g.time.season === 'winter' && g.weather.snowCover > 0.3)) && g.camp.denAt(p.x, p.z) === null) return { text: 'Pounce in the snow ❄', action: () => this.emote('snow') };
+    }
     const lm = g.territories.landmarks.find((l) => (l.kind === 'sunRocks' || l.kind === 'hollow' || l.kind === 'bigTree') && Math.hypot(l.x - p.x, l.z - p.z) < Math.max(4, l.radius * 0.8));
     if (!lm || g.clan.player.exiled && false) return null;
     const night = g.time.isNight;
@@ -156,6 +226,28 @@ export class FunActivities {
     if (!night && lm.kind === 'sunRocks' && clear) return { text: `Bask on ${lm.name}`, action: () => this.bask(lm.name) };
     if (night && clear) return { text: `Gaze at the stars from ${lm.name}`, action: () => this.stargaze() };
     return null;
+  }
+
+  private emote(kind: 'sunset' | 'puddle' | 'snow') {
+    const g = this.game;
+    const pc = g.clan.player;
+    this.emoteCd = g.clock + 75;
+    g.audio.purr();
+    if (kind === 'sunset') {
+      g.player.stamina = 100;
+      g.player.calmUntil = g.clock + 90;
+      g.clan.remember(pc, 'I watched the sun set from the Highrock. The whole forest glowed.', 2);
+      g.ui.toast('🌅 You sit on the Highrock as the sun sinks behind the trees, painting the forest gold and pink. You feel peaceful.', 'good');
+      for (const a of g.npcs.agents.values()) if (a.cat.clan === 'home' && Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 10 && g.clan.opinion(a.cat, pc) > 30) { a.say('Beautiful, isn\'t it?', 3); g.clan.adjust(a.cat, pc, 2); }
+    } else if (kind === 'puddle') {
+      g.combat.puff(g.player.pos, 20, 0.4);
+      g.ui.toast(simRng.pick(['💦 SPLASH! You leap into the puddle and soak your whiskers. Worth it.', '💦 *splish splash* Mud everywhere! The kits squeal with delight.', '💦 You pounce on your own reflection. It fights back. You lose.']), 'info');
+      for (const a of g.npcs.agents.values()) if (a.cat.stage === 'kit' && a.cat.clan === 'home' && Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 10) { a.say('Me too! Me too!', 2); g.clan.adjust(a.cat, pc, 2); }
+    } else {
+      g.combat.puff(g.player.pos, 24, 0.5);
+      pc.skills.hunting = Math.min(99, pc.skills.hunting + 0.5);
+      g.ui.toast(simRng.pick(['❄ You dive nose-first into a snowdrift and come up white as a ghost!', '❄ Pounce! You catch… a pawful of snow. Good practice, though!', '❄ You roll in the fresh snow until your fur sparkles.']), 'info');
+    }
   }
 
   private bask(where: string) {
@@ -187,6 +279,7 @@ export class FunActivities {
 
   update(dt: number) {
     this.updateRace(dt);
+    this.updateGames();
     const g = this.game;
     // now and then a clanmate nearby grumbles that they're bored (talk to them!)
     this.boredT -= dt;

@@ -452,6 +452,29 @@ export class Interactions {
     }
     // famous cats from the books have quests
     if (g.quests.available(a)) opts.push({ label: '★ Do you need help with anything?', hint: 'a quest', action: () => g.quests.offer(a, done) });
+    // share a StarClan dream with a medicine cat (or, if you are the medicine cat, with the leader)
+    const proph = g.pendingProphecy;
+    const healerPc = pc.role === 'medicine' || pc.role === 'medicineApprentice';
+    if (proph && !proph.solved && ((c.role === 'medicine' && !healerPc) || (healerPc && c.role === 'leader'))) {
+      opts.push({ label: '✨ Tell them about your StarClan dream', hint: 'they may understand it', action: () => {
+        const MEANING: Record<string, [string, string]> = {
+          fire: ['A red beast that eats the trees… that is fire.', 'We must clear the dry brush around camp and keep the kits near the stream. I will warn the leader.'],
+          flood: ['A stream forgetting its banks — a flood is coming.', 'We will move the nursery bedding to high ground and keep the kits close.'],
+          badger: ['Black and white in the dark… a badger! And the smallest — the kits.', 'I will ask the leader to set warriors on guard by the nursery every night.'],
+          illness: ['A cold breath from den to den. Sickness — greencough, perhaps.', 'I will gather extra sunpetal and bitterroot while I still can.'],
+          shortage: ['The forest holding its breath… the prey will vanish.', 'Tell the hunters to stock the fresh-kill pile now, while prey is fat.'],
+          fox: ['Red fur at the border — a fox.', 'The border patrols must be doubled. I will speak to the deputy.'],
+          storm: ['The sky roaring, great trees kneeling — a terrible storm.', 'Everyone must stay close to camp when the clouds gather.'],
+        };
+        const [meaning, plan] = MEANING[proph.type] ?? ['StarClan speaks in riddles…', 'We will be ready.'];
+        proph.solved = true;
+        proph.by = c.id;
+        clan.adjust(c, pc, 5, { text: `${pc.given} shared a StarClan dream with me.`, weight: 3 });
+        clan.remember(pc, `${displayName(c)} explained my StarClan dream: ${meaning}`, 4, c.id);
+        g.ui.dialog({ speaker: c, text: `*listens with half-closed eyes* ${proph.omen ? `"${proph.omen.replace(/"/g, '')}"… ` : ''}${meaning} ${plan} Thank you for telling me — StarClan chose you for a reason.`, options: [{ label: 'I\'m glad I told you', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+        g.ui.toast('✨ The clan will prepare for what StarClan foretold.', 'good');
+      } });
+    }
     // kits can ask a grown cat for permission to go outside camp
     if (pc.stage === 'kit' && !pc.exiled && c.stage !== 'kit' && c.stage !== 'apprentice' && !((pc.outsideUntil ?? -1) > g.time.totalHours)) {
       opts.push({ label: 'Can I go outside the camp?', hint: 'ask permission', action: () => {
@@ -483,6 +506,28 @@ export class Interactions {
       for (const k of g.npcs.agents.values()) if (k.cat.stage === 'kit' && k.cat.clan === 'home' && dist2(k.pos.x, k.pos.z, a.pos.x, a.pos.z) < 12 && k.activity === 'idle') { k.setTarget(a.pos.x + simRng.range(-1, 1), a.pos.z + simRng.range(-1, 1)); clan.adjust(k.cat, c, 2); }
       g.ui.dialog({ speaker: c, text: story, options: [{ label: 'Wow… thank you', action: again }, { label: 'Goodbye', action: done }], onClose: done });
     } });
+    // playground games
+    if (!pc.exiled && !g.fun.game2 && (c.stage === 'kit' || c.stage === 'apprentice' || (op > 25 && c.stage !== 'elder'))) {
+      opts.push({ label: 'Play hide-and-seek', hint: 'find them!', action: () => { g.ui.closeDialog(false); g.fun.startHide(a); } });
+      opts.push({ label: 'Play chase', hint: 'catch them!', action: () => { g.ui.closeDialog(false); g.fun.startChase(a); } });
+    }
+    // grown cats can tell kits stories and teach them to pounce
+    if (c.stage === 'kit' && (pc.stage === 'warrior' || pc.stage === 'elder')) {
+      if (c.lastStory !== g.time.day) opts.push({ label: 'Tell the kits a story', hint: 'kits nearby gather round', action: () => {
+        c.lastStory = g.time.day;
+        let n = 0;
+        for (const k of g.npcs.agents.values()) if (k.cat.stage === 'kit' && k.cat.clan === 'home' && dist2(k.pos.x, k.pos.z, g.player.pos.x, g.player.pos.z) < 15) { n++; clan.adjust(k.cat, pc, 6, { text: `${pc.given} told us a story!`, weight: 2 }); k.setTarget(g.player.pos.x + simRng.range(-1.2, 1.2), g.player.pos.z + simRng.range(-1.2, 1.2)); }
+        pc.reputation = clamp(pc.reputation + 1, -100, 100);
+        g.ui.dialog({ speaker: c, text: `*${n > 1 ? `${n} kits pile around you,` : 'eyes wide,'} ears pricked* And then what happened?! Tell it again! Tell it again!`, options: [{ label: '*purrs*', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+      } });
+      opts.push({ label: 'Teach them to pounce', hint: 'a hunting lesson', action: () => {
+        c.skills.hunting = Math.min(99, c.skills.hunting + 3);
+        clan.adjust(c, pc, 5, { text: `${pc.given} taught me how to pounce!`, weight: 3 });
+        a.forcedPose = 'crouch';
+        setTimeout(() => (a.forcedPose = null), 2500);
+        g.ui.dialog({ speaker: c, text: simRng.pick(['*wiggles bottom… POUNCE!* Did you see? Did you see?!', 'Tail low, eyes on the prey… got it! I\'m going to be the best hunter EVER!', '*pounces on your tail* Oops. That counts, right?']), options: [{ label: 'Well done!', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+      } });
+    }
     // races
     if (!pc.exiled && c.stage !== 'elder' && !g.fun.race && (c.stage === 'kit' || c.stage === 'apprentice' || op > 20)) {
       opts.push({ label: 'Challenge them to a race', hint: 'first one there wins', action: () => { g.ui.closeDialog(false); g.fun.startRace(a); } });
