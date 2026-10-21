@@ -99,7 +99,7 @@ export const BOOK_CATS: Record<string, BookCat[]> = {
   ThunderClan: [
     { prefix: 'Blue', suffix: 'fur', sex: 'she', age: 78, role: 'leader', traits: ['calm', 'loyal'], app: { base: '#8f9aab', second: '#6a7384', pattern: 'solid', eye: '#5aa2e6', fur: 'medium', body: 'average' } },
     { prefix: 'Tiger', suffix: 'claw', sex: 'tom', age: 44, role: 'deputy', traits: ['ambitious', 'aggressive'], app: { ...tabby('#553827', '#1f1612'), eye: '#e2a02c', fur: 'short', body: 'large', size: 1.08 } },
-    { prefix: 'Spotted', suffix: 'leaf', sex: 'she', age: 30, role: 'medicine', traits: ['kind', 'calm'], app: { base: '#9b5c36', second: '#2b2725', pattern: 'tortie', eye: '#e2a02c', fur: 'medium', body: 'slender' } },
+    { prefix: 'Spotted', suffix: 'leaf', sex: 'she', age: 30, role: 'medicine', traits: ['kind', 'calm'], app: { base: '#c9783a', second: '#2b2725', pattern: 'calico', white: 0.38, eye: '#e2a02c', fur: 'medium', body: 'slender' } },
     { prefix: 'White', suffix: 'storm', sex: 'tom', age: 56, traits: ['loyal', 'calm'], app: { base: '#f1eee7', second: '#d8d4cc', pattern: 'solid', eye: '#e9d23c', fur: 'medium', body: 'large' } },
     { prefix: 'Lion', suffix: 'heart', sex: 'tom', age: 52, traits: ['brave', 'kind'], app: { ...tabby('#d4a24a', '#9a6a28'), eye: '#e2a02c', fur: 'long', body: 'large' } },
     { prefix: 'Gray', suffix: 'stripe', sex: 'tom', age: 14, traits: ['friendly', 'playful'], app: { base: '#7c7f86', second: '#3e4046', pattern: 'smoke', eye: '#e9d23c', fur: 'long', body: 'stocky' } },
