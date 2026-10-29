@@ -1069,8 +1069,8 @@ export class ChunkManager {
         }
       }
     // Herbs & moss: a few special interactables per chunk
-    const nh = rng.int(1, 4);
-    for (let i = 0; i < nh + 3; i++) {
+    const nh = rng.int(3, 7);
+    for (let i = 0; i < nh + 7; i++) {
       const x = chunk.x0 + rng.range(2, CHUNK_SIZE - 2), z = chunk.z0 + rng.range(2, CHUNK_SIZE - 2);
       const idx = chunk.nearestIndex(x, z);
       if (chunk.flags[idx] & 11) continue;
@@ -1079,10 +1079,10 @@ export class ChunkManager {
       const y = chunk.heightAt(x, z);
       if (y < this.waterLevel + 0.05) continue;
       if (i < nh) {
-        if (season === 'winter' && rng.chance(0.6)) continue;
+        if (season === 'winter' && rng.chance(0.4)) continue;
         const kind: HerbKind = biome === 'marsh' ? 'bitterroot' : biome === 'meadow' || biome === 'hills' ? 'sunpetal' : rng.pick(['silverleaf', 'silverleaf', 'bitterroot', 'sunpetal'] as HerbKind[]);
         herbData.push({ kind, x, y, z });
-      } else if (biome === 'forest' || biome === 'pine' || biome === 'marsh') {
+      } else if (biome === 'forest' || biome === 'pine' || biome === 'marsh' || biome === 'hills' || biome === 'meadow') {
         mossData.push({ x, y, z });
       }
     }

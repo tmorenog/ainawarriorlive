@@ -126,8 +126,8 @@ export class CombatSystem {
     }
     if (b.kind === 'player' && !spar) {
       this.game.player.enterCombat();
-      this.rally(a, b);
-      this.sendFriends(a);
+      const provoked = !!agent && agent.cat.clan === 'home' && agent.userAggressive;
+      if (!provoked) { this.rally(a, b); this.sendFriends(a); }
     }
     if (b.kind === 'cat' && b.faction === 'home' && !spar) this.rally(a, b);
     if (a.kind === 'creature' || a.faction === 'rival') this.game.audio.growl(a.kind === 'creature');

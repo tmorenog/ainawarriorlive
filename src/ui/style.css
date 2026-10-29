@@ -232,3 +232,6 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 .grief-card { width: min(360px, 80vw); height: min(390px, 58vh); background: #fff; border-radius: 22px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.5); margin-bottom: 18px; }
 .grief-frame { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; image-rendering: auto; }
 .grief .btn { margin-top: 8px; }
+
+.hud-compass .help { font-size: 20px; filter: drop-shadow(0 0 4px #ff8a5a); animation: helppulse 1s ease-in-out infinite; }
+@keyframes helppulse { 50% { transform: translateX(-50%) scale(1.25); } }

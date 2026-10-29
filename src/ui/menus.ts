@@ -160,7 +160,7 @@ export class Menus {
         b.onclick = () => { set(v); els.forEach((e) => e.classList.remove('on')); b.classList.add('on'); refresh(); };
       }
     };
-    chips<Sex>('Sex', [['tom', 'Tom'], ['she', 'She-cat']], () => spec.sex, (v) => (spec.sex = v));
+    chips<Sex>('Gender', [['tom', 'Tom'], ['she', 'She-cat']], () => spec.sex, (v) => (spec.sex = v));
     // breed preset
     const br = field('Breed');
     const bs = h('select', '', '', br) as HTMLSelectElement;

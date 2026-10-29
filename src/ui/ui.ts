@@ -421,6 +421,14 @@ export class UI {
     if (Math.hypot(p.x, p.z) > 16) items.push({ label: '🏠', ang: bearingTo(0, 0), cls: 'mark' });
     const o = g.objectives.primary;
     if (o?.target) items.push({ label: '◆', ang: bearingTo(o.target.x, o.target.z), cls: 'mark' });
+    // a cat that needs your help shows as a cat on the compass
+    for (const ob of g.objectives.list) {
+      const needsHelp = ob.kind === 'rescue' || ob.kind === 'escort' || ob.data?.follow || ob.id === 'berry-kit';
+      if (needsHelp && ob.target) items.push({ label: '🐈', ang: bearingTo(ob.target.x, ob.target.z), cls: 'mark help' });
+    }
+    for (const a of g.npcs.agents.values()) {
+      if (a.activity === 'stranded' && Math.hypot(a.pos.x - p.x, a.pos.z - p.z) < 200) items.push({ label: '🐈', ang: bearingTo(a.pos.x, a.pos.z), cls: 'mark help' });
+    }
     if (g.events.isActive('gathering')) items.push({ label: '🌕', ang: bearingTo(g.territories.council.x, g.territories.council.z), cls: 'mark' });
     let html = '';
     for (const it of items) {

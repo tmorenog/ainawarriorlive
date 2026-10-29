@@ -36,6 +36,9 @@ export class Objectives {
   busy() { return this.list.some((o) => o.order || o.kind === 'lesson' || o.kind === 'patrol' || o.kind === 'assessment'); }
 
   add(o: Objective) {
+    // kits outside camp are never handed orders (except their own punishments)
+    const pl = this.game.clan.player;
+    if (pl && pl.stage === 'kit' && o.order && !o.id.startsWith('punish') && o.id !== 'meeting' && Math.hypot(this.game.player.pos.x, this.game.player.pos.z) > 17.5) return;
     if (this.has(o.id)) this.list = this.list.filter((x) => x.id !== o.id);
     o.progress = o.progress ?? 0;
     // urgent objectives first

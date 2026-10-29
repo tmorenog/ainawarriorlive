@@ -475,6 +475,24 @@ export class Interactions {
         g.ui.toast('✨ The clan will prepare for what StarClan foretold.', 'good');
       } });
     }
+    // pick a fight with a clanmate (never with friends)
+    const isFriend = op >= 40 || c.mate === pc.id || isFamily(c, pc) || clan.opinion(pc, c) >= 40;
+    if (!pc.exiled && c.stage !== 'kit' && !isFriend) opts.push({ label: 'Attack them!', hint: 'breaks the code', action: () => {
+      done();
+      const fightsBack = c.traits.includes('aggressive') || c.traits.includes('brave') || c.pers.aggression > 0.45 || (c.stage === 'warrior' && Math.random() < 0.6);
+      clan.adjust(c, pc, -20, { text: `${pc.given} attacked me!`, weight: -6 });
+      clan.infraction('obeyOrders', g.npcs.witnesses(g.player.pos.x, g.player.pos.z, 18), 'attacked a clanmate');
+      if (fightsBack) {
+        a.userAggressive = true;
+        a.say(simRng.pick(['You want a fight? You\'ve got one!', '*HISS* Big mistake!', 'Fine — come on then!']), 3);
+        g.combat.engage(a, g.player);
+      } else {
+        a.say(simRng.pick(['Hey! What\'s wrong with you?!', 'Get away from me!', 'I\'m telling the leader!']), 3);
+        a.activity = 'flee'; a.mood = 'afraid';
+        a.setTarget(a.pos.x + (a.pos.x - g.player.pos.x) * 4, a.pos.z + (a.pos.z - g.player.pos.z) * 4);
+        setTimeout(() => { if (a.activity === 'flee') { a.activity = 'idle'; a.mood = 'neutral'; } }, 6000);
+      }
+    } });
     // kits can ask a grown cat for permission to go outside camp
     if (pc.stage === 'kit' && !pc.exiled && c.stage !== 'kit' && c.stage !== 'apprentice' && !((pc.outsideUntil ?? -1) > g.time.totalHours)) {
       opts.push({ label: 'Can I go outside the camp?', hint: 'ask permission', action: () => {
@@ -1052,6 +1070,7 @@ export class Interactions {
         ], onClose: done });
         return;
       case 'order': {
+        if (pc.stage === 'kit') { done(); return; }
         const task = this.makeOrder(a.cat);
         g.ui.dialog({ speaker: a.cat, text: `${intent.text} ${task.speech}`, options: [
           { label: 'At once', action: () => { g.objectives.add(task.obj); done(); } },
