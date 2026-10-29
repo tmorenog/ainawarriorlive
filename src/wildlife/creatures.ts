@@ -3,16 +3,17 @@
 import * as THREE from 'three';
 import type { Game } from '../game';
 import type { Fighter } from '../player/combat';
-import { BADGER, DOG, FOX, QuadModel, QuadSpec } from './models';
+import { BADGER, CatShapedAnimal, DOG, FOX, QuadSpec } from './models';
 import { simRng } from '../core/rng';
 import { angleDiff, clamp, dist2 } from '../core/math';
 
-export type CreatureKind = 'fox' | 'badger' | 'dog';
+export type CreatureKind = 'fox' | 'badger' | 'dog' | 'raccoon';
 
 const DEFS: Record<CreatureKind, { name: string; spec: QuadSpec; hp: number; power: number; speed: number; notice: number; reach: number; aggression: number; chaseTime: number }> = {
   fox: { name: 'Fox', spec: FOX, hp: 42, power: 5, speed: 5.2, notice: 16, reach: 0.75, aggression: 0.6, chaseTime: 25 },
   badger: { name: 'Badger', spec: BADGER, hp: 105, power: 9.5, speed: 2.9, notice: 12, reach: 0.8, aggression: 0.9, chaseTime: 40 },
   dog: { name: 'Dog', spec: DOG, hp: 75, power: 6.5, speed: 7.2, notice: 28, reach: 0.9, aggression: 0.7, chaseTime: 18 },
+  raccoon: { name: 'Raccoon', spec: FOX, hp: 34, power: 4, speed: 4.4, notice: 10, reach: 0.65, aggression: 0.45, chaseTime: 15 },
 };
 
 export class Creature implements Fighter {
@@ -27,7 +28,7 @@ export class Creature implements Fighter {
   power: number;
   defense = 0.1;
   name: string;
-  model: QuadModel;
+  model: CatShapedAnimal;
   state: 'wander' | 'stalk' | 'fight' | 'flee' | 'goal' = 'wander';
   target: { x: number; z: number } | null = null;
   fightTarget: Fighter | null = null;
@@ -44,7 +45,7 @@ export class Creature implements Fighter {
     this.hp = this.maxHp = d.hp;
     this.power = d.power;
     this.name = d.name;
-    this.model = new QuadModel(d.spec);
+    this.model = new CatShapedAnimal(type);
     scene.add(this.model.root);
     if (type === 'badger') this.defense = 0.25;
   }
@@ -99,6 +100,7 @@ export class CreatureManager {
     let type: CreatureKind | null = null;
     if (houses && simRng.chance(0.5)) type = 'dog';
     else if (game.time.isNight && simRng.chance(0.25)) type = simRng.chance(0.3) ? 'badger' : 'fox';
+    else if (game.time.isNight && (houses || biome === 'farmland' || biome === 'forest') && simRng.chance(0.2)) type = 'raccoon';
     else if ((biome === 'forest' || biome === 'pine') && simRng.chance(0.12)) type = 'fox';
     if (!type) return;
     const a = simRng.range(0, Math.PI * 2);

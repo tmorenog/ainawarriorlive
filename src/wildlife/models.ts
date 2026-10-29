@@ -208,3 +208,39 @@ export function preyGeometry(kind: PreyKind): THREE.BufferGeometry {
   return g;
 }
 export const preyMaterial = mat;
+
+// ---------------------------------------------------------------------------
+// Predators drawn with the same body shape as the cats, in their own colours.
+import { CatModel } from '../cats/model';
+import type { Appearance } from '../cats/types';
+
+export const ANIMAL_LOOKS: Record<string, Appearance> = {
+  // russet fox: white chest and muzzle, black "stockings", huge bushy tail
+  fox: { base: '#c8611f', second: '#7a3410', white: 0.22, pattern: 'bicolor', paws: '#1d1410', eye: '#e8b02c', fur: 'medium', body: 'slender', ears: 'pointed', tail: 'bushy', size: 1.25 },
+  // badger: grizzled grey body, black legs and a pale striped face
+  badger: { base: '#8a8884', second: '#2a2a2a', white: 0.2, pattern: 'solid', paws: '#121212', eye: '#2a2a2a', fur: 'long', body: 'large', ears: 'rounded', tail: 'short', size: 1.45 },
+  // raccoon: grey with a dark bandit mask and a ringed tail
+  raccoon: { base: '#8c8a86', second: '#252423', white: 0.08, pattern: 'mackerel', paws: '#2a2826', eye: '#1a1a1a', fur: 'long', body: 'stocky', ears: 'rounded', tail: 'bushy', size: 1.15 },
+  // farm dog: big, tan and floppy-eared
+  dog: { base: '#a7743f', second: '#5a3a1c', white: 0.2, pattern: 'bicolor', eye: '#5a3a1c', fur: 'short', body: 'large', ears: 'folded', tail: 'long', size: 1.7 },
+};
+
+/** Same interface as QuadModel, but built from the cat body. */
+export class CatShapedAnimal {
+  private cat: CatModel;
+  speed = 0;
+  lunge = 0;
+  crouch = 0;
+  constructor(kind: string) {
+    this.cat = new CatModel({ ...ANIMAL_LOOKS[kind] }, 'warrior');
+  }
+  get root() { return this.cat.root; }
+  update(dt: number) {
+    const m = this.cat;
+    m.speed = this.speed;
+    m.mood = this.crouch > 0.6 || this.lunge > 0.2 ? 'angry' : 'neutral';
+    m.pose = this.lunge > 0.3 ? 'pounce' : this.crouch > 0.6 ? 'crouch' : this.speed > 0.15 ? 'walk' : 'stand';
+    m.update(dt);
+  }
+  dispose() { this.cat.dispose(); }
+}
