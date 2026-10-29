@@ -40,6 +40,8 @@ export class Camp {
   colliders: Collider[] = [];
   highRock = { x: 0, z: -9, top: 0 };
   pile = { x: 3.2, z: 1.5 };
+  /** A little rock-ringed pool of rainwater where the clan drinks. */
+  pool = { x: -3.6, z: 2.6 };
   center = { x: 0, z: -2.5 };
   entrance = { x: 0, z: 17 };
   floorY = 0;
@@ -218,6 +220,23 @@ export class Camp {
     }
     this.pileMesh.castShadow = true;
     this.pileMesh.count = 0;
+    // drinking pool
+    {
+      const py2 = terrain.height(this.pool.x, this.pool.z);
+      const water = new THREE.Mesh(new THREE.CircleGeometry(0.85, 20), new THREE.MeshPhongMaterial({ color: 0x5a8fb0, shininess: 90, specular: 0xffffff, transparent: true, opacity: 0.85 }));
+      water.rotation.x = -Math.PI / 2;
+      water.position.set(this.pool.x, py2 + 0.03, this.pool.z);
+      this.group.add(water);
+      const stoneGeo = new THREE.DodecahedronGeometry(0.22, 0);
+      for (let i = 0; i < 11; i++) {
+        const a = (i / 11) * Math.PI * 2;
+        const st = new THREE.Mesh(stoneGeo, new THREE.MeshLambertMaterial({ color: new THREE.Color(0.55 + (i % 3) * 0.05, 0.54, 0.5) }));
+        st.position.set(this.pool.x + Math.cos(a) * 0.98, py2 + 0.05, this.pool.z + Math.sin(a) * 0.98);
+        st.scale.set(1, 0.6, 1);
+        st.rotation.y = a;
+        this.group.add(st);
+      }
+    }
     this.group.add(this.pileMesh);
 
     // Herb store inside the medicine den

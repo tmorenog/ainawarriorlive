@@ -235,3 +235,16 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 
 .hud-compass .help { font-size: 20px; filter: drop-shadow(0 0 4px #ff8a5a); animation: helppulse 1s ease-in-out infinite; }
 @keyframes helppulse { 50% { transform: translateX(-50%) scale(1.25); } }
+
+.bar.thirst i { background: linear-gradient(90deg, #3d8fd1, #8fd3ff); }
+/* first-person drinking: tongue lapping between your front paws */
+.drink-overlay { position: fixed; left: 0; right: 0; bottom: 0; height: 46vh; pointer-events: none; z-index: 30; display: flex; justify-content: center; align-items: flex-end; }
+.drink-overlay .paw { position: absolute; bottom: -4vh; width: 22vh; height: 26vh; border-radius: 50% 50% 40% 40%; background: var(--paw, #c9a583); box-shadow: inset 0 -2vh 3vh rgba(0,0,0,0.25); }
+.drink-overlay .paw.l { left: calc(50% - 30vh); transform: rotate(8deg); }
+.drink-overlay .paw.r { left: calc(50% + 8vh); transform: rotate(-8deg); }
+.drink-overlay .paw::after { content: ''; position: absolute; left: 18%; right: 18%; top: 8%; height: 22%; background: radial-gradient(circle at 20% 50%, #3a2a2a 18%, transparent 20%), radial-gradient(circle at 50% 30%, #3a2a2a 18%, transparent 20%), radial-gradient(circle at 80% 50%, #3a2a2a 18%, transparent 20%); opacity: 0.35; }
+.drink-overlay .tongue { position: absolute; bottom: 0; width: 9vh; height: 16vh; border-radius: 50% 50% 45% 45%; background: linear-gradient(#f29aa8, #e0707f); box-shadow: inset 0 -1vh 2vh rgba(120,20,40,0.3); animation: lap 0.32s ease-in-out infinite alternate; transform-origin: bottom center; }
+.drink-overlay .tongue::after { content: ''; position: absolute; left: 48%; top: 10%; width: 4%; height: 60%; background: rgba(150,40,60,0.35); border-radius: 2px; }
+.drink-overlay .drops { position: absolute; bottom: 15vh; width: 30vh; height: 8vh; background: radial-gradient(circle at 20% 60%, rgba(160,210,255,0.8) 4%, transparent 6%), radial-gradient(circle at 70% 40%, rgba(160,210,255,0.8) 3%, transparent 5%), radial-gradient(circle at 45% 80%, rgba(160,210,255,0.8) 3%, transparent 5%); animation: drops 0.64s linear infinite; }
+@keyframes lap { from { transform: translateY(6vh) scaleY(0.7); } to { transform: translateY(-1vh) scaleY(1.05); } }
+@keyframes drops { from { transform: translateY(0); opacity: 1; } to { transform: translateY(6vh); opacity: 0; } }

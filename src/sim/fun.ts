@@ -208,15 +208,21 @@ export class FunActivities {
 
   // ------------------------------------------------------------ basking & stargazing
   private emoteCd = 0;
+  private dewCd = 0;
 
   spotAction(): { text: string; action: () => void } | null {
     const g = this.game;
     const p = g.player.pos;
+    // morning dew on the grass
+    const h = g.time.hour;
+    if (h > 4.8 && h < 8.5 && g.time.season !== 'winter' && Math.hypot(p.x, p.z) > 17 && g.clock > this.dewCd && (g.clan.player.thirst ?? 100) < 85 && g.weather.kind !== 'snow') {
+      return { text: 'Lick the dew off the grass 💧', action: () => { this.dewCd = g.clock + 25; g.interactions.drink(35); g.ui.toast('💧 You lick cold dew drops from the grass blades. Not much — but it helps.', 'info'); } };
+    }
     if (g.clock > this.emoteCd && !g.player.swimming) {
       const hr = g.camp.highRock;
       const wk = g.weather.kind;
       if (g.time.isDusk && Math.hypot(p.x - hr.x, p.z - hr.z) < 5) return { text: 'Watch the sunset from the Highrock 🌅', action: () => this.emote('sunset') };
-      if ((wk === 'rain' || wk === 'heavyRain' || wk === 'thunderstorm') && g.camp.denAt(p.x, p.z) === null) return { text: 'Splash in a puddle 💦', action: () => this.emote('puddle') };
+      if ((wk === 'rain' || wk === 'heavyRain' || wk === 'thunderstorm') && g.camp.denAt(p.x, p.z) === null) return { text: (g.clan.player.thirst ?? 100) < 70 ? 'Drink from a puddle 💧' : 'Splash in a puddle 💦', action: () => this.emote('puddle') };
       if ((wk === 'snow' || (g.time.season === 'winter' && g.weather.snowCover > 0.3)) && g.camp.denAt(p.x, p.z) === null) return { text: 'Pounce in the snow ❄', action: () => this.emote('snow') };
     }
     const lm = g.territories.landmarks.find((l) => (l.kind === 'sunRocks' || l.kind === 'hollow' || l.kind === 'bigTree') && Math.hypot(l.x - p.x, l.z - p.z) < Math.max(4, l.radius * 0.8));
@@ -240,6 +246,7 @@ export class FunActivities {
       g.ui.toast('🌅 You sit on the Highrock as the sun sinks behind the trees, painting the forest gold and pink. You feel peaceful.', 'good');
       for (const a of g.npcs.agents.values()) if (a.cat.clan === 'home' && Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 10 && g.clan.opinion(a.cat, pc) > 30) { a.say('Beautiful, isn\'t it?', 3); g.clan.adjust(a.cat, pc, 2); }
     } else if (kind === 'puddle') {
+      if ((pc.thirst ?? 100) < 70) { g.interactions.drink(45); return; }
       g.combat.puff(g.player.pos, 20, 0.4);
       g.ui.toast(simRng.pick(['💦 SPLASH! You leap into the puddle and soak your whiskers. Worth it.', '💦 *splish splash* Mud everywhere! The kits squeal with delight.', '💦 You pounce on your own reflection. It fights back. You lose.']), 'info');
       for (const a of g.npcs.agents.values()) if (a.cat.stage === 'kit' && a.cat.clan === 'home' && Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 10) { a.say('Me too! Me too!', 2); g.clan.adjust(a.cat, pc, 2); }

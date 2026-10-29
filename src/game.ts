@@ -2,6 +2,7 @@
 // loading, sleeping, time skips, death and succession.
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
+import { tickWaterfalls } from './world/chunks';
 import { BOOK_CATS } from './lore';
 import { CLOVER_APP } from './sim/clan';
 import { Bees, CodeBreakers, FunActivities, Vigils } from './sim/fun';
@@ -187,7 +188,7 @@ export class Game {
     this.terrain = new Terrain(seed);
     this.territories = new Territories(seed, homeName);
     for (const l of this.territories.landmarks) {
-      if (l.kind === 'pond') this.terrain.addMod(l.x, l.z, l.radius, 'pond');
+      if (l.kind === 'pond' || l.kind === 'waterfall') this.terrain.addMod(l.x, l.z, l.radius, 'pond');
       else if (l.kind === 'trainingHollow') this.terrain.addMod(l.x, l.z, 9, 'flat');
       else if (l.kind === 'councilRocks') this.terrain.addMod(l.x, l.z, 16, 'flat');
     }
@@ -864,6 +865,13 @@ export class Game {
         c.hunger = clamp(c.hunger - 1.35, 0, 100);
         if (c.hunger < 8) c.health -= 1.2;
       }
+      // thirst: find water every so often — streams, ponds, waterfalls, the camp pool, puddles or morning dew
+      const thirstRate = (t.season === 'summer' ? 5 : 3.6) * (this.events.isActive('drought') ? 1.6 : 1) * (this.player.sleeping ? 0.4 : 1);
+      const before = c.thirst ?? 100;
+      c.thirst = clamp(before - thirstRate, 0, 100);
+      if (before >= 30 && c.thirst < 30) this.ui.toast('💧 You\'re getting thirsty. Find water: a stream, pond, the camp pool, or dew in the morning.', 'info');
+      if (before >= 10 && c.thirst < 10) this.ui.toast('💧 You are parched! Drink soon or you will grow weak.', 'danger');
+      if (c.thirst <= 0) { c.health -= 4; if (c.health <= 0) { this.clan.kill(c, 'thirst'); return; } }
       if (this.player.poison > 0) {
         c.health -= 7 * this.player.poison;
         this.player.poison = Math.max(0, this.player.poison - 0.07);
@@ -995,6 +1003,7 @@ export class Game {
     this.combat.update(dt);
     this.fire.update(dt);
     this.mossBalls.update(dt);
+    tickWaterfalls(dt);
     this.fun.update(dt);
     this.codeBreakers.update(dt);
     this.bees.update(dt);

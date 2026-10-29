@@ -324,6 +324,9 @@ export class AudioEngine {
   }
 
   // ------------------------------------------------------------ player & cats
+  /** Soft wet lapping sound while drinking. */
+  lap() { this.burst(0.05, 0.05, 'bandpass', 1500 + Math.random() * 600, 3); }
+
   footstep(surface: Surface, intensity: number) {
     const v = 0.035 * intensity;
     switch (surface) {

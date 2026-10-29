@@ -142,6 +142,10 @@ export interface Cat {
   questGiven?: boolean;
   /** Clan meetings missed (every third is a broken rule). */
   meetingStrikes?: number;
+  /** 100 = not thirsty, 0 = parched (player only). */
+  thirst?: number;
+  /** A forbidden mate from another clan. */
+  secretMate?: string;
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;

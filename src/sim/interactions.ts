@@ -61,11 +61,27 @@ export class Interactions {
     g.ui.toast('You aren\'t carrying anything.', 'info');
   }
 
-  drink() {
+  /** First-person view of your tongue lapping water between your paws. */
+  showLapping(seconds = 1.8) {
+    const g = this.game;
+    const pc = g.clan.player;
+    const paw = pc.app.paws ?? (pc.app.white > 0.05 || pc.app.pattern === 'tuxedo' ? '#f4f1ea' : pc.app.base);
+    document.querySelector('.drink-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.className = 'drink-overlay';
+    ov.style.setProperty('--paw', paw);
+    ov.innerHTML = '<div class="paw l"></div><div class="drops"></div><div class="tongue"></div><div class="paw r"></div>';
+    if (!g.player.thirdPerson) document.body.appendChild(ov);
+    for (let i = 0; i < 4; i++) setTimeout(() => g.audio.lap(), i * 320);
+    setTimeout(() => ov.remove(), seconds * 1000);
+  }
+
+  drink(amount = 100) {
     const g = this.game;
     const pl = g.player;
     const pc = g.clan.player;
-    g.audio.eat();
+    pc.thirst = Math.min(100, (pc.thirst ?? 100) + amount);
+    this.showLapping();
     pl.stamina = 100;
     pc.health = Math.min(pc.maxHealth, pc.health + 5);
     const drought = g.events.active.some((e) => e.type === 'drought');
@@ -228,6 +244,8 @@ export class Interactions {
       if (pl.prey.length) { this.current = { text: `Drop your catch on the fresh-kill pile`, action: () => this.depositPrey() }; return; }
       if (g.clan.food >= 1) { this.current = { text: `Eat from the fresh-kill pile (${Math.floor(g.clan.food)} left)`, action: () => this.eatFromPile() }; return; }
     }
+    // the camp's drinking pool
+    if (dist2(p.x, p.z, g.camp.pool.x, g.camp.pool.z) < 1.6) { this.current = { text: 'Drink from the camp pool 💧', action: () => this.drink() }; return; }
     // water: lap from the edge of a stream, pond or lake
     {
       const ax = p.x + f.x * 1.1, az = p.z + f.z * 1.1;
@@ -875,6 +893,46 @@ export class Interactions {
       clan.infraction('helpOutsiders', g.npcs.witnesses(g.player.pos.x, g.player.pos.z, 25));
       g.ui.dialog({ speaker: c, text: 'You... you\'d do that? Thank you.', options: [{ label: 'Farewell', action: done }], onClose: done });
     } });
+    // forbidden romance across clan borders
+    if (isRival && !pc.exiled && (pc.stage === 'warrior' || pc.stage === 'apprentice') && c.stage !== 'kit' && c.stage !== 'elder' && c.sex !== pc.sex && !a.hostile) {
+      const r = clan.rel(c, pc);
+      const caughtCheck = (risk: number) => {
+        const w = g.npcs.witnesses(g.player.pos.x, g.player.pos.z, 28);
+        if (w.length || simRng.chance(risk)) {
+          clan.infraction('helpOutsiders', w.length ? w : (clan.leader && !clan.leader.isPlayer ? [clan.leader.id] : []), `secret romance with a ${clanName} cat`);
+          g.ui.toast(`⚠ Strike! Someone saw you with ${displayName(c)} of ${clanName}. A forbidden romance breaks the code!`, 'danger');
+          return true;
+        }
+        return false;
+      };
+      if (pc.secretMate === c.id) {
+        opts.push({ label: 'Meet in secret 💕', hint: 'you might get caught!', action: () => {
+          r.romance = clamp(r.romance + 5, 0, 100);
+          clan.adjust(c, pc, 4);
+          const caught = caughtCheck(0.12);
+          g.audio.purr();
+          g.ui.dialog({ speaker: c, text: caught ? '*ears flatten* Someone saw us! Go — quickly!' : simRng.pick(['I counted the moons until I could see you again.', '*presses close* Our clans would never understand… but I don\'t care.', 'Meet me by the border stones at moonhigh?']), options: [{ label: '*purrs*', action: done }], onClose: done });
+        } });
+      } else {
+        opts.push({ label: 'Flirt', hint: 'forbidden — careful!', action: () => {
+          const likes = op > 5 && !c.mate;
+          if (likes) { r.romance = clamp(r.romance + 8, 0, 100); clan.adjust(c, pc, 3); }
+          else clan.adjust(c, pc, -2);
+          const caught = caughtCheck(0.05);
+          g.ui.dialog({ speaker: c, text: caught ? 'We shouldn\'t be seen like this!' : likes ? simRng.pick(['*whiskers twitch* You\'re bold, for a ' + g.territories.homeName + ' cat.', 'Maybe I\'ll see you at the next Gathering…', '*purrs quietly* Don\'t let anyone hear you say that.']) : 'Hmph. Go back to your own clan.', options: [{ label: 'Farewell', action: done }], onClose: done });
+        } });
+        if (!pc.mate && !pc.secretMate && r.romance >= 30 && op >= 35 && !c.mate) opts.push({ label: 'Ask to be your secret mate 💕', hint: 'forbidden — you might get caught!', action: () => {
+          const yes = r.romance >= 45 || simRng.chance(0.5);
+          const caught = caughtCheck(0.08);
+          if (yes) {
+            pc.secretMate = c.id; c.secretMate = pc.id;
+            r.romance = clamp(r.romance + 10, 0, 100);
+            clan.remember(pc, `${c.given} of ${clanName} and I are secret mates. No one can know.`, 8, c.id);
+          }
+          g.ui.dialog({ speaker: c, text: yes ? `*glances around, then touches noses with you* Yes. But no one can ever know — not your clan, not mine.${caught ? ' …Oh no. Did someone see us?' : ''}` : 'I… I can\'t. It\'s against the code. I\'m sorry.', options: [{ label: yes ? '💕' : 'I understand', action: done }], onClose: done });
+        } });
+      }
+    }
     if (!truce && isRival) opts.push({ label: 'Challenge them', hint: 'fight', action: () => { done(); a.hostile = true; a.userAggressive = true; g.combat.engage(a, g.player); } });
     if (c.clan === 'loner' && !pc.exiled && clan.leader && !clan.leader.isPlayer) opts.push({ label: 'Suggest they ask to join the clan', action: () => {
       clan.adjust(c, pc, 5);

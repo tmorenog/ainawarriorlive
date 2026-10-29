@@ -67,6 +67,26 @@ export interface WorldContext {
 }
 
 const TREASURE_GEO = new THREE.IcosahedronGeometry(0.045, 0);
+// Waterfalls share one streaky, scrolling water texture
+let _fallMat: THREE.MeshBasicMaterial | null = null;
+function waterfallMat() {
+  if (_fallMat) return _fallMat;
+  const cv = document.createElement('canvas');
+  cv.width = 64; cv.height = 128;
+  const x = cv.getContext('2d')!;
+  x.fillStyle = '#9fd0ee'; x.fillRect(0, 0, 64, 128);
+  for (let i = 0; i < 70; i++) {
+    x.fillStyle = `rgba(255,255,255,${0.25 + Math.random() * 0.6})`;
+    x.fillRect(Math.random() * 64, Math.random() * 128, 1 + Math.random() * 3, 8 + Math.random() * 30);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 2);
+  _fallMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
+  return _fallMat;
+}
+/** Scroll the waterfall water downwards. */
+export function tickWaterfalls(dt: number) { if (_fallMat?.map) _fallMat.map.offset.y += dt * 1.6; }
 const TWIG_GEO = new THREE.BoxGeometry(0.4, 0.025, 0.025);
 
 class InstBuilder {
@@ -625,6 +645,41 @@ export class ChunkManager {
             props.push(prep(hole, [0.08, 0.06, 0.05]));
           }
           chunk.colliders.push({ x: l.x, z: l.z, r: 2.2 });
+          break;
+        }
+        case 'waterfall': {
+          // a rocky cliff with white water tumbling into a clear pool
+          chunk.clearZones.push({ x: l.x, z: l.z, r: l.radius + 4 });
+          const pond = ctx.terrain.ponds.find((p) => Math.hypot(p.x - l.x, p.z - l.z) < 1);
+          const wy = pond ? pond.h0 - 0.3 : y;
+          if (pond) {
+            const pg = new THREE.CircleGeometry(l.radius * 1.15, 24);
+            pg.rotateX(-Math.PI / 2);
+            const pm = new THREE.Mesh(pg, this.pondMat);
+            pm.position.set(l.x, wy, l.z);
+            pm.renderOrder = 2;
+            chunk.group.add(pm);
+          }
+          const cx = l.x, cz = l.z - l.radius - 1.2;
+          for (let i = -2; i <= 2; i++) {
+            const rx = cx + i * 2.2, rz = cz - Math.abs(i) * 0.6;
+            const s = i === 0 ? 4.2 : rng.range(3, 4.4);
+            rocks[(i + 3) % 3].add(rx, chunk.heightAt(rx, rz) - 0.3, rz, rng.range(0, 6), s, s * 1.5, s, [0.55, 0.56, 0.58]);
+            chunk.colliders.push({ x: rx, z: rz, r: s * 0.38 });
+          }
+          const fall = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 5.6, 1, 1), waterfallMat());
+          fall.position.set(cx, wy + 2.8, cz + 1.25);
+          fall.renderOrder = 3;
+          chunk.group.add(fall);
+          const foam = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf2f8ff, transparent: true, opacity: 0.6 }));
+          foam.scale.set(1.4, 0.35, 0.8);
+          foam.position.set(cx, wy, cz + 1.5);
+          chunk.group.add(foam);
+          for (let i = 0; i < 10; i++) {
+            const a = rng.range(0, Math.PI * 2), d = l.radius * rng.range(0.95, 1.3);
+            const rx = l.x + Math.cos(a) * d, rz = l.z + Math.sin(a) * d;
+            reeds.add(rx, chunk.heightAt(rx, rz), rz, rng.range(0, 6), 1, rng.range(0.8, 1.3), 1, [0.5, 0.7, 0.35]);
+          }
           break;
         }
         case 'pond': {

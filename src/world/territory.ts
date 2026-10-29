@@ -13,7 +13,7 @@ export interface RivalClanDef {
   temperament: 'proud' | 'cautious' | 'hostile' | 'friendly';
 }
 
-export type LandmarkKind = 'bigTree' | 'sunRocks' | 'hollow' | 'fallenGiant' | 'oldSett' | 'pond' | 'trainingHollow' | 'councilRocks' | 'borderStone';
+export type LandmarkKind = 'bigTree' | 'sunRocks' | 'hollow' | 'fallenGiant' | 'oldSett' | 'pond' | 'trainingHollow' | 'councilRocks' | 'borderStone' | 'waterfall';
 
 export interface Landmark {
   id: string;
@@ -33,7 +33,8 @@ const LANDMARK_NAMES: [LandmarkKind, string[]][] = [
   ['hollow', ['Mossy Hollow', 'Whispering Dell', 'Fernshade Hollow']],
   ['fallenGiant', ['the Fallen Giant', 'the Long Log', 'Hollow-Trunk Bridge']],
   ['oldSett', ['the Old Sett', 'the Empty Burrow', 'Digger Mound']],
-  ['pond', ['Frog Pool', 'Stillwater Pond', 'Moon Puddle']],
+  ['pond', ['Frog Pool', 'Stillwater Pond', 'Moon Puddle', 'Dewdrop Pool']],
+  ['waterfall', ['the Singing Falls', 'Whitewater Falls']],
 ];
 
 export const HOME_CLAN_NAMES = ['ThunderClan', 'WindClan', 'RiverClan', 'ShadowClan', 'SkyClan'];
@@ -87,13 +88,13 @@ export class Territories {
     // Home landmarks
     let idx = 0;
     for (const [kind, pool] of LANDMARK_NAMES) {
-      const count = kind === 'bigTree' ? 2 : 1;
+      const count = kind === 'bigTree' ? 2 : kind === 'pond' ? 3 : kind === 'waterfall' ? 2 : 1;
       for (let c = 0; c < count; c++) {
         const a = rng.range(0, Math.PI * 2);
         const d = rng.range(55, 135);
         this.landmarks.push({
           id: `lm${idx++}`, name: pool[c % pool.length], kind,
-          x: Math.cos(a) * d, z: Math.sin(a) * d, radius: kind === 'pond' ? 7 : 6, home: true,
+          x: Math.cos(a) * d, z: Math.sin(a) * d, radius: kind === 'pond' ? (c === 0 ? 7 : 3.5) : kind === 'waterfall' ? 5 : 6, home: true,
         });
       }
     }

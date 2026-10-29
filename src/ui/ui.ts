@@ -358,6 +358,7 @@ export class UI {
       <div class="hud-sub">${esc(roleLabel(c))} · ${Math.floor(c.age)} moons · ${g.clan.playerReputationLabel()} · ${coinStr}${extra ? ' · ' + extra : ''}</div>
       <div class="bar-label"><span>Health</span><span>${Math.round(c.health)}</span></div><div class="bar health"><i style="width:${hp}%"></i></div>
       <div class="bar-label"><span>Hunger</span><span>${c.hunger < 20 ? 'starving' : c.hunger < 45 ? 'hungry' : 'fed'}</span></div><div class="bar hunger"><i style="width:${c.hunger}%"></i></div>
+      <div class="bar-label"><span>Thirst</span><span>${(c.thirst ?? 100) < 15 ? 'parched' : (c.thirst ?? 100) < 40 ? 'thirsty' : 'fine'}</span></div><div class="bar thirst"><i style="width:${c.thirst ?? 100}%"></i></div>
       <div class="bar stamina"><i style="width:${p.stamina}%"></i></div>
       <div class="hud-inv">${inv.length ? esc(inv.join('  ')) : '<span style="color:var(--ink-dim)">Carrying nothing</span>'}</div>`;
   }
@@ -454,6 +455,7 @@ export class UI {
       const icons: Record<string, string> = { leader: '👑', warriors: '⚔️', apprentices: '🐾', nursery: '🍼', elders: '🌙', medicine: '🌿' };
       for (const d of Object.values(camp.dens)) places.push({ label: d.label, icon: icons[d.name] ?? '🏠', x: d.x, z: d.z, y: g.groundAt(d.x, d.z) + d.radius * 0.85 + 0.55 });
       places.push({ label: 'High Rock', icon: '🪨', x: camp.highRock.x, z: camp.highRock.z, y: camp.highRock.top + 0.6 });
+      places.push({ label: 'Drinking pool', icon: '💧', x: camp.pool.x, z: camp.pool.z, y: g.groundAt(camp.pool.x, camp.pool.z) + 0.6 });
       places.push({ label: `Fresh-kill pile (${Math.floor(g.clan.food)})`, icon: '🍖', x: camp.pile.x, z: camp.pile.z, y: g.groundAt(camp.pile.x, camp.pile.z) + 0.6 });
       places.push({ label: 'Camp entrance', icon: '🌲', x: camp.entrance.x, z: camp.entrance.z - 2, y: g.groundAt(camp.entrance.x, camp.entrance.z - 2) + 1.2 });
       for (const p of places) {
