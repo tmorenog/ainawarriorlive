@@ -101,6 +101,43 @@ const RULES: Rule[] = [
     return { reply: op < -20 ? `Between us? I don't trust ${displayName(o)}. Watch them.` : o.mate ? `${displayName(o)} and ${displayName(c.g.clan.get(o.mate)!)} — you should see how they look at each other.` : `I think ${displayName(o)} is sweet on someone. Don't tell!`, opinion: 3 };
   } },
   { re: /\b(bye|goodbye|see you|farewell|later)\b/i, fn: (c) => ({ reply: tone(c, ['Take care out there!', 'May StarClan light your path.', 'See you at the fresh-kill pile!'], ['Finally.', 'Go, then.'], ['Farewell.', 'Until later.']), opinion: 0 }) },
+  { re: /\b(what are you doing|whatcha doing|what r u doing|busy|wyd)\b/i, fn: (c) => ({ reply: c.pick([
+      c.cat.role === 'medicine' ? 'Sorting herbs. Again. Want to help me tell silverleaf from sunpetal?' : c.cat.stage === 'kit' ? 'Playing! Well, I WAS playing, until you came along. Want to join?' : 'Taking a breather before the next patrol.',
+      'Watching the clouds. That one looks like a rabbit, see?',
+      'Thinking about fresh-kill, honestly.',
+      'Just listening to the forest. It\'s never really quiet, you know.']), opinion: 1 }) },
+  { re: /\b(favou?rite|fave|best (food|prey|place|season|thing))\b/i, fn: (c) => ({ reply: /season|time of year/i.test(c.text) ? `${c.pick(['Rose-leaf, when the blossoms fall like snow', 'Greenleaf — fat prey and warm sun', 'Leaf-fall, I love the crunchy leaves', 'Newleaf, when everything wakes up'])}. That's my favourite season.` : /place|spot/i.test(c.text) ? `My favourite place is ${c.pick(['the Sunning Rocks on a warm day', 'the pool by the waterfall', 'the big oak by the border', 'my nest in the den, if I\'m honest'])}.` : /food|prey|eat/i.test(c.text) ? `My favourite prey? A fat ${c.pick(['vole', 'thrush', 'squirrel', 'mouse', 'rabbit'])}. Nothing beats it.` : c.pick([
+      `My favourite prey? A fat ${c.pick(['vole', 'thrush', 'squirrel', 'mouse', 'rabbit'])}. Nothing beats it.`,
+      `My favourite place is ${c.pick(['the Sunning Rocks on a warm day', 'the pool by the waterfall', 'the big oak by the border', 'my nest in the den, if I\'m honest'])}.`,
+      `${c.pick(['Rose-leaf, when the blossoms fall like snow', 'Greenleaf — fat prey and warm sun', 'Leaf-fall, I love the crunchy leaves', 'Newleaf, when everything wakes up'])}. That's my favourite season.`,
+      'Favourite thing? Sharing tongues after a long day. Simple pleasures.']), opinion: 2, mood: 'happy' }) },
+  { re: /\b(do you like me|like me\??|what do you think of me|am i (your )?friend)\b/i, fn: (c) => ({
+    reply: c.op > 50 ? c.pick(['Like you? You\'re one of my favourite cats in the whole forest!', '*purrs* Of course I do, mouse-brain.']) : c.op > 15 ? c.pick(['Yes, I like you. You\'re good company.', 'You\'re alright. More than alright, actually.'])
+      : c.op < -20 ? c.pick(['Honestly? Not really.', 'You\'ll have to work harder than that.']) : c.pick(['I don\'t know you that well yet.', 'Ask me again in a moon or two.']),
+    opinion: 1 }) },
+  { re: /\b(scared|afraid|frightened|nervous|worried|anxious)\b/i, fn: (c) => ({ reply: c.pick(['*presses against you* It\'s alright. You\'re not alone — the whole clan is here.', 'Being scared is fine. Being brave means doing it anyway.', 'Take a deep breath. Smell the forest. You\'re safe right now.', 'I get scared too. Especially during storms.']), opinion: 4, mood: 'neutral' }) },
+  { re: /\b(sad|lonely|upset|cry|crying|miss)\b/i, fn: (c) => ({ reply: c.pick(['*sits beside you* Do you want to talk about it? Or I can just stay here.', 'Come here. *gently grooms your ear* It\'ll get better, I promise.', 'Everyone feels like that sometimes. You can always come to me.', 'Want to go watch the sunset from the Highrock? It always helps me.']), opinion: 5, mood: 'sad' }) },
+  { re: /\b(happy|glad|excited|yay|great day|wonderful)\b/i, fn: (c) => ({ reply: c.pick(['*tail goes straight up* That makes me happy too!', 'Ha! Your good mood is catching!', 'Days like this are what StarClan made us for.']), opinion: 3, mood: 'happy' }) },
+  { re: /\b(bored|boring|nothing to do)\b/i, fn: (c) => ({ reply: c.pick(['Bored? Let\'s play catch with a moss ball!', 'We could race to the Highrock! Or go hunting!', 'There are always ticks to pick off the elders… *grins*', 'Go smell some flowers. Or find a shiny stone! The kits love those.']), opinion: 2 }) },
+  { re: /\b(tired|sleepy|sleep|nap|rest|yawn)\b/i, fn: (c) => ({ reply: c.pick(['*yawns* Don\'t make me yawn too!', 'A nap in a sunbeam sounds perfect right now.', c.g.time.isNight ? 'It\'s late. You should be in your nest.' : 'You should rest in your den for a bit.']), opinion: 1 }) },
+  { re: /\b(story|tale|tell me about|legend|history)\b/i, fn: (c) => ({ reply: c.pick([
+      'Long ago, the clans fought all the time. Then StarClan gave us the warrior code, and the Gatherings, so we could live in peace.',
+      'The elders say a great storm once blew down half the forest. The clan sheltered together under the Highrock for three days.',
+      'There was once a kit who got lost in the snow. A fox found her first — but then a warrior found the fox. *purrs* Happy ending.',
+      'Ask the elders! They tell it better than me. Mostly because they add more badgers every time.']), opinion: 2 }) },
+  { re: /\b(water|thirsty|drink|pool|waterfall|stream|river|pond)\b/i, fn: (c) => ({ reply: c.pick(['Thirsty? The camp pool is by the centre of camp. Or try the waterfall — the water is so cold!', 'In the morning there\'s dew on the grass. Every drop counts in a drought.', 'Never drink from a puddle near the Thunderpath. It tastes like monsters.']), opinion: 1 }) },
+  { re: /\b(twolegs?|humans?|people|kittypets?|house|monster|thunderpath|road|tinkercat)\b/i, fn: (c) => ({ reply: c.pick(['Twolegs are strange. They walk on two legs and stare at glowing stones in their paws.', 'Kittypets! Soft, round, fed from little bowls… I couldn\'t live like that. Could you?', 'Stay away from the Thunderpath. Monsters don\'t stop for cats.', 'Sometimes Twolegs come with cages and take cats away. Never let them catch you.']), opinion: 1 }) },
+  { re: /\b(flowers?|blossoms?|bees?|daisy|poppy|bluebell)\b/i, fn: (c) => ({ reply: c.pick(['I love the smell of bluebells in newleaf.', 'Watch out for bees around the flowers! I got stung on the nose once.', 'The cherry blossoms in rose-leaf are the prettiest thing in the forest.', 'Smelling flowers always calms me down.']), opinion: 2, mood: 'happy' }) },
+  { re: /\b(dream|dreams|vision|prophecy|omen)\b/i, fn: (c) => ({ reply: c.cat.role === 'medicine' ? c.pick(['Dreams from StarClan are riddles. Tell me what you saw, and I\'ll try to read it.', 'I dreamed of stars falling into the river last night. I\'m still thinking about what it means.']) : c.pick(['I dreamed I could fly! Over the whole forest!', 'If StarClan sends you a dream, tell the medicine cat right away.', 'I don\'t remember my dreams. Lucky, maybe.']), opinion: 2 }) },
+  { re: /\b(gathering|full moon|fourtrees|truce)\b/i, fn: (c) => ({ reply: c.pick(['At the Gathering there\'s a truce — no fighting, by the will of StarClan.', 'I love Gatherings! So much news, and so many new scents.', 'If clouds cover the moon at a Gathering, StarClan is angry.']), opinion: 1 }) },
+  { re: /\b(clover|ashshade)\b/i, fn: (c) => ({ reply: c.cat.given === 'Clover' ? c.pick(['That\'s me! *purrs* Did you need something? Are you hurt?', 'Yes? Oh — you just wanted to say my name? You\'re sweet.']) : c.pick(['Clover Ashshade? She\'s the kindest healer in the forest.', 'Clover patched up my paw last moon. She never complains, not once.']), opinion: 2 }) },
+  { re: /\b(yes|yeah|yep|sure|ok|okay|alright)\b/i, fn: (c) => ({ reply: c.pick(['Good! Then it\'s settled.', '*purrs* I knew you\'d agree.', 'Great. Let\'s go, then!', 'Mm-hm.']), opinion: 1 }) },
+  { re: /\b(no|nope|nah|never)\b/i, fn: (c) => ({ reply: c.pick(['Oh. Alright then.', 'No? Hmph. Suit yourself.', 'Fine, fine. I won\'t push.', '*flicks an ear* Your loss.']), opinion: 0 }) },
+  { re: /\b(lol|haha|hehe|lmao|xd|😂|🤣|😹)/i, fn: (c) => ({ reply: c.pick(['*purr-laughs* You\'re ridiculous.', 'Ha! What\'s so funny?', 'Heh. You\'re in a good mood today.']), opinion: 2, mood: 'happy' }) },
+  { re: /(❤|💕|💖|😻|🥰)/, fn: (c) => ({ reply: c.op > 30 ? '*purrs and bumps your cheek*' : '*tilts head* …What does that mean?', opinion: 2, mood: 'happy' }) },
+  { re: /\b(help|help me|need help|can you help)\b/i, fn: (c) => ({ reply: c.pick(['Of course. What do you need?', 'I\'ll help if I can. Hunting? Herbs? Something worse?', 'Ask the leader for a duty, or the medicine cat if you\'re hurt. I\'ll help however I can.']), opinion: 2 }) },
+  { re: /\b(where|which way|how do i get|lost)\b/i, fn: (c) => ({ reply: c.pick(['Check your map (M) — and follow your nose.', 'Camp is the 🏠 on your compass. Head that way and you can\'t go wrong.', 'The waterfall? Follow the stream uphill and listen for the roar.']), opinion: 1 }) },
+  { re: /\b(meow|mew|mrrp|purr|prr|nya)\b/i, fn: (c) => ({ reply: c.pick(['*mrrp!*', '*purrs back*', 'Mrow?', '*chirps happily*']), opinion: 2, mood: 'happy' }) },
   { re: /\?\s*$/, fn: (c) => ({ reply: has(c.cat, 'curious') ? c.pick(['Good question! I\'ve wondered that myself.', 'Hmm, I\'d have to think about that. What do you think?']) : has(c.cat, 'serious') ? c.pick(['That\'s not something I can answer.', 'Ask the leader.', 'Focus on your duties.']) : c.pick(['I\'m not sure, honestly.', 'Maybe the elders would know.', 'Who can say? StarClan, maybe.']), opinion: 1 }) },
 ];
 
@@ -108,13 +145,17 @@ export function localReply(g: Game, cat: Cat, text: string): ChatResult {
   const me = g.clan.player;
   const c: ChatCtx = { g, cat, me, text, op: g.clan.opinion(cat, me), pick: (a) => simRng.pick(a) };
   for (const r of RULES) if (r.re.test(text)) return r.fn(c);
-  // fallback: personality-flavoured musing that echoes the player
+  // fallback: personality-flavoured musing that echoes the player — plenty of variety
   const short = text.length > 40 ? text.slice(0, 40) + '…' : text;
-  const reply = has(cat, 'shy') ? c.pick(['Oh... um. I see.', '...I don\'t really know what to say.', '*nods quietly*'])
-    : has(cat, 'serious') ? c.pick([`"${short}"? Hm. Is that all?`, 'Interesting. Now, don\'t you have duties?'])
-      : has(cat, 'playful', 'mischievous') ? c.pick([`"${short}" — ha! You say the strangest things.`, 'Heh, you\'re odd. I like it.'])
-        : has(cat, 'curious') ? c.pick(['Really? Tell me more!', 'I never thought of it like that.'])
-          : c.pick(['Mm, I see.', 'Is that so?', 'Hmm. Maybe you\'re right.', 'I\'ll think about that.']);
+  const emote = c.pick(['*nods slowly*', '*tilts head*', '*flicks an ear*', '*blinks*', '*twitches whiskers*', '*thinks for a moment*', '*tail curls thoughtfully*', '*hmms*']);
+  const follow = c.pick(['What made you think of that?', 'Tell me more.', 'And then what?', 'Do you really think so?', 'Hm. I\'ll remember that.', 'You always surprise me.', 'Is that a Twoleg thing?', 'StarClan only knows.']);
+  const reply = has(cat, 'shy') ? c.pick(['Oh... um. I see.', '...I don\'t really know what to say.', `${emote} …okay.`, 'M-maybe? I\'m not sure.'])
+    : has(cat, 'serious') ? c.pick([`"${short}"? Hm. Is that all?`, 'Interesting. Now, don\'t you have duties?', `${emote} Noted.`, 'Words are fine. Deeds are better.'])
+      : has(cat, 'playful', 'mischievous') ? c.pick([`"${short}" — ha! You say the strangest things.`, 'Heh, you\'re odd. I like it.', `${emote} Bet you can't say that three times fast!`, 'Ooh, mysterious. Race you to explain it!'])
+        : has(cat, 'curious') ? c.pick(['Really? Tell me more!', 'I never thought of it like that.', `${emote} ${follow}`, 'Wait, wait — explain from the beginning!'])
+          : has(cat, 'clumsy') ? c.pick(['Huh? Sorry, I was busy tripping over my own tail.', `${emote} Right! …What were we talking about?`])
+            : has(cat, 'lazy') ? c.pick(['*yawns* Mm-hm. Fascinating.', `${emote} Can we talk about it lying down?`])
+              : c.pick(['Mm, I see.', 'Is that so?', 'Hmm. Maybe you\'re right.', 'I\'ll think about that.', `${emote} ${follow}`, `${emote}`, `"${short}"… ${follow}`]);
   return { reply, opinion: 1 };
 }
 

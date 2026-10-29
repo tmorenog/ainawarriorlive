@@ -312,6 +312,7 @@ export class CatModel {
   lookPitch = 0;
   scale = 1;
   legLen = 0.16;
+  private tipMat: THREE.MeshLambertMaterial | null = null;
   shoulderY = 0.26;
   eyeHeight = 0.3;
   private poseBlend = { bodyY: 0, pitch: 0, legF: 0, legB: 0, headP: 0, tailUp: 0, lie: 0, curl: 0, roll: 0 };
@@ -337,6 +338,7 @@ export class CatModel {
   }
 
   private rebuild() {
+    this.tipMat = null;
     this.disposeParts();
     this.body.clear();
     if (this.shadowBlob) { this.root.remove(this.shadowBlob); this.shadowBlob = null; }
@@ -409,7 +411,7 @@ export class CatModel {
     const headMat = new THREE.MeshLambertMaterial({ map: tx.head });
     const bellyC = app.white > 0.15 || app.pattern === 'tuxedo' || app.pattern === 'bicolor' || app.pattern === 'calico'
       ? col('#f4f1ea') : col(app.pattern === 'colorpoint' ? app.base : app.base).lerp(col('#ffffff'), 0.3);
-    const bellyMat = new THREE.MeshLambertMaterial({ color: bellyC });
+    const bellyMat = new THREE.MeshLambertMaterial({ color: app.belly ? col(app.belly) : bellyC });
     this.mats.push(torsoMat, legMat, tailMat, headMat, bellyMat);
 
     const bodyParts = new THREE.Group();
@@ -697,11 +699,13 @@ export class CatModel {
       const cg = new THREE.CylinderGeometry(r1, r0, segL * 1.15, 7);
       cg.rotateZ(Math.PI / 2);
       cg.translate(-segL / 2, 0, 0);
-      this.addMesh(seg, cg, tailMat, true);
+      const tipped = !!app.tailTip && i >= segN - (segN > 4 ? 2 : 1);
+      if (tipped && !this.tipMat) { this.tipMat = new THREE.MeshLambertMaterial({ color: col(app.tailTip!) }); this.mats.push(this.tipMat); }
+      this.addMesh(seg, cg, tipped ? this.tipMat! : tailMat, true);
       if (i === segN - 1) {
         const tip = new THREE.SphereGeometry(r1, 7, 5);
         tip.translate(-segL, 0, 0);
-        this.addMesh(seg, tip, tailMat, true);
+        this.addMesh(seg, tip, tipped ? this.tipMat! : tailMat, true);
       }
       this.tailSegs.push(seg);
       parent = seg;

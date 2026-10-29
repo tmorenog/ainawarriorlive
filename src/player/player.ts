@@ -69,6 +69,20 @@ export class Player implements Fighter {
   /** 0 crouch · 1 crawl · 2 walk · 3 trot · 4 canter (Shift = sprint) */
   gait = 3;
   snowSink = 0;
+  tripT = 0;
+  private tripCd = 0;
+  trip() {
+    const game = this.game;
+    this.tripT = 0.9;
+    this.tripCd = game.clock + 12;
+    this.vel.x *= 0.1; this.vel.z *= 0.1;
+    this.stamina = Math.max(0, this.stamina - 12);
+    game.audio.land();
+    this.shake = Math.max(this.shake, 0.3);
+    game.ui.floatText('*trips*', '#ffd9a0');
+    game.ui.toast(simRng.pick(['You trip over your own paws and tumble into the dirt! 😹', 'Whoops! Your paws tangle and down you go.', 'You stumble over a root and land on your nose. Very graceful.']), 'info');
+    for (const a of game.npcs.agents.values()) if (a.cat.clan === 'home' && Math.hypot(a.pos.x - this.pos.x, a.pos.z - this.pos.z) < 8 && Math.random() < 0.4) a.say(simRng.pick(['*snickers*', 'Are you alright?', 'Clumsy-paws!']), 2);
+  }
   private snowWarned = false;
   /** After smelling flowers you stay calm for a while. */
   calmUntil = -1;
@@ -222,6 +236,10 @@ export class Player implements Fighter {
     const rise = (nh - ground) / Math.max(1e-4, Math.hypot(this.vel.x * dt, this.vel.z * dt));
     if (rise > 1.6 && this.onGround) { this.vel.x *= 0.2; this.vel.z *= 0.2; }
 
+    // clumsy cats trip over their own paws now and then
+    this.tripT = Math.max(0, this.tripT - dt);
+    if (cat.traits.includes('clumsy') && this.onGround && moving && this.tripT <= 0 && game.clock > this.tripCd
+        && Math.random() < dt * (this.sprinting ? 0.06 : this.gait >= 4 ? 0.025 : 0.006)) this.trip();
     // stamina
     if (this.sprinting) this.stamina -= dt * 17;
     else if (this.swimming) this.stamina -= dt * (moving ? 5 : 2.5);
@@ -379,6 +397,7 @@ export class Player implements Fighter {
     this.vel.set(0, 0, 0);
     this.onGround = true;
     this.game.audio.land();
+    if (this.cat.traits.includes('clumsy') && Math.random() < 0.15) { this.trip(); return; }
     const scale = Math.max(0.45, this.model.scale);
     // attack pounce on a hostile
     const hostile = this.findTarget(0.9 * scale + 0.4, 1.4);
@@ -574,6 +593,7 @@ export class Player implements Fighter {
     if (!this.pounce) {
       if (this.sleeping) m.pose = 'sleep';
       else if (this.swimming) m.pose = 'swim';
+      else if (this.tripT > 0) m.pose = 'lie';
       else if (this.crouching || this.charging) m.pose = 'crouch';
       else if (this.inCombatT > 0) m.pose = 'fight';
       else if (this.speed > 0.1) m.pose = 'walk';

@@ -357,6 +357,13 @@ export class Interactions {
       this.boredTalk(a, done);
       return;
     }
+    if (a.cantSleep && g.time.isNight) {
+      const lines = ['I can\'t sleep… too many thoughts. Stay with me a while?', '*gazing at the stars* Do you think StarClan can see us right now?', 'You\'re awake too? The night is so quiet…'];
+      const opts0 = this.talkOptions(a, done);
+      opts0.unshift({ label: 'Keep them company', action: () => { clan.adjust(c, pc, 5, { text: `${pc.given} kept me company when I couldn't sleep.`, weight: 3 }); g.audio.purr(); g.ui.dialog({ speaker: c, text: '*leans against you* Thank you… I think I could sleep now.', options: [{ label: 'Goodnight', action: () => { done(); a.cantSleep = false; a.activity = 'idle'; a.actTimer = 0; } }], onClose: done }); } });
+      g.ui.dialog({ speaker: c, text: simRng.pick(lines), options: opts0, onClose: done, input: (t) => this.freeTalk(a, t, done) });
+      return;
+    }
     let text = greetPlayer(c, pc, op, { night: g.time.isNight, food: clan.food, clanSize: clan.home().length, weather: g.weatherLabel(), recent: clan.lastRecent });
     if (pc.exiled && g.npcs.isPlayerFriend(a)) text = simRng.pick([
       `${pc.given}! *presses close* It hasn't been the same without you. I hate this.`,
@@ -734,6 +741,23 @@ export class Interactions {
     a.actTimer = 0;
     a.forcedPose = null;
     a.heading = Math.atan2(g.player.pos.z - a.pos.z, g.player.pos.x - a.pos.x);
+    const hurtMe = g.player.poison > 0 || pc.sick > 10 || pc.injury > 10 || pc.health < pc.maxHealth - 15;
+    if (c.role === 'medicine' && hurtMe) {
+      // a medicine cat never refuses a patient, even half asleep
+      a.say(simRng.pick(['*yawns* You\'re hurt? Come here, let me see.', 'Mmf… wounded? Right. Herbs. Hold still.', 'Wha—? Oh, you\'re hurt! Quickly, into the den.']), 3);
+      setTimeout(() => {
+        this.seekHealing(c);
+        if (simRng.chance(0.6)) setTimeout(() => { if (a.activity === 'idle') { a.say('*curls back up* Wake me if it gets worse…', 3); a.activity = 'sleep'; a.actTimer = 40; } }, 5000);
+        else a.say('I\'m awake now anyway. I\'ll sort the herbs.', 3);
+      }, 900);
+      return;
+    }
+    if (clan.opinion(c, pc) >= 45 && !grumpy && simRng.chance(0.7)) {
+      a.say(simRng.pick([`*blinks* ${pc.given}? For you, I'll get up. What's wrong?`, 'Mm? Can\'t sleep either? Come, sit with me.', '*stretches* Alright, alright, I\'m up. What is it?']), 3.5);
+      clan.adjust(c, pc, 1);
+      setTimeout(() => { if (a.activity === 'idle') this.talk(a); }, 700);
+      return;
+    }
     if (simRng.chance(lashChance)) {
       // a sleepy swipe: stings, but never serious
       a.mood = 'angry';

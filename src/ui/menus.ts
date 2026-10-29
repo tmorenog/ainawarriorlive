@@ -226,7 +226,7 @@ export class Menus {
     const oePick = colorInput(oe, () => spec.app.eye2 ?? '#5aa2e6', (v) => { spec.app.eye2 = v; oeCheck.checked = true; }, 'Second eye colour');
     oeCheck.onchange = () => { spec.app.eye2 = oeCheck.checked ? oePick.value : undefined; refresh(); };
     // personality: pick up to two traits
-    const pr2 = field('Personality (pick two)');
+    const pr2 = field('Personality (pick up to four)');
     spec.traits = spec.traits ?? [];
     const traitEls: HTMLElement[] = [];
     for (const t of TRAITS) {
@@ -236,9 +236,20 @@ export class Menus {
         const list = spec.traits!;
         const i = list.indexOf(t);
         if (i >= 0) list.splice(i, 1);
-        else { list.push(t); if (list.length > 2) list.shift(); }
+        else { list.push(t); if (list.length > 4) list.shift(); }
         TRAITS.forEach((x, k) => traitEls[k].classList.toggle('on', list.includes(x)));
       };
+    }
+    // white markings
+    const mk = field('Markings (tap to add)');
+    const marks: [string, string, () => boolean, (on: boolean) => void][] = [
+      ['White tail tip', 'tail', () => !!spec.app.tailTip, (on) => (spec.app.tailTip = on ? '#f4f1ea' : undefined)],
+      ['White paws', 'paws', () => spec.app.paws === '#f4f1ea', (on) => (spec.app.paws = on ? '#f4f1ea' : undefined)],
+      ['White belly', 'belly', () => !!spec.app.belly, (on) => (spec.app.belly = on ? '#f4f1ea' : undefined)],
+    ];
+    for (const [label, , get, set] of marks) {
+      const b = h('button', `chip ${get() ? 'on' : ''}`, label, mk);
+      b.onclick = () => { set(!get()); b.classList.toggle('on', get()); refresh(); };
     }
     chips<FurLength>('Fur length', [['short', 'Short'], ['medium', 'Medium'], ['long', 'Long']], () => spec.app.fur, (v) => (spec.app.fur = v));
     chips<BodyType>('Body type', [['slender', 'Slender'], ['average', 'Average'], ['stocky', 'Stocky'], ['large', 'Large']], () => spec.app.body, (v) => (spec.app.body = v));

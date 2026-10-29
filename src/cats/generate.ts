@@ -160,7 +160,7 @@ export function inheritAppearance(a: Appearance, b: Appearance, rng: RNG): Appea
   };
 }
 
-export const TRAITS: Trait[] = ['friendly', 'shy', 'brave', 'curious', 'serious', 'playful', 'suspicious', 'aggressive', 'loyal', 'ambitious', 'kind', 'mischievous', 'calm', 'lazy'];
+export const TRAITS: Trait[] = ['friendly', 'shy', 'brave', 'curious', 'serious', 'playful', 'suspicious', 'aggressive', 'loyal', 'ambitious', 'kind', 'mischievous', 'calm', 'lazy', 'clumsy'];
 const CONFLICTS: [Trait, Trait][] = [
   ['friendly', 'suspicious'], ['shy', 'brave'], ['serious', 'playful'], ['aggressive', 'kind'], ['calm', 'aggressive'], ['lazy', 'ambitious'], ['shy', 'friendly'],
 ];
@@ -198,6 +198,7 @@ export function personalityFrom(traits: Trait[], rng: RNG): Personality {
       case 'kind': bump('kindness', 0.4); bump('aggression', -0.15); break;
       case 'mischievous': bump('mischief', 0.45); break;
       case 'calm': bump('aggression', -0.2); bump('bravery', 0.1); break;
+      case 'clumsy': bump('mischief', 0.1); bump('sociability', 0.05); break;
       case 'lazy': bump('ambition', -0.25); break;
     }
   }

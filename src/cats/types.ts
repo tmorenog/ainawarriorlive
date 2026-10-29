@@ -12,7 +12,7 @@ export type EarShape = 'pointed' | 'rounded' | 'tufted' | 'folded';
 export type TailShape = 'long' | 'short' | 'bushy' | 'kinked';
 export type Trait =
   | 'friendly' | 'shy' | 'brave' | 'curious' | 'serious' | 'playful'
-  | 'suspicious' | 'aggressive' | 'loyal' | 'ambitious' | 'kind' | 'mischievous' | 'calm' | 'lazy';
+  | 'suspicious' | 'aggressive' | 'loyal' | 'ambitious' | 'kind' | 'mischievous' | 'calm' | 'lazy' | 'clumsy';
 export type Lesson = 'hunting' | 'tracking' | 'fighting' | 'exploring' | 'territory' | 'rules';
 export const LESSONS: Lesson[] = ['hunting', 'tracking', 'fighting', 'exploring', 'territory', 'rules'];
 export const LESSON_LABEL: Record<Lesson, string> = {
@@ -44,6 +44,9 @@ export interface Appearance {
   accessoryColor?: string;
   /** Paw colour override (e.g. Blackfoot's black paws). */
   paws?: string;
+  /** White (or any colour) markings: tail tip and belly. */
+  tailTip?: string;
+  belly?: string;
 }
 
 export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm' | 'bow' | 'flowerEar' | 'clawNecklace'

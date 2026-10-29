@@ -328,7 +328,7 @@ export class Game {
       // the clan's cats depend only on which clan you join, so every new cat in ThunderClan meets the same clanmates
       const rng = new RNG(hashString(`${spec.lore}:${spec.clanName}`));
       const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: 0, rng: new RNG((Math.random() * 1e9) | 0) });
-      if (spec.traits?.length) { me.traits = spec.traits.slice(0, 2); me.pers = personalityFrom(me.traits, new RNG((Math.random() * 1e9) | 0)); }
+      if (spec.traits?.length) { me.traits = spec.traits.slice(0, 4); me.pers = personalityFrom(me.traits, new RNG((Math.random() * 1e9) | 0)); }
       this.clan.newClan(me, rng);
       this.youngAgain();
       this.clan.fillDens(rng);
@@ -446,7 +446,7 @@ export class Game {
       ?? home.find((x) => x.stage !== 'kit');
     const father = mother ? c.get(mother.mate) : null;
     const me = createCat({ age: 3, sex: spec.sex, given: spec.name, app: { ...spec.app }, day: this.time.day, usedNames: c.usedNames, rng: new RNG((Math.random() * 1e9) | 0) });
-    if (spec.traits?.length) { me.traits = spec.traits.slice(0, 2); me.pers = personalityFrom(me.traits, new RNG((Math.random() * 1e9) | 0)); }
+    if (spec.traits?.length) { me.traits = spec.traits.slice(0, 4); me.pers = personalityFrom(me.traits, new RNG((Math.random() * 1e9) | 0)); }
     me.bornDay = this.time.day - 3;
     me.isPlayer = true;
     c.cats[me.id] = me;

@@ -62,6 +62,8 @@ export class NpcAgent implements Fighter {
   warned = 0;
   mood: Mood = 'neutral';
   forcedPose: Pose | null = null;
+  /** Awake at night because they can't sleep. */
+  cantSleep = false;
   bedSpot: { x: number; z: number } | null = null;
   visible = true;
   stalkT = 0;
@@ -498,6 +500,17 @@ export class NpcManager {
   }
 
   private goToBed(a: NpcAgent) {
+    const h0 = this.game.time.hour;
+    if ((h0 >= 21 || h0 < 5) && a.cat.stage !== 'kit' && !a.cat.isPlayer && simRng.chance(0.07)) {
+      // can't sleep tonight: sits awake in camp for a while
+      a.activity = 'sit';
+      a.actTimer = simRng.range(40, 90);
+      a.cantSleep = true;
+      const p = this.game.camp.randomCampPoint(() => simRng.next());
+      a.setTarget(p.x, p.z);
+      return;
+    }
+    a.cantSleep = false;
     const d = this.game.camp.dens[this.denFor(a.cat)];
     if (!a.bedSpot || Math.hypot(a.bedSpot.x - d.x, a.bedSpot.z - d.z) > d.radius + 1) a.bedSpot = simRng.pick(d.beds);
     a.activity = 'sleep';

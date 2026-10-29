@@ -49,7 +49,7 @@ export const RULES: Record<RuleId, { text: string; severity: number }> = {
 export const RIVAL_CAT_COUNT = 10;
 
 /** Clover Ashshade: dark slate-blue tabby with black stripes, a white chest and green eyes. */
-export const CLOVER_APP = { pattern: 'mackerel' as const, base: '#535c73', second: '#15171c', white: 0.16, eye: '#78c24c', fur: 'medium' as const, body: 'average' as const };
+export const CLOVER_APP = { pattern: 'mackerel' as const, base: '#535c73', second: '#15171c', white: 0.16, eye: '#78c24c', eye2: '#5aa2e6', tailTip: '#f4f1ea', fur: 'medium' as const, body: 'average' as const };
 
 export class ClanSim {
   cats: Record<string, Cat> = {};
