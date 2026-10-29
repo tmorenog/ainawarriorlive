@@ -67,6 +67,7 @@ export interface WorldContext {
 }
 
 const TREASURE_GEO = new THREE.IcosahedronGeometry(0.045, 0);
+const TWIG_GEO = new THREE.BoxGeometry(0.4, 0.025, 0.025);
 
 class InstBuilder {
   mats: number[] = [];
@@ -1008,6 +1009,7 @@ export class ChunkManager {
     const season = ctx.season;
     const detail = new THREE.Group();
     const grass = new InstBuilder();
+    const twigs = new InstBuilder();
     const ferns = new InstBuilder();
     const flowers = new InstBuilder();
     const mush = new InstBuilder();
@@ -1035,7 +1037,11 @@ export class ChunkManager {
         if (y < this.waterLevel + 0.05) continue;
         const campD = Math.hypot(x, z);
         if (campD < 12) continue;
-        if (f & 8) { if (r0 < 0.04) grass.add(x, y, z, r0 * 100, 0.2, 0.2, 0.2, [0.3, 0.45, 0.2]); continue; }
+        if (f & 8) {
+          if (r0 < 0.015) grass.add(x, y, z, r0 * 100, 0.2, 0.2, 0.2, [0.3, 0.45, 0.2]);
+          else if (r0 < 0.22) twigs.add(x, y + 0.01, z, r0 * 37, rng.range(0.6, 1.6), 1, 1, rng.pick([[0.13, 0.1, 0.08], [0.2, 0.15, 0.11], [0.08, 0.07, 0.06]] as [number, number, number][]), 0, rng.range(-0.2, 0.2));
+          continue;
+        }
         let pGrass = 0, pFern = 0, pFlower = 0, pMush = 0, hMul = 1;
         switch (biome) {
           case 'forest': pGrass = 0.35; pFern = 0.07; pFlower = 0.015; pMush = 0.01; hMul = 0.7; break;
@@ -1172,6 +1178,7 @@ export class ChunkManager {
     const fm = add(flowerPatches.build(A.flower, A.mat.flower, false));
     const bm = add(berries.build(A.deathberry, A.mat.bush, false));
     add(grass.build(A.grass, A.mat.grass, false));
+    add(twigs.build(TWIG_GEO, A.mat.static, false));
     add(ferns.build(A.fern, A.mat.fern, false));
     add(flowers.build(A.flower, A.mat.flower, false));
     add(mush.build(A.mushroom, A.mat.static, false));

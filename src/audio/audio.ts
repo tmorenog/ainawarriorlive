@@ -333,7 +333,7 @@ export class AudioEngine {
       case 'rock': this.burst(0.03, v * 0.8, 'bandpass', 1800, 3); break;
       case 'mud': this.burst(0.08, v * 1.2, 'lowpass', 500, 2); break;
       case 'water': this.burst(0.14, v * 2, 'bandpass', 1200, 0.8); this.burst(0.1, v, 'highpass', 4000, 0.5, undefined, 0.03); break;
-      case 'snow': this.burst(0.1, v * 1.2, 'bandpass', 700, 1.2); break;
+      case 'snow': this.burst(0.13, v * 1.6, 'lowpass', 900, 1.0); this.burst(0.05, v * 0.9, 'bandpass', 1900, 6, undefined, 0.05); this.burst(0.07, v * 0.6, 'bandpass', 420, 2, undefined, 0.02); break;
       case 'road': this.burst(0.03, v * 0.6, 'bandpass', 2400, 2); break;
       default: this.burst(0.05, v * 0.7, 'lowpass', 1200, 1); break;
     }

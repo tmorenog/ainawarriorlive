@@ -133,7 +133,7 @@ export class EventSystem {
         return true;
       }
       case 'flood': {
-        const rise = simRng.range(1.1, 1.8);
+        const rise = simRng.range(1.8, 2.6);
         add(20, { rise });
         this.waterTarget = BASE_WATER + rise;
         cool(8);
@@ -143,6 +143,7 @@ export class EventSystem {
         g.decisions.floodResponse();
         // strand a cat
         setTimeout(() => this.strandCat(), 8000);
+        setTimeout(() => this.strandCat(), 20000);
         return true;
       }
       case 'drought': {

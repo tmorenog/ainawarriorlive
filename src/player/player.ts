@@ -68,6 +68,8 @@ export class Player implements Fighter {
   confineFlag = false;
   /** 0 crouch · 1 crawl · 2 walk · 3 trot · 4 canter (Shift = sprint) */
   gait = 3;
+  snowSink = 0;
+  private snowWarned = false;
   /** After smelling flowers you stay calm for a while. */
   calmUntil = -1;
   private wheel = 0;
@@ -192,6 +194,13 @@ export class Player implements Fighter {
     else if (this.crouching && this.gait > 1) target = GAITS[0].speed;
     else target = GAITS[this.gait].speed;
     target *= stageSpeed;
+    // deep snow: paws sink in and every step is slow and squishy
+    const snowDeep = game.weather.snowCover > 0.2 && Math.hypot(this.pos.x, this.pos.z) > 17;
+    if (snowDeep) {
+      target *= 1 - Math.min(0.35, game.weather.snowCover * 0.4);
+      this.snowSink += (Math.min(0.06, game.weather.snowCover * 0.07) - this.snowSink) * Math.min(1, dt * 3);
+      if (!this.snowWarned && (ax.x !== 0 || ax.y !== 0)) { this.snowWarned = true; game.ui.toast('❄ The snow is deep and soft — your paws sink with every squishy step, and prey is hard to find.', 'info'); }
+    } else this.snowSink += (0 - this.snowSink) * Math.min(1, dt * 3);
     if (this.swimming) target = 1.4 * Math.max(0.6, stageSpeed);
     if (ax.y < 0 && !this.sprinting) target *= 0.7;
     const f = this.forward();
@@ -218,6 +227,13 @@ export class Player implements Fighter {
     else if (this.swimming) this.stamina -= dt * (moving ? 5 : 2.5);
     else this.stamina += dt * (cat.hunger < 15 ? 5 : 12);
     this.stamina = clamp(this.stamina, 0, 100);
+    // floodwater drags swimmers along and wears them out fast
+    if (this.swimming && game.events.isActive('flood')) {
+      this.vel.x += game.windDir.x * dt * 2.2;
+      this.vel.z += game.windDir.y * dt * 2.2;
+      this.stamina -= dt * 6;
+      if (simRng.chance(dt * 0.4)) game.ui.toast('🌊 The floodwater is dragging you away — swim for high ground!', 'danger');
+    }
     if (this.swimming && this.stamina <= 0) {
       cat.health -= dt * 6;
       if (simRng.chance(dt)) game.ui.toast('You are exhausted and slipping under! Get out of the water!', 'danger');
@@ -298,7 +314,7 @@ export class Player implements Fighter {
 
   surface(biome: string, depth: number): string {
     if (depth > 0.02) return 'water';
-    if (this.game.weather.snowCover > 0.35) return 'snow';
+    if (this.game.weather.snowCover > 0.2 || (this.game.time.season === 'winter' && this.game.weather.kind === 'snow')) return 'snow';
     if (Math.hypot(this.pos.x, this.pos.z) < 17) return 'dirt';
     const c = this.game.chunks.getChunkAt(this.pos.x, this.pos.z);
     if (c && c.flagAt(this.pos.x, this.pos.z) & 2) return 'road';
@@ -552,6 +568,7 @@ export class Player implements Fighter {
   syncModel(dt: number) {
     const m = this.model;
     m.root.position.copy(this.pos);
+    m.root.position.y -= this.snowSink;
     m.root.rotation.y = -this.heading;
     m.speed = this.speed;
     if (!this.pounce) {
@@ -585,7 +602,7 @@ export class Player implements Fighter {
       cam.lookAt(this.pos.x + f.x * 0.5, this.pos.y + eye, this.pos.z + f.z * 0.5);
     } else {
       const fo = 0.15 * scale;
-      cam.position.set(this.pos.x + f.x * fo, this.pos.y + eye - crouchDrop + bobY, this.pos.z + f.z * fo);
+      cam.position.set(this.pos.x + f.x * fo, this.pos.y + eye - crouchDrop - this.snowSink + bobY, this.pos.z + f.z * fo);
       cam.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
     }
     if (this.shake > 0) {

@@ -82,7 +82,7 @@ export class PreyManager {
     const abundance = game.events.preyAbundance();
     if (this.spawnT <= 0) {
       this.spawnT = 1.2;
-      const target = Math.round(this.max * abundance * (game.time.isNight ? 0.7 : 1) * (game.weather.p.rain > 0.5 ? 0.6 : 1) * (game.weather.p.snow > 0.5 ? 0.5 : 1));
+      const target = Math.round(this.max * abundance * (game.time.isNight ? 0.7 : 1) * (game.weather.p.rain > 0.5 ? 0.6 : 1) * (game.weather.p.snow > 0.5 ? 0.5 : 1) * (game.weather.snowCover > 0.3 ? 0.45 : 1));
       if (this.list.length < target) this.spawn();
     }
     for (const pr of [...this.list]) {
@@ -111,6 +111,8 @@ export class PreyManager {
       if (game.chunks.waterDepthAt(sp.x, sp.z) < 0.25) return;
     } else if (game.chunks.waterDepthAt(sp.x, sp.z) > 0.05) return;
     if (Math.hypot(sp.x, sp.z) < 20) return; // not inside camp
+    const ch = game.chunks.getChunkAt(sp.x, sp.z);
+    if (ch && ch.flagAt(sp.x, sp.z) & 8 && simRng.chance(0.85)) return; // burnt forest: almost nothing lives here
     const pr = new Prey(kind, game.scene);
     pr.pos.set(sp.x, this.groundY(pr, sp.x, sp.z), sp.z);
     this.list.push(pr);
