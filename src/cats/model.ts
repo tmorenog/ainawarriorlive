@@ -9,7 +9,7 @@ import { clamp } from '../core/math';
 
 const _footV = new THREE.Vector3();
 const _rootV = new THREE.Vector3();
-export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink';
+export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink' | 'loaf' | 'layDown' | 'playDead' | 'claws' | 'lashTail' | 'stretch';
 export type Mood = 'neutral' | 'happy' | 'angry' | 'afraid' | 'alert' | 'sad';
 
 const STAGE_SCALE: Record<LifeStage, number> = { kit: 0.42, apprentice: 0.7, warrior: 1, elder: 0.97 };
@@ -144,6 +144,71 @@ function makeTextures(app: Appearance, elder: boolean): Textures {
       t.fillStyle = base === '#2b2725' ? '#d9823b' : '#d9823b';
       for (let i = 0; i < 4; i++) blob(t, rng.range(W * 0.25, W * 0.75), rng.range(0, H), rng.range(12, 20), rng);
       break;
+    case 'classic': {
+      // bold swirls (a "bullseye" on each flank) and three stripes down the spine
+      t.strokeStyle = stripeCol;
+      t.lineWidth = 7;
+      for (const cx of [W * 0.24, W * 0.76]) for (const r of [10, 22, 34]) { t.beginPath(); t.ellipse(cx, H * 0.55, r * 1.1, r * 0.8, 0, 0.3, Math.PI * 2 - 0.4); t.stroke(); }
+      t.fillStyle = stripeCol;
+      for (const dx of [-10, 0, 10]) t.fillRect(W * 0.5 + dx - 3, 0, 6, H);
+      break;
+    }
+    case 'marbled':
+      // flowing marble bands with pale outlines
+      for (let i = 0; i < 6; i++) {
+        const y0 = (i + 0.5) * (H / 6);
+        t.lineCap = 'round';
+        t.beginPath();
+        for (let x = W * 0.1; x <= W * 0.9; x += 5) { const y = y0 + Math.sin(x * 0.045 + i * 1.7) * 9; if (x === W * 0.1) t.moveTo(x, y); else t.lineTo(x, y); }
+        t.strokeStyle = mix(base, '#ffffff', 0.35); t.lineWidth = 13; t.stroke();
+        t.strokeStyle = stripeCol; t.lineWidth = 8; t.stroke();
+      }
+      break;
+    case 'rosette':
+      // leopard rosettes: dark rings around warmer centres
+      for (let i = 0; i < 26; i++) {
+        const x = rng.range(W * 0.14, W * 0.86), y = rng.range(0, H), r = rng.range(5, 8);
+        t.fillStyle = stripeCol; blob(t, x, y, r, rng);
+        t.fillStyle = mix(base, '#7a4a20', 0.35); blob(t, x, y, r * 0.55, rng);
+      }
+      break;
+    case 'van':
+      // almost all white: colour stays on the head and tail
+      t.fillStyle = '#f4f1ea';
+      t.fillRect(0, 0, W, H);
+      t.fillStyle = base;
+      blob(t, W * 0.5, 4, 14, rng);
+      break;
+    case 'harlequin':
+      t.fillStyle = '#f4f1ea';
+      t.fillRect(0, 0, W, H);
+      t.fillStyle = base;
+      for (let i = 0; i < 5; i++) blob(t, rng.range(W * 0.25, W * 0.75), rng.range(0, H), rng.range(9, 16), rng);
+      t.fillStyle = second;
+      for (let i = 0; i < 2; i++) blob(t, rng.range(W * 0.3, W * 0.7), rng.range(0, H), rng.range(6, 10), rng);
+      break;
+    case 'torbie':
+      // tortoiseshell patches with tabby stripes through them
+      t.fillStyle = second;
+      for (let i = 0; i < 12; i++) blob(t, rng.range(0, W), rng.range(0, H), rng.range(10, 22), rng);
+      t.globalAlpha = 0.75;
+      t.strokeStyle = mix(second, '#000000', 0.35);
+      drawStripes(8, 4);
+      t.globalAlpha = 1;
+      break;
+    case 'lynxpoint': {
+      const cg = t.createLinearGradient(0, 0, 0, H);
+      cg.addColorStop(0, second);
+      cg.addColorStop(0.2, 'rgba(0,0,0,0)');
+      cg.addColorStop(0.85, 'rgba(0,0,0,0)');
+      cg.addColorStop(1, mix(second, base, 0.4));
+      t.fillStyle = cg;
+      t.fillRect(0, 0, W, H);
+      t.globalAlpha = 0.35;
+      drawStripes(6, 3);
+      t.globalAlpha = 1;
+      break;
+    }
     case 'colorpoint': {
       const cg = t.createLinearGradient(0, 0, 0, H);
       cg.addColorStop(0, second);
@@ -180,18 +245,30 @@ function makeTextures(app: Appearance, elder: boolean): Textures {
       for (let i = 0; i < 3; i++) blob(t, rng.range(W * 0.3, W * 0.7), rng.range(H * 0.3, H), rng.range(10, 20), rng);
     }
   }
+  if (app.locket) {
+    // a white "locket" spot on the chest
+    t.fillStyle = '#f4f1ea';
+    for (const x of [W * 0.03, W * 0.97]) blob(t, x, H - 10, 12, rng);
+  }
   furNoise(t, W, H, rng);
 
   // Head texture: sphere UV, forward (+x) is u=0.5, top is v=1 (canvas top)
   const [hc, h] = canvas(128, 64);
-  const headBase = app.pattern === 'colorpoint' ? mix(base, second, 0.35) : base;
+  const pointed = app.pattern === 'colorpoint' || app.pattern === 'lynxpoint';
+  const headBase = pointed ? mix(base, second, 0.35) : base;
   h.fillStyle = headBase;
   h.fillRect(0, 0, 128, 64);
-  if (app.pattern === 'colorpoint') {
+  if (pointed) {
     h.fillStyle = second;
     blob(h, 64, 36, 18, rng);
   }
-  if (app.pattern === 'tabby' || app.pattern === 'mackerel' || app.pattern === 'ticked' || app.pattern === 'spotted') {
+  if (app.pattern === 'van' || app.pattern === 'harlequin') {
+    // coloured cap over the ears and eyes, white face below
+    h.fillStyle = '#f4f1ea';
+    h.fillRect(0, 34, 128, 30);
+    if (app.pattern === 'harlequin') { h.fillStyle = base; blob(h, 64 + rng.range(-18, 18), 14, 12, rng); }
+  }
+  if (['tabby', 'mackerel', 'ticked', 'spotted', 'classic', 'marbled', 'torbie', 'lynxpoint', 'rosette'].includes(app.pattern)) {
     h.strokeStyle = second;
     h.lineWidth = 2.5;
     for (const dx of [-9, -3, 3, 9]) {
@@ -209,9 +286,14 @@ function makeTextures(app: Appearance, elder: boolean): Textures {
       h.stroke();
     }
   }
-  if (app.pattern === 'tortie' || app.pattern === 'calico') {
+  if (app.pattern === 'tortie' || app.pattern === 'calico' || app.pattern === 'torbie') {
     h.fillStyle = second;
     blob(h, 64 + rng.range(-20, 20), rng.range(10, 40), 14, rng);
+  }
+  if (app.eyePatch) {
+    // a dark patch around one eye
+    h.fillStyle = app.pattern === 'solid' ? mix(base, '#000000', 0.5) : second;
+    blob(h, 76, 28, 10, rng);
   }
   if (white > 0.15 || app.pattern === 'tuxedo') {
     h.fillStyle = '#f4f1ea';
@@ -223,6 +305,11 @@ function makeTextures(app: Appearance, elder: boolean): Textures {
     h.fill();
     blob(h, 64, 52, 12, rng);
   }
+  if (app.blaze) {
+    // a white stripe from the forehead down the nose
+    h.fillStyle = '#f4f1ea';
+    h.beginPath(); h.moveTo(60, 6); h.lineTo(68, 6); h.lineTo(72, 50); h.lineTo(56, 50); h.closePath(); h.fill();
+  }
   if (elder) {
     h.fillStyle = 'rgba(200,200,200,0.35)';
     blob(h, 64, 44, 16, rng);
@@ -231,13 +318,14 @@ function makeTextures(app: Appearance, elder: boolean): Textures {
 
   // Leg texture: top of canvas = top of leg
   const [lc, l] = canvas(32, 64);
-  const legCol = app.pattern === 'colorpoint' ? second : app.pattern === 'tuxedo' ? base : base;
+  const legCol = pointed ? second : app.pattern === 'van' || app.pattern === 'harlequin' ? '#f4f1ea' : base;
   l.fillStyle = legCol;
   l.fillRect(0, 0, 32, 64);
-  if (app.pattern === 'tabby' || app.pattern === 'mackerel') {
-    l.fillStyle = second;
+  if (['tabby', 'mackerel', 'classic', 'marbled', 'torbie', 'lynxpoint'].includes(app.pattern)) {
+    l.fillStyle = app.pattern === 'lynxpoint' ? mix(second, '#000000', 0.3) : second;
     for (let y = 8; y < 56; y += 11) l.fillRect(0, y, 32, 4);
   }
+  if (app.pattern === 'rosette') { l.fillStyle = second; for (let i = 0; i < 4; i++) blob(l, rng.range(4, 28), rng.range(6, 50), 4, rng); }
   if (app.pattern === 'tortie' || app.pattern === 'calico') {
     l.fillStyle = second;
     blob(l, rng.range(0, 32), rng.range(10, 50), 10, rng);
@@ -251,16 +339,17 @@ function makeTextures(app: Appearance, elder: boolean): Textures {
 
   // Tail texture: rings for tabbies, darker tip for colorpoint
   const [ac, a] = canvas(32, 64);
-  a.fillStyle = app.pattern === 'colorpoint' ? second : app.pattern === 'smoke' ? second : base;
+  a.fillStyle = pointed ? second : app.pattern === 'smoke' ? second : base;
   a.fillRect(0, 0, 32, 64);
-  if (app.pattern === 'tabby' || app.pattern === 'mackerel' || app.pattern === 'ticked') {
+  if (['tabby', 'mackerel', 'ticked', 'classic', 'marbled', 'torbie', 'lynxpoint'].includes(app.pattern)) {
     a.fillStyle = second;
     for (let y = 4; y < 64; y += 16) a.fillRect(0, y, 32, 7);
   }
-  if (app.pattern === 'tortie' || app.pattern === 'calico') {
+  if (app.pattern === 'tortie' || app.pattern === 'calico' || app.pattern === 'torbie') {
     a.fillStyle = second;
     blob(a, 16, rng.range(10, 50), 12, rng);
   }
+  if (app.pattern === 'rosette') { a.fillStyle = second; for (let i = 0; i < 5; i++) blob(a, rng.range(4, 28), rng.range(4, 60), 4, rng); }
   furNoise(a, 32, 64, rng, 0.06);
 
   const res = { torso: tex(tc), head: tex(hc), leg: tex(lc), tail: tex(ac) };
@@ -293,6 +382,10 @@ export class CatModel {
   body = new THREE.Group();
   headPivot = new THREE.Group();
   tongue: THREE.Mesh | null = null;
+  private mouth: THREE.Mesh | null = null;
+  private claws: THREE.Mesh[] = [];
+  /** Seconds of talking left: the mouth moves while > 0. */
+  talkT = 0;
   head = new THREE.Group();
   tailPivot = new THREE.Group();
   legs: THREE.Group[] = [];
@@ -352,6 +445,7 @@ export class CatModel {
     this.tailPivot = new THREE.Group();
     this.legs = [];
     this.feet = [];
+    this.claws = [];
     this.tailSegs = [];
     const carrying = this.carryMesh;
     this.carryMesh = null;
@@ -441,7 +535,7 @@ export class CatModel {
     const legMat = new THREE.MeshLambertMaterial({ map: tx.leg });
     const tailMat = new THREE.MeshLambertMaterial({ map: tx.tail });
     const headMat = new THREE.MeshLambertMaterial({ map: tx.head });
-    const bellyC = app.white > 0.15 || app.pattern === 'tuxedo' || app.pattern === 'bicolor' || app.pattern === 'calico'
+    const bellyC = app.white > 0.15 || app.pattern === 'tuxedo' || app.pattern === 'bicolor' || app.pattern === 'calico' || app.pattern === 'van' || app.pattern === 'harlequin'
       ? col('#f4f1ea') : col(app.pattern === 'colorpoint' ? app.base : app.base).lerp(col('#ffffff'), 0.3);
     const bellyMat = new THREE.MeshLambertMaterial({ color: app.belly ? col(app.belly) : bellyC });
     this.mats.push(torsoMat, legMat, tailMat, headMat, bellyMat);
@@ -568,7 +662,7 @@ export class CatModel {
     this.addMesh(this.head, hg, headMat, true);
 
     // face bits (merged): muzzle, nose, ears, cheek fluff
-    const whiteMuzzle = app.white > 0.15 || app.pattern === 'tuxedo' || app.pattern === 'bicolor';
+    const whiteMuzzle = app.white > 0.15 || app.pattern === 'tuxedo' || app.pattern === 'bicolor' || app.pattern === 'van' || app.pattern === 'harlequin' || !!app.blaze;
     const baseC = col(app.pattern === 'colorpoint' ? app.second : app.base);
     const muzzleC = whiteMuzzle ? col('#f4f1ea') : col(app.base).lerp(col('#ffffff'), 0.25);
     const parts: THREE.BufferGeometry[] = [];
@@ -579,7 +673,7 @@ export class CatModel {
     const nose = new THREE.SphereGeometry(0.011, 6, 5);
     nose.scale(0.8, 0.7, 1.2);
     nose.translate(0.092, -0.008, 0);
-    parts.push(vc(nose, col(app.base === '#2b2725' ? '#3a2a2a' : '#d98c8c')));
+    parts.push(vc(nose, col(app.noseColor ?? (app.base === '#2b2725' ? '#3a2a2a' : '#d98c8c'))));
     if (app.fur === 'long') {
       for (const sz of [-1, 1]) {
         const ch = new THREE.SphereGeometry(0.035, 8, 6);
@@ -652,6 +746,14 @@ export class CatModel {
     this.tongue.position.set(0.075, -0.042, 0);
     this.tongue.visible = false;
     this.head.add(this.tongue);
+    // the mouth opens when the cat talks (dark inside, a hint of pink tongue)
+    const mg = new THREE.SphereGeometry(0.016, 10, 6);
+    mg.scale(1.1, 1, 1.5);
+    this.mouth = new THREE.Mesh(mg, new THREE.MeshLambertMaterial({ color: '#5a1e24' }));
+    this.mouth.position.set(0.071, -0.047, 0);
+    this.mouth.scale.y = 0.05;
+    this.mouth.visible = false;
+    this.head.add(this.mouth);
 
     // whiskers
     const wp: number[] = [];
@@ -726,7 +828,7 @@ export class CatModel {
     // legs
     const legR = 0.022 * (app.body === 'stocky' || app.body === 'large' ? 1.15 : 1) * (app.fur === 'long' ? 1.1 : 1);
     const hipX = bodyLen * 0.42 * K, hipZ = bodyR * 0.55 * K * widthK;
-    const pawC = app.paws ?? (app.white > 0.05 || app.pattern === 'tuxedo' ? '#f4f1ea' : app.pattern === 'colorpoint' ? app.second : app.base);
+    const pawC = app.paws ?? (app.white > 0.05 || app.pattern === 'tuxedo' || app.pattern === 'van' || app.pattern === 'harlequin' ? '#f4f1ea' : app.pattern === 'colorpoint' || app.pattern === 'lynxpoint' ? app.second : app.base);
     const pawMat = new THREE.MeshLambertMaterial({ color: col(pawC) });
     this.mats.push(pawMat);
     const legLocal = legLen + torsoH * 0.45;
@@ -763,6 +865,20 @@ export class CatModel {
       pivot.add(foot);
       this.addMesh(foot, pg, pawMat, true);
       this.feet.push(foot);
+      // claws, hidden until unsheathed (front paws only)
+      if (lx > 0) {
+        const clawMat = new THREE.MeshLambertMaterial({ color: '#f4f0e6' });
+        this.mats.push(clawMat);
+        for (let cI = 0; cI < 4; cI++) {
+          const a = (cI - 1.5) * 0.42;
+          const cg = new THREE.ConeGeometry(pr * 0.14, pr * 0.55, 5);
+          cg.rotateZ(-Math.PI / 2 - 0.5);
+          const cm = this.addMesh(foot, cg, clawMat, true);
+          cm.position.set(0.004 + Math.cos(a) * pr * 1.32, -pr * 0.3, Math.sin(a) * pr * 1.1);
+          cm.visible = false;
+          this.claws.push(cm);
+        }
+      }
       this.legs.push(pivot);
     }
 
@@ -859,6 +975,25 @@ export class CatModel {
         // curled up: body rolled onto its side a little, head tucked, tail over the nose
         bodyY = -this.legLen * 0.98; legF = 1.45; legB = -1.45; headP = 0.55; tailUp = 0.25; lie = 1; curl = 0.55; roll = 0.28;
         break;
+      case 'loaf':
+        bodyY = -this.legLen * 0.95; legF = 1.45; legB = -1.45; headP = 0.05; tailUp = 0.2; lie = 1; curl = 0.3;
+        break;
+      case 'layDown':
+        // stretched out on one side, relaxed
+        bodyY = -this.legLen * 0.98; legF = 0.55; legB = -0.5; headP = 0.1; tailUp = 0.3; lie = 1; roll = 1.2;
+        break;
+      case 'playDead':
+        // flopped on the side, legs stiff, tongue out
+        bodyY = -this.legLen * 0.96; legF = -0.25; legB = 0.25; headP = -0.25; tailUp = 0.35; lie = 1; roll = 1.55;
+        break;
+      case 'claws':
+        // claws out, weight back, ready to swipe
+        bodyY = -this.legLen * 0.25; legF = 0.5; legB = -0.35; tailUp = -0.95; headP = -0.18; pitch = 0.08;
+        break;
+      case 'stretch':
+        // front paws far forward, rump in the air
+        bodyY = -this.legLen * 0.35; pitch = -0.32; legF = 1.15; legB = -0.15; headP = -0.25; tailUp = -0.9;
+        break;
       case 'drink':
         // crouched at the water's edge: elbows up, front paws planted wide, nose down to the surface
         bodyY = -this.legLen * 0.5; pitch = -0.2; legF = 0.42; legB = -0.75; headP = 1.05; tailUp = 0.3; curl = 0.15;
@@ -879,6 +1014,7 @@ export class CatModel {
         else tailUp = 0.55; // relaxed: tail hangs down and curves up at the end
     }
     if (this.mood === 'afraid') tailUp = 0.45;
+    if (this.mood === 'sad' && lie === 0 && pose !== 'drink' && pose !== 'eat') { headP += 0.22; tailUp = 0.55; }
     if (this.mood === 'happy' && pose !== 'sleep' && pose !== 'lie' && pose !== 'sit') tailUp = -1.15;
     const pb = this.poseBlend;
     const k = 1 - Math.exp(-dt * 8);
@@ -950,7 +1086,8 @@ export class CatModel {
     this.headPivot.rotation.z += (hpTarget - this.headPivot.rotation.z) * k;
     // tail
     const angry = this.mood === 'angry';
-    const swish = Math.sin(this.t * (angry ? 5 : 1.4)) * (angry ? 0.35 : pb.curl > 0.2 ? 0.05 : 0.16);
+    const lash = pose === 'lashTail';
+    const swish = lash ? Math.sin(this.t * 9) * 0.55 : Math.sin(this.t * (angry ? 5 : 1.4)) * (angry ? 0.35 : pb.curl > 0.2 ? 0.05 : 0.16);
     // when sitting the tail lies on the ground behind the cat before curling forward
     this.tailPivot.rotation.z = pose === 'sit' || pose === 'groom' ? -pb.pitch + 0.12 : pb.tailUp;
     const walkCurl = moving && !running && pose !== 'crouch';
@@ -971,10 +1108,21 @@ export class CatModel {
       if (this.earT < 0) { tw = Math.sin(-this.earT * 30) * 0.15; if (this.earT < -0.2) this.earT = 2 + Math.random() * 6; }
       this.ears.rotation.z = back + tw;
     }
+    // claws out
+    const clawsOut = pose === 'claws';
+    for (const c of this.claws) c.visible = clawsOut;
+    // talking: the jaw opens and closes
+    this.talkT = Math.max(0, this.talkT - dt);
+    if (this.mouth) {
+      const open = this.talkT > 0 ? Math.max(0, Math.sin(this.t * 15)) * 0.9 + 0.1 : pose === 'playDead' ? 0.55 : this.mood === 'angry' && pose === 'claws' ? 0.8 : 0;
+      this.mouth.visible = open > 0.06;
+      this.mouth.scale.y += (Math.max(0.05, open) - this.mouth.scale.y) * Math.min(1, dt * 20);
+    }
     // lapping: the tongue curls out and flicks back about four times a second
     if (this.tongue) {
       const drinking = pose === 'drink';
-      this.tongue.visible = drinking;
+      this.tongue.visible = drinking || pose === 'playDead';
+      if (pose === 'playDead') { this.tongue.scale.set(0.8, 1, 1); this.tongue.rotation.z = -1.1; this.tongue.position.y = -0.05; }
       if (drinking) {
         const lap = (this.t * 4.2) % 1;
         const out = Math.sin(Math.min(1, lap * 1.6) * Math.PI);
@@ -986,8 +1134,10 @@ export class CatModel {
     // blink
     this.blinkT -= dt;
     if (this.eyes) {
-      const closed = pose === 'sleep';
-      let sy = closed ? 0.1 : 1;
+      const closed = pose === 'sleep' || pose === 'playDead';
+      // expressions: content squint, wide scared eyes, narrow angry eyes, sad droop
+      const moodEye = this.mood === 'happy' ? 0.55 : this.mood === 'afraid' ? 1.25 : this.mood === 'angry' || pose === 'claws' ? 0.62 : this.mood === 'sad' ? 0.78 : this.mood === 'alert' ? 1.12 : 1;
+      let sy = closed ? 0.1 : moodEye;
       if (!closed && this.blinkT < 0) {
         sy = 0.15;
         if (this.blinkT < -0.12) this.blinkT = 2 + Math.random() * 5;

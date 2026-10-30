@@ -200,6 +200,8 @@ export class Panels {
         break;
       }
       case 'wardrobe': {
+        const ed = h('button', 'btn', '✏️ Open the full cat creator (keeps your life)', body);
+        ed.onclick = () => g.openLookEditor();
         h('p', '', `Change what you wear any time. Earn 🪙 clan coins by finishing duties and quests and by feeding the clan, then spend them on special accessories. You have <b>🪙 ${pc.coins ?? 0}</b>.`, body);
         pc.app.accessories = pc.app.accessories ?? (pc.app.accessory && pc.app.accessory !== 'none' ? [pc.app.accessory] : []);
         const grid = h('div', 'row', '', body);
@@ -273,6 +275,9 @@ export class Panels {
       ['White tail tip', () => !!pc.app.tailTip, (on) => (pc.app.tailTip = on ? '#f4f1ea' : undefined)],
       ['White paws', () => pc.app.paws === '#f4f1ea', (on) => (pc.app.paws = on ? '#f4f1ea' : undefined)],
       ['White belly', () => !!pc.app.belly, (on) => (pc.app.belly = on ? '#f4f1ea' : undefined)],
+      ['White blaze', () => !!pc.app.blaze, (on) => (pc.app.blaze = on || undefined)],
+      ['Eye patch', () => !!pc.app.eyePatch, (on) => (pc.app.eyePatch = on || undefined)],
+      ['Chest locket', () => !!pc.app.locket, (on) => (pc.app.locket = on || undefined)],
     ];
     for (const [label, get, set] of marks) { const b = h('button', `chip ${get() ? 'on' : ''}`, label, mk); b.onclick = () => { set(!get()); apply(); this.render(); }; }
     const chipsRow = <T extends string>(label: string, opts: [T, string][], get: () => T, set: (v: T) => void) => {

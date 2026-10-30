@@ -76,6 +76,10 @@ export class TwolegSystem {
   private reunionPending = false;
   private leashAsked = -1;
   private lastVan = -99;
+  /** Rubbish bins along the street (some tipped over). */
+  private bins: { x: number; z: number; tipped: boolean; usedAt: number }[] = [];
+  private vetCheckT = 0;
+  private lastVet = -99;
   /** Testing: a van comes every hour near the Thunderpath, no break between visits. */
   testVans = false;
 
@@ -137,6 +141,7 @@ export class TwolegSystem {
     if (!this.light.parent) g.scene.add(this.light);
     this.yarnPos.set(-1.2, 2.4);
     this.spawnTownCats();
+    this.buildBins();
   }
 
   reset() {
@@ -295,6 +300,7 @@ export class TwolegSystem {
       this.updateTownCats(dt);
       this.updateLeash(dt);
       this.updateKittypet(dt);
+      this.vetCheck(dt);
     } else if (this.walkers.length) { for (const w of this.walkers) w.model.dispose(); this.walkers = []; }
     this.updateCars(dt, nearTown);
     this.updateYardWalkers(dt);
@@ -494,6 +500,28 @@ export class TwolegSystem {
         if (this.isKittypet) this.say(o, o.kid ? `${name}! I'm home!` : `Hello ${name}, I'm home!`);
       }
       if (o.away) { o.model.root.visible = false; continue; }
+      // the runaway: chase after the cat who slipped the leash
+      if (o.task === 'chasePet') {
+        const pp2 = g.player.pos;
+        o.timer += dt;
+        const dd = Math.hypot(pp2.x - o.pos.x, pp2.z - o.pos.z);
+        if (dd > 2.5) this.headTo(o, pp2.x, pp2.z, 3.3, dt);
+        o.model.pose = 'run';
+        o.model.speed = 3.3;
+        if (o.timer > 2.5 && o.timer < 2.6) this.say(o, `${name.toUpperCase()}! PLEASE! COME BACK!`, 3);
+        if (o.timer > 9 || dd > 26) {
+          o.task = 'idle'; o.timer = 0;
+          this.say(o, simRng.pick([`Come back… please… *sniff*`, `${name}… where did you go?`, `I'll leave your food out, ${name}…`]), 5);
+          this.send(o, this.home.spots.kitchen, 'idle');
+          this.reunionPending = true;
+        }
+        o.pos.y = this.inHome(o.pos.x, o.pos.z) ? this.L.home.y : this.yAt(o.pos.x, o.pos.z);
+        o.model.root.position.copy(o.pos);
+        o.model.root.rotation.y = o.heading;
+        o.model.update(dt);
+        if (o.bubble && o.bubble.until < g.clock) o.bubble = null;
+        continue;
+      }
       // walk the path
       if (o.path.length) {
         const p = o.path[0];
@@ -992,6 +1020,13 @@ export class TwolegSystem {
         k.model.pose = 'run';
         k.model.speed = 4.3;
         const d = Math.hypot(tp.x - k.pos.x, tp.z - k.pos.z);
+        // playing dead: the Twoleg thinks you're hurt and backs off
+        if (k.target!.kind === 'player' && g.player.posePick === 'playDead' && d < 4 && simRng.chance(dt * 0.6)) {
+          k.state = 'return'; k.target = null;
+          this.say(k, simRng.pick(['Oh no… is it… *backs away* I\'m not touching that.', 'Poor thing. Not my job.', 'Eugh. I\'ll let someone else deal with that one.']), 4);
+          g.ui.toast('🙀 You play dead so well that the Twoleg backs away!', 'good');
+          return;
+        }
         // a cat that crouches still, far enough away, can be lost
         if (k.target!.kind === 'player' && g.player.crouching && g.player.speed < 0.3 && d > 5.5) { k.lost += dt; if (k.lost > 2.5) { k.state = 'search'; k.target = null; k.timer = 0; this.say(k, 'Where\'d it go?', 3); g.ui.toast('You crouch perfectly still in the shadows… the Twoleg loses sight of you!', 'good'); return; } }
         else k.lost = 0;
@@ -1130,6 +1165,165 @@ export class TwolegSystem {
     }, 3000);
   }
 
+  // ------------------------------------------------------------------ rubbish bins & raccoons
+  private buildBins() {
+    const g = this.game;
+    this.bins = [];
+    const spots: { x: number; z: number; tipped: boolean }[] = [];
+    // the family's own bins beside the house
+    const h1 = toWorld(this.L.home, 6.6, -2.2), h2 = toWorld(this.L.home, 6.6, -1.45);
+    spots.push({ ...h1, tipped: false }, { ...h2, tipped: false });
+    // more bins out by the street, some knocked over
+    this.L.neighbours.forEach((n, i) => { const p = toWorld(n, 4.2 + (i % 2), 8.6); spots.push({ ...p, tipped: i % 2 === 0 }); });
+    const p3 = this.st(-60, 5.8), p4 = this.st(70, -5.8);
+    spots.push({ ...p3, tipped: true }, { ...p4, tipped: false });
+    const canM = new THREE.MeshLambertMaterial({ color: '#4a5a4a' }), lidM = new THREE.MeshLambertMaterial({ color: '#3a4a3a' });
+    const rubbish = ['#e8e4da', '#c8302a', '#d8c060', '#8a7a5a', '#b8bcc2', '#e0b84a'];
+    for (const sp of spots) {
+      this.bins.push({ x: sp.x, z: sp.z, tipped: sp.tipped, usedAt: -99 });
+      if (sp === spots[0] || sp === spots[1]) continue; // already part of the house garden
+      const grp = new THREE.Group();
+      const can = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 0.85, 14), canM);
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.06, 14), lidM);
+      if (sp.tipped) {
+        can.rotation.z = Math.PI / 2; can.position.set(0, 0.3, 0);
+        lid.rotation.z = 0.3; lid.position.set(-0.8, 0.05, 0.4);
+        // rubbish spilled across the ground
+        for (let i = 0; i < 9; i++) {
+          const r = new THREE.Mesh(i % 3 === 0 ? new THREE.BoxGeometry(0.12, 0.05, 0.08) : new THREE.SphereGeometry(0.06, 6, 4), new THREE.MeshLambertMaterial({ color: rubbish[i % rubbish.length] }));
+          r.position.set(0.5 + Math.random() * 0.9, 0.04, (Math.random() - 0.5) * 0.9);
+          r.rotation.set(Math.random(), Math.random(), Math.random());
+          grp.add(r);
+        }
+        const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.22, 5), new THREE.MeshLambertMaterial({ color: '#efe6d2' }));
+        bone.rotation.z = Math.PI / 2; bone.position.set(0.9, 0.03, 0.2);
+        grp.add(bone);
+      } else {
+        can.position.y = 0.42; lid.position.y = 0.87;
+      }
+      grp.add(can, lid);
+      grp.position.set(sp.x, this.yAt(sp.x, sp.z), sp.z);
+      grp.rotation.y = Math.random() * Math.PI * 2;
+      g.scene.add(grp);
+      this.groups.push(grp);
+    }
+  }
+
+  /** Dig through the rubbish: food, but it might make you sick (and raccoons love bins too). */
+  private rummage(b: { x: number; z: number; tipped: boolean; usedAt: number }) {
+    const g = this.game;
+    const pc = this.pc;
+    g.audio.rattle();
+    b.tipped = true;
+    // a raccoon guarding the bin at night
+    if (g.time.darkness > 0.4 && simRng.chance(0.4)) {
+      const r = g.creatures.spawn('raccoon', b.x + 1.2, b.z + 0.6);
+      g.ui.toast('🦝 A raccoon bursts out of the rubbish, chittering angrily! "MINE!"', 'danger');
+      if ((pc.animalFriends?.raccoon ?? 0) < 50) { r.state = 'stalk'; r.fightTarget = g.player; r.chase = 12; }
+      return;
+    }
+    if (g.time.totalHours - b.usedAt < 3) { g.ui.toast('Nothing left in there but wrappers and a funny smell.', 'info'); return; }
+    b.usedAt = g.time.totalHours;
+    g.audio.eat();
+    pc.hunger = Math.min(100, pc.hunger + 35);
+    if (simRng.chance(0.55)) {
+      pc.sick = Math.min(100, pc.sick + 30);
+      g.ui.toast(simRng.pick(['🤢 You gulp down some smelly scraps… your belly twists. The food was rotten — you feel sick!', '🤢 Old fish skin and something slimy. Your tummy gurgles horribly. You feel sick!']), 'danger');
+    } else {
+      g.ui.toast(simRng.pick(['🍗 You find half a chicken leg! Not bad at all.', '🥪 A crust of bread with butter on it. Strange, but filling.', '🐟 Fish scraps! Your belly is happy.']), 'good');
+    }
+    if (pc.lifestyle === 'clan' && !pc.exiled) g.clan.infraction('dangerZones', g.npcs.witnesses(g.player.pos.x, g.player.pos.z, 20), 'ate Twoleg rubbish');
+  }
+
+  /** Raccoons come out to raid the bins at night. */
+  private raccoonTick() {
+    const g = this.game;
+    if (g.time.darkness < 0.4 || !this.bins.length) return;
+    const pp = g.player.pos;
+    if (g.creatures.list.filter((c) => c.type === 'raccoon').length >= 2) return;
+    const b = simRng.pick(this.bins);
+    if (Math.hypot(b.x - pp.x, b.z - pp.z) < 12 || Math.hypot(b.x - pp.x, b.z - pp.z) > 70) return;
+    g.creatures.spawn('raccoon', b.x + 0.8, b.z, { goal: { x: b.x, z: b.z } });
+  }
+
+  // ------------------------------------------------------------------ the vet
+  private vetCheck(dt: number) {
+    const g = this.game;
+    this.vetCheckT -= dt;
+    if (this.vetCheckT > 0) return;
+    this.vetCheckT = 2;
+    const pc = this.pc;
+    if (this.cutscene || this.ac || this.leash || g.player.busy || g.time.totalHours - this.lastVet < 30) return;
+    const hurt = pc.health < pc.maxHealth * 0.45 || pc.injury > 55 || pc.sick > 55;
+    if (!hurt) return;
+    const pp = g.player.pos;
+    // your own family, or a kind stranger on the street
+    const owner = this.isKittypet ? this.owners.find((o) => !o.away && o.task !== 'sleep' && Math.hypot(o.pos.x - pp.x, o.pos.z - pp.z) < 12) : null;
+    const stranger = !owner && g.time.hour > 7 && g.time.hour < 20 ? this.walkers.find((w) => !w.kid && Math.hypot(w.pos.x - pp.x, w.pos.z - pp.z) < 10) : null;
+    if (owner) this.say(owner, `Oh no, ${pc.given}! You're hurt! We're going to the vet RIGHT now.`, 4);
+    else if (stranger) this.say(stranger, 'Oh you poor thing, you\'re hurt! Come here — I know a good vet.', 4);
+    else return;
+    this.lastVet = g.time.totalHours;
+    setTimeout(() => this.vetTrip(!!owner), 1800);
+  }
+
+  /** A trip to the Twoleg healer (the vet): all patched up, smelling strange. */
+  private vetTrip(family: boolean) {
+    const g = this.game;
+    const pc = this.pc;
+    if (this.cutscene || this.ac) return;
+    this.cutscene = true;
+    g.player.busy = true;
+    g.player.frozen = true;
+    g.combat.disengage(g.player);
+    g.input.unlock();
+    const ov = document.createElement('div');
+    ov.className = 'vet-scene';
+    ov.innerHTML = '<div class="vet-room"><div class="vet-emoji">🩺</div><div class="caption"></div></div>';
+    document.body.appendChild(ov);
+    const cap = ov.querySelector('.caption') as HTMLElement;
+    const lines = [
+      family ? 'Your Tallfolk lift you gently into a carrier. "It\'s okay, it\'s okay…"' : 'A kind Tallfolk scoops you up in a soft towel and carries you to a monster.',
+      'You arrive at a bright, white Tallfolk den. It smells of strange herbs and other scared animals.',
+      'A Tallfolk healer in a blue coat checks your ears, your teeth and your wounds. A tiny sting in your scruff — ouch!',
+      'They clean your wounds, wrap a bandage around you and give you a bitter-tasting medicine. You feel much better.',
+    ];
+    lines.forEach((l, i) => setTimeout(() => { cap.textContent = this.twoleg(l); cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in'); g.audio.meow(1.1, 0.4, 0.03); }, i * 2600));
+    setTimeout(() => {
+      ov.classList.add('out');
+      setTimeout(() => ov.remove(), 700);
+      this.cutscene = false;
+      g.player.busy = false;
+      g.player.frozen = false;
+      pc.health = pc.maxHealth; pc.injury = 0; pc.sick = 0; g.player.poison = 0;
+      g.time.totalHours += 4;
+      const p = family ? this.home.spots.bed : this.st(this.L.len / 2 - 4, 6.2);
+      g.player.placeAt(p.x, p.z);
+      g.input.lock();
+      g.ui.toast(this.twoleg(family ? '🩺 Home from the vet! You\'re all healed — and you smell like the vet. Your Tallfolk give you extra treats.' : '🩺 The Tallfolk healer fixed you up and let you go by the Thunderpath. You\'re all healed!'), 'good');
+      if (family) { pc.hunger = Math.min(100, pc.hunger + 30); this.bowlFull = true; }
+      if (!family && pc.lifestyle === 'clan') g.clan.remember(pc, 'Twolegs took me to their healer when I was hurt. They were… kind.', 3);
+    }, lines.length * 2600 + 500);
+  }
+
+  // ------------------------------------------------------------------ slipping the leash
+  private breakLeash() {
+    const g = this.game;
+    const pc = this.pc;
+    const o = this.owners.find((x) => x.task === 'leash');
+    this.endLeash(false);
+    g.audio.bell();
+    g.audio.swipe();
+    g.player.stamina = 100;
+    g.ui.toast('🏃 You twist, wriggle and pull — the leash slips over your head! RUN!', 'good');
+    if (o) {
+      o.task = 'chasePet';
+      o.timer = 0;
+      o.path = [];
+      this.say(o, `NO ${pc.given.toUpperCase()}! COME BACK!`, 4);
+    }
+  }
+
   /** A cat is taken away to the pound. */
   cageCat(cat: Cat) {
     const g = this.game;
@@ -1181,6 +1375,7 @@ export class TwolegSystem {
       }
     }
     if (hour === 7 && this.trap && !this.trap.sprung) this.removeTrap();
+    if (this.nearTown(pp.x, pp.z, 80) && simRng.chance(0.5)) this.raccoonTick();
     // caught cats who were never rescued: some escape home, some are taken in by Tallfolk
     if (hour === 7) for (const c of Object.values(g.clan.cats)) {
       if (!c.caged || !c.alive || (this.ac && this.occupants.some((o) => o.cat.id === c.id))) continue;
@@ -1640,6 +1835,11 @@ export class TwolegSystem {
     return true;
   }
 
+  /** The 3D model of a town or pound cat (so their mouth can move when they talk). */
+  modelOf(id: string): CatModel | null {
+    return this.townCats.find((t) => t.cat.id === id)?.model ?? this.occupants.find((o) => o.cat.id === id)?.model ?? null;
+  }
+
   /** Interaction prompt for anything Twoleg-related near the player. */
   prompt(): Prompt | null {
     const g = this.game;
@@ -1669,6 +1869,13 @@ export class TwolegSystem {
       if (pal && !near(this.fac.door, 1.5)) return { text: `Talk to ${pal.cat.given}`, action: () => this.talkPound(pal) };
       if (near(this.fac.door, 1.5)) return { text: 'Scratch at the door (it\'s locked)', action: () => { g.audio.swipe(); g.ui.toast('The metal door is locked tight. The Twoleg has the key. There must be another way out…', 'info'); } };
       return null;
+    }
+    // slip the leash!
+    if (this.leash && this.isKittypet) return { text: '🏃 Break free from the leash!', action: () => this.breakLeash() };
+    // rubbish bins
+    for (const b of this.bins) {
+      if (!near(b, 1.25)) continue;
+      return { text: b.tipped ? '🗑 Rummage through the spilled rubbish' : '🗑 Knock the lid off and rummage in the bin', action: () => this.rummage(b) };
     }
     // bait set out by the van: a trick!
     for (const c of this.cars) {

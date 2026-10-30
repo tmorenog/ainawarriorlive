@@ -101,6 +101,23 @@ export class Player implements Fighter {
   sniffCd = 0;
   sleeping = false;
   poison = 0;
+  /** A pose chosen from the poses menu (held until you move). */
+  posePick: import('../cats/model').Pose | null = null;
+  posesMenu() {
+    const g = this.game;
+    if (this.busy || this.sleeping || g.ui.isBusy()) return;
+    const set = (p: import('../cats/model').Pose, msg: string) => () => { this.posePick = p; this.vel.set(0, 0, 0); g.ui.floatText(msg, '#e8d9a8'); if (p === 'claws') g.audio.hiss(); };
+    g.ui.choice('🐾 Poses', 'Strike a pose. Move to stop.', [
+      { label: '🐈 Sit', action: set('sit', '*sits*') },
+      { label: '🍞 Loaf (paws tucked in)', action: set('loaf', '*loafs*') },
+      { label: '😴 Lie down on your side', action: set('layDown', '*flops over*') },
+      { label: '💀 Play dead', action: set('playDead', '*plays dead*') },
+      { label: '😾 Unleash your claws', action: set('claws', '*unsheathes claws*') },
+      { label: '〰 Lash your tail', action: set('lashTail', '*lashes tail*') },
+      { label: '🙆 Big stretch', action: set('stretch', '*stretttches*') },
+      { label: '👅 Groom yourself', action: set('groom', '*grooms*') },
+    ]);
+  }
   /** Seconds left lapping water (the camera swings round to watch your cat drink). */
   drinkT = 0;
   private ripples: { m: THREE.Mesh; t: number }[] = [];
@@ -182,6 +199,8 @@ export class Player implements Fighter {
       this.yaw -= look.dx * 0.0022;
       this.pitch = clamp(this.pitch - look.dy * 0.0022, -1.45, 1.2);
     }
+    if (controllable && input.pressed('KeyY')) this.posesMenu();
+    if (controllable && input.pressed('KeyH')) game.interactions.herbsMenu();
     if (controllable && input.pressed('KeyV')) {
       this.thirdPerson = !this.thirdPerson;
       this.model.setVisibleHead(this.thirdPerson);
@@ -241,6 +260,7 @@ export class Player implements Fighter {
     const ml = Math.hypot(mx, mz);
     if (ml > 0) { mx /= ml; mz /= ml; }
     const moving = ml > 0.01;
+    if (moving || this.pounce || this.inCombatT > 0) this.posePick = null;
     const desiredVX = moving ? mx * target * Math.min(1, ml) : 0;
     const desiredVZ = moving ? mz * target * Math.min(1, ml) : 0;
     const accel = this.onGround || this.swimming ? 10 : 2;
@@ -462,6 +482,7 @@ export class Player implements Fighter {
     // Twolegs can be bitten and scratched too
     if (game.twolegs.playerAttack(heavy, (heavy ? 1.6 : 0.9) * scale + 0.6)) return;
     const target = this.findTarget((heavy ? 1.6 : 0.8) * scale + 0.3);
+    this.posePick = null;
     if (heavy) {
       const f = this.forward();
       this.vel.x += f.x * 3;
@@ -640,6 +661,7 @@ export class Player implements Fighter {
       else if (this.sleeping) m.pose = 'sleep';
       else if (this.swimming) m.pose = 'swim';
       else if (this.tripT > 0) m.pose = 'lie';
+      else if (this.posePick && this.speed < 0.15 && !this.swimming) m.pose = this.posePick;
       else if (this.crouching || this.charging) m.pose = 'crouch';
       else if (this.inCombatT > 0) m.pose = 'fight';
       else if (this.speed > 0.1) m.pose = 'walk';

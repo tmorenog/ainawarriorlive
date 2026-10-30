@@ -398,6 +398,34 @@ export class Game {
     this.save();
   }
 
+  /** Open the full cat creator to change your look, without starting a new life. */
+  openLookEditor() {
+    const pc = this.clan.player;
+    if (!pc || this.state !== 'playing') return;
+    const hours = this.time.totalHours;
+    this.ui.panels.close();
+    this.ui.closeDialog(false);
+    this.input.unlock();
+    this.ui.showHud(false);
+    this.touch?.show(false);
+    this.player.model.root.visible = false;
+    const finish = (app?: Appearance) => {
+      this.clearPreview();
+      this.menus.clear();
+      this.time.totalHours = hours;
+      if (app) pc.app = { ...app, accessories: pc.app.accessories, accessoryColor: pc.app.accessoryColor };
+      this.player.attach();
+      this.state = 'playing';
+      this.ui.showHud(true);
+      this.touch?.show(true);
+      this.input.clear();
+      this.input.lock();
+      if (app) { this.ui.toast('🎨 Your new look is saved. Same life, new coat!', 'good'); this.save(); }
+    };
+    this.menus.create({ name: pc.given, sex: pc.sex, app: JSON.parse(JSON.stringify(pc.app)), seed: this.seed, clanName: this.territories.homeName, lore: lore.mode, traits: pc.traits, lifestyle: pc.lifestyle },
+      { onSave: (app) => finish(app), onCancel: () => finish() });
+  }
+
   continueGame() {
     const d = readSave();
     if (!d) { this.menus.create(); return; }

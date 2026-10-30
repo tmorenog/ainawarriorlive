@@ -86,7 +86,7 @@ export class Camp {
       for (let i = 0; i < nb; i++) {
         if (d.name === 'elders') {
           // two rows of moss beds along the inside of the hollow log
-          const along = -1.9 + Math.floor(i / 2) * 1.0, side = i % 2 ? 0.55 : -0.55;
+          const along = -1.55 + Math.floor(i / 2) * 0.8, side = i % 2 ? 0.42 : -0.42;
           beds.push({ x: x + Math.cos(facing) * along - Math.sin(facing) * side, z: z + Math.sin(facing) * along + Math.cos(facing) * side });
           continue;
         }
@@ -120,7 +120,7 @@ export class Camp {
         }
       } else if (d.name === 'elders') {
         // a huge fallen hollow log, open at the end that faces the camp
-        const R = 1.75, L = 6.2;
+        const R = 1.35, L = 4.9;
         const ax = Math.cos(facing), az = Math.sin(facing);
         const cy = gy + R * 0.42;
         const place = (g: THREE.BufferGeometry, along: number) => {
@@ -184,7 +184,7 @@ export class Camp {
         // moss cushions and ferns on top, bracket fungus on the sides, broken branch stubs
         for (let i = 0; i < 9; i++) {
           const along = -L / 2 + 0.4 + i * (L - 0.8) / 8;
-          const m = new THREE.SphereGeometry(0.35 + (i % 3) * 0.1, 8, 5);
+          const m = new THREE.SphereGeometry(0.28 + (i % 3) * 0.08, 8, 5);
           m.scale(1.4, 0.35, 1);
           m.rotateY(-facing);
           m.translate(x + ax * along, cy + R * 0.97, z + az * along);

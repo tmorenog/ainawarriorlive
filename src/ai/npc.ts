@@ -103,6 +103,7 @@ export class NpcAgent implements Fighter {
 
   say(text: string, seconds = 4) {
     this.bubble = { text, until: this.game.clock + seconds };
+    if (!text.startsWith('*')) this.model.talkT = Math.min(3.5, 0.4 + text.length * 0.045);
   }
 
   setTarget(x: number, z: number) {

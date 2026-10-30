@@ -86,6 +86,8 @@ export class TouchControls {
     tap('📖', () => game.ui.panels.toggle('journal'));
     tap('🗺', () => game.ui.panels.toggle('map'));
     tap('🍖', () => game.interactions.eatCarried());
+    tap('🐾', () => game.player.posesMenu());
+    tap('🌿', () => game.interactions.herbsMenu());
     tap('👁', () => { input.virtualDown('KeyV'); setTimeout(() => input.virtualUp('KeyV'), 50); });
   }
 

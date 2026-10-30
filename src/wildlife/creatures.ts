@@ -134,7 +134,9 @@ export class CreatureManager {
     const game = this.game;
     let best: Fighter | null = null, bd = r;
     const pl = game.player;
-    if (pl.alive && game.combat.yieldUntil < game.clock) {
+    // animals you've befriended leave you alone
+    const friend = (game.clan.player?.animalFriends?.[c.type] ?? 0) >= 50;
+    if (pl.alive && game.combat.yieldUntil < game.clock && !friend) {
       const d = dist2(c.pos.x, c.pos.z, pl.pos.x, pl.pos.z) * (pl.crouching ? 1.6 : 1);
       if (d < bd) { bd = d; best = pl; }
     }

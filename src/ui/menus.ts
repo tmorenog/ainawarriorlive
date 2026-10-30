@@ -116,7 +116,7 @@ export class Menus {
   }
 
   // ------------------------------------------------------------ creation
-  create(existing?: NewGameSpec) {
+  create(existing?: NewGameSpec, edit?: { onSave: (app: Appearance) => void; onCancel: () => void }) {
     this.clear();
     const g = this.game;
     const rng = new RNG((Math.random() * 1e9) | 0);
@@ -138,8 +138,8 @@ export class Menus {
       const outsider = spec.lifestyle && spec.lifestyle !== 'clan';
       label.innerHTML = `${esc(outsider ? spec.name : spec.name + (asKit ? 'kit' : 'heart'))}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${spec.app.breed ? esc(spec.app.breed) + ' · ' : ''}${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
     };
-    h('h2', '', 'Your cat', form);
-    h('div', '', '<span style="color:var(--ink-dim);font-size:13px">You will be born as a kit in the nursery. This is how you will look when grown.</span>', form);
+    h('h2', '', edit ? '🎨 Change your look' : 'Your cat', form);
+    h('div', '', `<span style="color:var(--ink-dim);font-size:13px">${edit ? 'Change anything about how you look. Your name, age, clan and memories all stay the same.' : 'You will be born as a kit in the nursery. This is how you will look when grown.'}</span>`, form);
 
     const field = (name: string) => { const f = h('div', 'field', `<label>${name}</label>`, form); return h('div', 'row', '', f); };
     // name
@@ -173,7 +173,7 @@ export class Menus {
       const ls = h('select', '', '', lr) as HTMLSelectElement;
       h('option', '', 'Use a saved look…', ls);
       looks.forEach((l, i) => { const o = h('option', '', esc(l.name), ls) as HTMLOptionElement; o.value = String(i); });
-      ls.onchange = () => { const l = looks[parseInt(ls.value, 10)]; if (l) { spec.app = { ...spec.app, ...l.app }; this.create(spec); } };
+      ls.onchange = () => { const l = looks[parseInt(ls.value, 10)]; if (l) { spec.app = { ...spec.app, ...l.app }; this.create(spec, edit); } };
     }
     // breed preset
     const br = field('Breed');
@@ -185,7 +185,7 @@ export class Menus {
       Object.assign(spec.app, b.app);
       spec.app.breed = b.name === BREEDS[0].name ? undefined : b.name;
       if (b.app.pattern || b.app.base) spec.app.second = secondFor(spec.app.base, spec.app.pattern, rng);
-      this.create(spec);
+      this.create(spec, edit);
     };
     // fur colour
     const fr = field('Fur colour');
@@ -260,10 +260,18 @@ export class Menus {
       ['White tail tip', 'tail', () => !!spec.app.tailTip, (on) => (spec.app.tailTip = on ? '#f4f1ea' : undefined)],
       ['White paws', 'paws', () => spec.app.paws === '#f4f1ea', (on) => (spec.app.paws = on ? '#f4f1ea' : undefined)],
       ['White belly', 'belly', () => !!spec.app.belly, (on) => (spec.app.belly = on ? '#f4f1ea' : undefined)],
+      ['White blaze on the face', 'blaze', () => !!spec.app.blaze, (on) => (spec.app.blaze = on || undefined)],
+      ['Patch over one eye', 'eyePatch', () => !!spec.app.eyePatch, (on) => (spec.app.eyePatch = on || undefined)],
+      ['White chest locket', 'locket', () => !!spec.app.locket, (on) => (spec.app.locket = on || undefined)],
     ];
     for (const [label, , get, set] of marks) {
       const b = h('button', `chip ${get() ? 'on' : ''}`, label, mk);
       b.onclick = () => { set(!get()); b.classList.toggle('on', get()); refresh(); };
+    }
+    const nr2 = field('Nose colour');
+    for (const [hex, nm] of [['#d98c8c', 'Pink'], ['#3a2a2a', 'Black'], ['#7a4a3a', 'Brown'], ['#e8a0a8', 'Light pink'], ['#8a8a90', 'Grey']]) {
+      const b = h('button', `chip ${(spec.app.noseColor ?? '#d98c8c') === hex ? 'on' : ''}`, nm, nr2);
+      b.onclick = () => { spec.app.noseColor = hex === '#d98c8c' ? undefined : hex; nr2.querySelectorAll('.chip').forEach((x) => x.classList.remove('on')); b.classList.add('on'); refresh(); };
     }
     chips<FurLength>('Fur length', [['short', 'Short'], ['medium', 'Medium'], ['long', 'Long']], () => spec.app.fur, (v) => (spec.app.fur = v));
     chips<BodyType>('Body type', [['slender', 'Slender'], ['average', 'Average'], ['stocky', 'Stocky'], ['large', 'Large']], () => spec.app.body, (v) => (spec.app.body = v));
@@ -293,14 +301,14 @@ export class Menus {
     const kb = h('button', 'chip', 'Show as kit', kr);
     kb.onclick = () => { asKit = !asKit; kb.classList.toggle('on', asKit); refresh(); };
     const rb = h('button', 'chip', '🎲 Randomise look', kr);
-    rb.onclick = () => { spec.app = randomAppearance(rng); this.create(spec); };
+    rb.onclick = () => { spec.app = randomAppearance(rng); this.create(spec, edit); };
     h('h2', '', 'Your world', form).style.marginTop = '20px';
     lore.mode = spec.lore;
     chips<LoreMode>('Clans & naming', [['classic', 'Forest Clans (Thunder, River, Wind, Shadow)'], ['original', 'Original Mistwood clans']], () => spec.lore, (v) => {
       spec.lore = v;
       lore.mode = v;
       spec.clanName = v === 'classic' ? 'ThunderClan' : HOME_CLAN_NAMES[0];
-      this.create(spec);
+      this.create(spec, edit);
     });
     const cr = field('Your clan');
     const cs = h('select', '', '', cr) as HTMLSelectElement;
@@ -316,6 +324,20 @@ export class Menus {
     si.onkeydown = (e) => e.stopPropagation();
     const sd = h('button', 'chip', '🎲', sr);
     sd.onclick = () => { spec.seed = (Math.random() * 1e6) | 0; si.value = String(spec.seed); };
+    if (edit) {
+      // editing your look in the middle of a life: hide everything that would start a new cat
+      for (const f of Array.from(form.querySelectorAll('.field'))) {
+        const l = f.querySelector('label')?.textContent ?? '';
+        if (/^(Name|Gender|Your life|Clans|Your clan|World seed)/.test(l)) (f as HTMLElement).style.display = 'none';
+      }
+      for (const h2 of Array.from(form.querySelectorAll('h2'))) if (h2.textContent === 'Your world') (h2 as HTMLElement).style.display = 'none';
+      const save = h('button', 'go', 'Save my new look ➜', form);
+      save.onclick = () => edit.onSave(spec.app);
+      const cancel = h('button', 'btn dim', '← Cancel (keep my old look)', form);
+      cancel.onclick = () => edit.onCancel();
+      refresh();
+      return;
+    }
     const go = h('button', 'go', 'Begin your life ➜', form);
     go.onclick = () => {
       if (!spec.name.trim()) { ni.focus(); return; }

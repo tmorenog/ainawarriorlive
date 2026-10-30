@@ -33,13 +33,14 @@ export const TREASURE_INFO: Record<TreasureKind, { name: string; color: [number,
   mossyStick: { name: 'mossy stick', color: [0.4, 0.55, 0.3] },
 };
 
-export type FlowerKind = 'daisy' | 'bluebell' | 'poppy' | 'primrose' | 'blossom';
+export type FlowerKind = 'daisy' | 'bluebell' | 'poppy' | 'primrose' | 'blossom' | 'dandelion';
 export const FLOWER_INFO: Record<FlowerKind, { name: string; color: [number, number, number] }> = {
   daisy: { name: 'daisy', color: [1, 1, 0.95] },
   bluebell: { name: 'bluebell', color: [0.45, 0.55, 1] },
   poppy: { name: 'poppy', color: [0.95, 0.25, 0.2] },
   primrose: { name: 'primrose', color: [1, 0.92, 0.45] },
   blossom: { name: 'cherry blossom', color: [1, 0.72, 0.86] },
+  dandelion: { name: 'dandelion', color: [1, 0.82, 0.1] },
 };
 
 export interface Interactable {
@@ -1222,8 +1223,8 @@ export class ChunkManager {
     const flowerData: { kind: FlowerKind; x: number; y: number; z: number; bees: boolean }[] = [];
     if (season !== 'winter') {
       const frng = new RNG(hash2(chunk.cx, chunk.cz, ctx.seed + 4242));
-      const nf = frng.chance(0.75) ? frng.int(1, 3) : 0;
-      const fk: FlowerKind[] = season === 'blossom' ? ['blossom', 'blossom', 'daisy', 'primrose'] : ['daisy', 'bluebell', 'poppy', 'primrose'];
+      const nf = frng.chance(0.85) ? frng.int(2, 5) : 0;
+      const fk: FlowerKind[] = season === 'blossom' ? ['blossom', 'blossom', 'daisy', 'dandelion', 'primrose'] : ['daisy', 'daisy', 'dandelion', 'dandelion', 'bluebell', 'poppy', 'primrose'];
       for (let i = 0; i < nf; i++) {
         const x = chunk.x0 + frng.range(2, CHUNK_SIZE - 2), z = chunk.z0 + frng.range(2, CHUNK_SIZE - 2);
         const idx = chunk.nearestIndex(x, z);

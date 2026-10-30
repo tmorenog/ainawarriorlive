@@ -147,7 +147,124 @@ export class Interactions {
   }
 
   /** Breathe in the scent of flowers: it calms you, and you can carry one away to give. */
-  private smellFlower(it: Interactable) {
+  /** Smell a flower, pick one to carry, or (dandelions) blow the seeds away. */
+  private flowerMenu(it: Interactable) {
+    const g = this.game;
+    const pc = g.clan.player;
+    const fi = FLOWER_INFO[it.kind as FlowerKind];
+    const opts = [
+      { label: `👃 Smell the ${fi.name}s`, action: () => this.smellFlower(it, false) },
+      { label: `✋ Pick a ${fi.name} to carry (${(pc.flowers ?? []).length}/3)`, action: () => this.smellFlower(it, true) },
+    ];
+    if (it.kind === 'dandelion') opts.push({ label: '🌬 Blow the fluffy seeds', action: () => {
+      const p = g.player.pos;
+      for (let i = 0; i < 6; i++) setTimeout(() => g.combat.puff(new THREE.Vector3(p.x + Math.random() - 0.5, p.y + 0.3 + i * 0.12, p.z + Math.random() - 0.5), 6, 0.35), i * 120);
+      g.audio.sniff();
+      g.player.calmUntil = g.clock + 40;
+      g.ui.toast(simRng.pick(['🌬 Phffff! Fluffy dandelion seeds float away on the breeze. Make a wish!', '🌬 The seeds swirl up around your whiskers and tickle your nose. Achoo!', '🌬 A cloud of tiny parachutes drifts off over the grass.']), 'good');
+      g.chunks.takeInteractable(it);
+    } });
+    opts.push({ label: 'Leave them', action: () => {} });
+    g.ui.choice(`${it.kind === 'dandelion' ? '🌼' : '🌸'} ${fi.name[0].toUpperCase() + fi.name.slice(1)}s`, it.kind === 'daisy' ? 'Little white daisies with sunny yellow middles.' : it.kind === 'dandelion' ? 'Bright yellow dandelions — and a few fluffy seed heads.' : `A patch of ${fi.name}s.`, opts);
+  }
+
+  // ------------------------------------------------------------ wild animal friends
+  talkAnimal(beast: import('../wildlife/creatures').Creature) {
+    const g = this.game;
+    const pc = g.clan.player;
+    pc.animalFriends = pc.animalFriends ?? {};
+    const af = pc.animalFriends;
+    const kind = beast.type;
+    const nm = beast.name.toLowerCase();
+    const fr = af[kind] ?? 0;
+    const voice: Record<string, { friend: string[]; wary: string[]; cross: string[] }> = {
+      badger: { friend: ['*grunts warmly* Little cat. You came back.', 'The earth is soft after rain. Good digging. You want worms? No? Hm.', '*snuffles your fur* You smell of the clan. And of friend.'], wary: ['*stares with small black eyes* …Hrrm. What do you want, cat?', '*sniffs the air* You are not food. Not today.'], cross: ['*rumbles deep in its chest* GO AWAY.', '*shows its claws* My sett. My land.'] },
+      fox: { friend: ['*yips softly* Hey, whiskers. Hunting\'s good by the river today.', '*grins with all its teeth* Friends, you and me. Strange, isn\'t it?'], wary: ['*tilts its sly red head* A cat who talks to foxes? How curious.', '*circles you slowly* Hm. You\'re braver than most.'], cross: ['*snarls* Keep your distance, little morsel.', '*bares sharp teeth*'] },
+      raccoon: { friend: ['*chitters happily* Shiny-thing friend! Look, I found a bottle cap!', '*washes its paws* You want to share? The bins have fish tonight.'], wary: ['*clutches a wrapper* Mine. All mine. …What do you want?', '*chitters* Cat. Hmm. Cat.'], cross: ['*hisses and chatters* MINE! GO!', '*puffs up and swipes the air*'] },
+      dog: { friend: ['*tail thumps* FRIEND! FRIEND! You smell great!', '*rolls over* Belly rub? No? Okay! Still friends!'], wary: ['*sniffs you loudly* Cat?! CAT! …Are you a nice cat?', '*whines and wags uncertainly*'], cross: ['*barks* WOOF WOOF GET OUT!', '*growls low*'] },
+    };
+    const v = voice[kind] ?? voice.badger;
+    const anger = () => {
+      beast.state = 'stalk'; beast.fightTarget = g.player; beast.chase = 10;
+      g.ui.toast(`The ${nm} doesn't trust you yet — it lunges!`, 'danger');
+    };
+    const raise = (n: number, text: string) => {
+      const before = af[kind] ?? 0;
+      af[kind] = Math.min(100, before + n);
+      if (before < 50 && af[kind] >= 50) { g.ui.toast(`💛 The ${nm} trusts you now! ${kind === 'dog' ? 'Dogs' : `${beast.name}s`} won't attack you anymore.`, 'good'); g.clan.remember(pc, `I befriended a ${nm}. Nobody in the clan would believe it.`, 5); }
+      g.ui.dialog({ text: `${beast.name}: ${text}`, options: [{ label: 'Continue', action: () => this.talkAnimal(beast) }, { label: 'Goodbye', action: () => {} }] });
+    };
+    const opts: { label: string; action: () => void }[] = [];
+    if (g.player.prey.length) opts.push({ label: `Offer your ${g.player.prey[0].kind}`, action: () => {
+      g.player.prey.shift(); g.player.updateCarryVisual(); g.audio.eat();
+      raise(30, simRng.pick(['*gobbles it down* …Thank you, cat.', '*sniffs, then eats* Hm. Not bad. Not bad at all.', '*takes it gently* For me? You are a strange cat.']));
+    } });
+    opts.push({ label: 'Speak softly and slowly', action: () => {
+      if (fr < 15 && simRng.chance(beast.def.aggression * 0.5)) { anger(); return; }
+      raise(fr >= 50 ? 2 : 8, simRng.pick(fr >= 50 ? v.friend : v.wary));
+    } });
+    opts.push({ label: 'Back away carefully', action: () => {} });
+    g.ui.dialog({ text: `${beast.name} (${fr >= 50 ? '💛 friend' : fr >= 15 ? 'wary of you' : 'unfriendly'} · trust ${Math.round(Math.min(fr, 50))}/50): ${simRng.pick(fr >= 50 ? v.friend : fr >= 15 ? v.wary : v.cross)}`, options: opts });
+  }
+
+  // ------------------------------------------------------------ herbs and poultices
+  /** The herb menu (H): chew herbs into poultices and press them onto your own wounds. */
+  herbsMenu() {
+    const g = this.game;
+    const pl = g.player;
+    const pc = g.clan.player;
+    if (pl.busy || pl.sleeping || g.ui.isBusy()) return;
+    pc.poultices = pc.poultices ?? {};
+    const ps = pc.poultices;
+    const herbs = (['silverleaf', 'sunpetal', 'bitterroot'] as HerbKind[]);
+    const opts: { label: string; hint?: string; action: () => void }[] = [];
+    for (const k of herbs) if (pl.herbs[k] > 0) opts.push({ label: `🦷 Chew ${HERB_INFO[k].name} into a poultice`, hint: `${pl.herbs[k]} in your jaws`, action: () => this.chew(k) });
+    for (const k of herbs) if ((ps[k] ?? 0) > 0) opts.push({ label: `🩹 Press the ${HERB_INFO[k].name} poultice on yourself`, hint: HERB_INFO[k].use, action: () => this.applyPoultice(k, null) });
+    if (!opts.length) { g.ui.toast('🌿 You have no herbs. Pick some (or take them from the herb store in the medicine den), then press H to chew them into a poultice.', 'info'); return; }
+    opts.push({ label: 'Close', action: () => {} });
+    const carried = herbs.filter((k) => (ps[k] ?? 0) > 0).map((k) => `${ps[k]} ${HERB_INFO[k].name}`).join(', ');
+    g.ui.choice('🌿 Herbs & poultices', `Chew herbs into a poultice, then press it onto a wound. Silverleaf soothes wounds, sunpetal eases fever and cough, bitterroot fights sickness and poison.${carried ? ` Poultices ready: ${carried}.` : ''}`, opts);
+  }
+
+  /** Chew a herb into a poultice (takes a moment). */
+  chew(k: HerbKind, then?: () => void) {
+    const g = this.game;
+    const pl = g.player;
+    const pc = g.clan.player;
+    if (pl.herbs[k] <= 0) return;
+    pl.herbs[k]--;
+    pl.updateCarryVisual();
+    pl.busy = true;
+    pl.model.pose = 'eat';
+    for (let i = 0; i < 4; i++) setTimeout(() => g.audio.eat(), i * 300);
+    g.ui.floatText('*chew chew*', '#9fd08a');
+    setTimeout(() => {
+      pl.busy = false;
+      pc.poultices = pc.poultices ?? {};
+      pc.poultices[k] = (pc.poultices[k] ?? 0) + 1;
+      g.ui.toast(`🌿 You chew the ${HERB_INFO[k].name} into a soft green poultice.${then ? '' : ' Press H to use it, or talk to a hurt cat to treat them.'}`, 'good');
+      then?.();
+    }, 1400);
+  }
+
+  /** Press a poultice onto yourself (cat = null) or a clanmate. */
+  applyPoultice(k: HerbKind, cat: Cat | null) {
+    const g = this.game;
+    const pc = g.clan.player;
+    const ps = pc.poultices ?? {};
+    if ((ps[k] ?? 0) <= 0) return false;
+    ps[k]--;
+    const c = cat ?? pc;
+    if (k === 'silverleaf') { c.injury = Math.max(0, c.injury - 55); c.health = Math.min(c.maxHealth, c.health + 35); }
+    else if (k === 'sunpetal') { c.sick = Math.max(0, c.sick - 45); c.health = Math.min(c.maxHealth, c.health + 20); }
+    else { c.sick = Math.max(0, c.sick - 55); c.health = Math.min(c.maxHealth, c.health + 15); if (!cat) g.player.poison = Math.max(0, g.player.poison - 0.6); }
+    pc.skills.healing = Math.min(99, pc.skills.healing + 1);
+    g.audio.pick();
+    if (!cat) g.ui.toast(`🩹 You press the ${HERB_INFO[k].name} poultice onto ${k === 'silverleaf' ? 'your wounds. The sting fades.' : 'your fur and lick it in. You feel better already.'}`, 'good');
+    return true;
+  }
+
+  private smellFlower(it: Interactable, pick = true) {
     const g = this.game;
     const pc = g.clan.player;
     const fi = FLOWER_INFO[it.kind as FlowerKind];
@@ -157,7 +274,8 @@ export class Interactions {
     g.player.calmUntil = g.clock + 60;
     pc.flowers = pc.flowers ?? [];
     let picked = false;
-    if (pc.flowers.length < 3) { pc.flowers.push(it.kind as string); picked = true; g.chunks.takeInteractable(it); }
+    if (pick && pc.flowers.length < 3) { pc.flowers.push(it.kind as string); picked = true; g.chunks.takeInteractable(it); }
+    else if (pick) g.ui.toast('You can only carry three flowers. Give one away first!', 'info');
     g.ui.toast(`🌸 You breathe in the sweet scent of the ${fi.name}s. Any anger melts away — you feel calm.${picked ? ` You pick one to carry (${pc.flowers.length}/3). Give it to a clanmate to cheer them up — or calm them down!` : ''}`, 'good');
     if (it.bees && Math.random() < 0.7) setTimeout(() => g.bees.sting(), 600);
   }
@@ -189,6 +307,13 @@ export class Interactions {
     // Twoleg things: bowls, beds, owners, cages, vans…
     const tp = g.twolegs.prompt();
     if (tp) { this.current = tp; return; }
+    // wild animals you can try to talk to (or are already friends with)
+    const beast = g.creatures.list.find((c) => c.alive && c.state !== 'fight' && dist2(c.pos.x, c.pos.z, p.x, p.z) < 2.6);
+    if (beast) {
+      const fr = pc.animalFriends?.[beast.type] ?? 0;
+      this.current = { text: `${fr >= 50 ? '💛 ' : ''}Talk to the ${beast.name.toLowerCase()}${fr >= 50 ? ' (friend)' : ''}`, action: () => this.talkAnimal(beast) };
+      return;
+    }
     // NPC in front
     let best: NpcAgent | null = null, bs = 2.6 * Math.max(0.6, pl.scale);
     for (const a of g.npcs.agents.values()) {
@@ -263,7 +388,7 @@ export class Interactions {
       }
       if (it.type === 'flower') {
         const fi = FLOWER_INFO[it.kind as FlowerKind];
-        this.current = { text: `Smell the ${fi.name}s 🌸`, action: () => this.smellFlower(it) };
+        this.current = { text: `${it.kind === 'dandelion' ? '🌼' : '🌸'} The ${fi.name}s — smell or pick`, action: () => this.flowerMenu(it) };
         return;
       }
       if (it.type === 'treasure') { const ti = TREASURE_INFO[it.kind as TreasureKind]; this.current = { text: `Pick up the ${ti.name} ✨`, action: () => { if (g.fun.collectTreasure(it.kind as TreasureKind)) g.chunks.takeInteractable(it); } }; return; }
@@ -1490,7 +1615,30 @@ export class Interactions {
     const pc = clan.player;
     const c = a.cat;
     const pl = g.player;
-    const herb = (['sunpetal', 'bitterroot', 'silverleaf'] as HerbKind[]).find((k) => pl.herbs[k] > 0);
+    // the right poultice for what's wrong (or any poultice you've got)
+    pc.poultices = pc.poultices ?? {};
+    const want: HerbKind = c.sick > c.injury ? (c.sick > 40 ? 'bitterroot' : 'sunpetal') : 'silverleaf';
+    const ready = ([want, 'silverleaf', 'sunpetal', 'bitterroot'] as HerbKind[]).find((k) => (pc.poultices![k] ?? 0) > 0);
+    if (ready) {
+      this.applyPoultice(ready, c);
+      c.injury = 0; c.sick = 0; c.health = c.maxHealth;
+      this.healedDay.set(c.id, g.time.day);
+      pc.reputation = clamp(pc.reputation + 1.5, -100, 100);
+      clan.adjust(c, pc, 6, { text: `${pc.given} treated me with a poultice.`, weight: 2 });
+      g.ui.dialog({ speaker: c, text: `You press the ${HERB_INFO[ready].name} poultice onto ${a.name}'s ${ready === 'silverleaf' ? 'wounds' : 'fur'}. ${a.name} sighs with relief. "I feel so much better. Thank you!" (${a.name} is fully healed.)`, options: [{ label: 'Rest now', action: done }], onClose: done });
+      const o0 = g.objectives.get('lesson');
+      if (o0?.data?.medLesson === 'treat') g.objectives.complete('lesson');
+      else g.training.medProgress('treat');
+      return;
+    }
+    const herb = ([want, 'sunpetal', 'bitterroot', 'silverleaf'] as HerbKind[]).find((k) => pl.herbs[k] > 0);
+    if (herb) {
+      g.ui.dialog({ speaker: c, text: `Herbs work best chewed into a poultice. ${a.name} watches while you get ready.`, options: [
+        { label: `🦷 Chew the ${HERB_INFO[herb].name} into a poultice`, action: () => { done(); this.chew(herb, () => this.treatCat(a, () => {})); } },
+        { label: 'Not now', action: done },
+      ], onClose: done });
+      return;
+    }
     if (!herb) {
       g.ui.dialog({ speaker: c, text: `You have no herbs with you. Fetch some from the herb store in the medicine den (or gather fresh ones), then bring them to ${a.name}.`, options: [{ label: 'I\'ll be right back', action: done }], onClose: done });
       return;

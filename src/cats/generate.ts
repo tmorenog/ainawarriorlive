@@ -94,10 +94,11 @@ export const BREEDS: { name: string; app: Partial<Appearance> }[] = [
   { name: 'Manx', app: { body: 'stocky', tail: 'short', ears: 'rounded' } },
   { name: 'Japanese Bobtail', app: { body: 'slender', tail: 'kinked', pattern: 'calico', base: '#d9823b', white: 0.5 } },
 ];
-export const PATTERNS: Pattern[] = ['solid', 'tabby', 'mackerel', 'spotted', 'ticked', 'smoke', 'bicolor', 'tuxedo', 'tortie', 'calico', 'colorpoint'];
+export const PATTERNS: Pattern[] = ['solid', 'tabby', 'mackerel', 'classic', 'marbled', 'spotted', 'rosette', 'ticked', 'smoke', 'bicolor', 'tuxedo', 'van', 'harlequin', 'tortie', 'torbie', 'calico', 'colorpoint', 'lynxpoint'];
 export const PATTERN_LABEL: Record<Pattern, string> = {
   solid: 'Solid', tabby: 'Tabby', mackerel: 'Mackerel tabby', spotted: 'Spotted', ticked: 'Ticked', smoke: 'Smoke',
   bicolor: 'Bicolour (white)', tuxedo: 'Tuxedo', tortie: 'Tortoiseshell', calico: 'Calico', colorpoint: 'Colour-point',
+  classic: 'Classic swirl tabby', marbled: 'Marbled', rosette: 'Rosettes (leopard spots)', van: 'Van (white with coloured head & tail)', harlequin: 'Harlequin (white with patches)', torbie: 'Torbie (tortie-tabby)', lynxpoint: 'Lynx point',
 };
 const BODIES: BodyType[] = ['slender', 'average', 'stocky', 'large'];
 const EARS: EarShape[] = ['pointed', 'rounded', 'tufted', 'folded'];
@@ -122,16 +123,17 @@ export function randomAppearance(rng: RNG): Appearance {
   const pattern = rng.weighted<Pattern>([
     ['solid', 3], ['tabby', 4], ['mackerel', 2], ['spotted', 1.5], ['ticked', 1], ['smoke', 1],
     ['bicolor', 3], ['tuxedo', 1.5], ['tortie', 1.5], ['calico', 1.5], ['colorpoint', 1],
+    ['classic', 1.5], ['marbled', 0.6], ['rosette', 0.5], ['van', 0.5], ['harlequin', 0.6], ['torbie', 0.8], ['lynxpoint', 0.5],
   ]);
   let base = rng.pick(FUR_COLORS).hex;
-  if (pattern === 'colorpoint') base = rng.pick(['#e6cfa2', '#f1eee7', '#c9a583']);
+  if (pattern === 'colorpoint' || pattern === 'lynxpoint') base = rng.pick(['#e6cfa2', '#f1eee7', '#c9a583']);
   if (pattern === 'tuxedo') base = rng.pick(['#2b2725', '#7c7f86', '#553827']);
   return {
     base,
     second: secondFor(base, pattern, rng),
     white: pattern === 'bicolor' ? rng.range(0.3, 0.75) : pattern === 'calico' ? rng.range(0.35, 0.6) : pattern === 'tuxedo' ? 0.3 : rng.chance(0.25) ? rng.range(0.05, 0.25) : 0,
     pattern,
-    eye: pattern === 'colorpoint' ? '#5aa2e6' : rng.pick(EYE_COLORS).hex,
+    eye: pattern === 'colorpoint' || pattern === 'lynxpoint' ? '#5aa2e6' : rng.pick(EYE_COLORS).hex,
     fur: rng.weighted<FurLength>([['short', 5], ['medium', 3], ['long', 2]]),
     body: rng.weighted<BodyType>([['slender', 2], ['average', 5], ['stocky', 2], ['large', 1.2]]),
     ears: rng.weighted<EarShape>([['pointed', 5], ['rounded', 2], ['tufted', 2], ['folded', 0.6]]),

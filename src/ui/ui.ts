@@ -173,6 +173,11 @@ export class UI {
       const rel = c.id !== pc.id ? relLabel(c.relations[pc.id], isFamily(c, pc), c.mate === pc.id) : '';
       h('div', '', `<div class="nm">${esc(displayName(c))}</div><div class="rl">${esc(spec.sub ?? roleLabel(c))}${rel ? ` · <span style="color:${REL_COLOR[rel]}">${rel}</span>` : ''} · ${c.traits.join(', ')}</div>`, who);
     }
+    // the speaker's mouth moves while they talk
+    if (spec.speaker && !spec.text.startsWith('*')) {
+      const m = g.npcs.agents.get(spec.speaker.id)?.model ?? g.twolegs.modelOf(spec.speaker.id);
+      if (m) m.talkT = Math.min(4, 0.4 + spec.text.length * 0.04);
+    }
     if (spec.said) h('div', 'said', `You: “${esc(spec.said)}”`, el);
     h('div', 'txt', esc(spec.text), el);
     if (spec.input) {
@@ -433,6 +438,20 @@ export class UI {
     }
     for (const a of g.npcs.agents.values()) {
       if (a.activity === 'stranded' && Math.hypot(a.pos.x - p.x, a.pos.z - p.z) < 200) items.push({ label: '🐈', ang: bearingTo(a.pos.x, a.pos.z), cls: 'mark help' });
+    }
+    // cats an objective sends you to
+    for (const ob of g.objectives.list) {
+      const tid = ob.targetId ?? ob.data?.catId ?? ob.data?.target;
+      const ag = typeof tid === 'string' ? g.npcs.agents.get(tid) : undefined;
+      if (ag) items.push({ label: `🐈<small>${Math.round(Math.hypot(ag.pos.x - p.x, ag.pos.z - p.z))}</small>`, ang: bearingTo(ag.pos.x, ag.pos.z), cls: 'mark help' });
+    }
+    // sick or hurt clanmates, when you can heal them (medicine cats, or anyone carrying herbs or a poultice)
+    const pc0 = g.clan.player;
+    const healer = pc0.role === 'medicine' || pc0.role === 'medicineApprentice' || (g.player.herbs.silverleaf + g.player.herbs.sunpetal + g.player.herbs.bitterroot) > 0 || Object.values(pc0.poultices ?? {}).some((n) => n > 0) || g.events.isActive('illness');
+    if (healer) {
+      const sick = [...g.npcs.agents.values()].filter((a) => a.cat.clan === 'home' && (a.cat.sick > 25 || a.cat.injury > 25))
+        .map((a) => ({ a, d: Math.hypot(a.pos.x - p.x, a.pos.z - p.z) })).sort((x, y) => x.d - y.d).slice(0, 3);
+      for (const { a, d } of sick) items.push({ label: `🐈<small>${a.cat.sick > a.cat.injury ? '🤒' : '🩹'}${Math.round(d)}</small>`, ang: bearingTo(a.pos.x, a.pos.z), cls: 'mark help' });
     }
     if (g.events.isActive('gathering')) items.push({ label: '🌕', ang: bearingTo(g.territories.council.x, g.territories.council.z), cls: 'mark' });
     let html = '';

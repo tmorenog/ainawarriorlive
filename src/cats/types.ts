@@ -5,7 +5,8 @@ import { loreName, lifestyleLabel } from '../lore';
 export type LifeStage = 'kit' | 'apprentice' | 'warrior' | 'elder';
 export type Role = 'none' | 'leader' | 'deputy' | 'medicine' | 'medicineApprentice';
 export type Sex = 'tom' | 'she';
-export type Pattern = 'solid' | 'tabby' | 'mackerel' | 'spotted' | 'ticked' | 'smoke' | 'bicolor' | 'tuxedo' | 'tortie' | 'calico' | 'colorpoint';
+export type Pattern = 'solid' | 'tabby' | 'mackerel' | 'spotted' | 'ticked' | 'smoke' | 'bicolor' | 'tuxedo' | 'tortie' | 'calico' | 'colorpoint'
+  | 'classic' | 'marbled' | 'rosette' | 'van' | 'harlequin' | 'torbie' | 'lynxpoint';
 export type FurLength = 'short' | 'medium' | 'long';
 export type BodyType = 'slender' | 'average' | 'stocky' | 'large';
 export type EarShape = 'pointed' | 'rounded' | 'tufted' | 'folded';
@@ -47,6 +48,11 @@ export interface Appearance {
   /** White (or any colour) markings: tail tip and belly. */
   tailTip?: string;
   belly?: string;
+  /** Face and body markings. */
+  blaze?: boolean;
+  eyePatch?: boolean;
+  locket?: boolean;
+  noseColor?: string;
 }
 
 export type Accessory = 'none' | 'collar' | 'bellCollar' | 'flowerCrown' | 'feather' | 'leafScarf' | 'shellNecklace' | 'berryCharm' | 'bow' | 'flowerEar' | 'clawNecklace'
@@ -155,6 +161,10 @@ export interface Cat {
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;
+  /** How much each kind of wild animal trusts you (50+ = friends). */
+  animalFriends?: Record<string, number>;
+  /** Herb poultices chewed and ready to press onto a wound. */
+  poultices?: Record<string, number>;
   /** Flowers carried to smell or give away. */
   flowers?: string[];
   /** Kittypet, loner or rogue instead of a clan cat (one-word names). */
