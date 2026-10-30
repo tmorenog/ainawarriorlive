@@ -2,6 +2,8 @@
 // on the Thunderpath, the kittypet's family and home, lost-cat posters,
 // animal-control vans with carriers, and the rusty pound you must escape.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+const mergeGeometriesSafe = (l: THREE.BufferGeometry[]) => mergeGeometries(l)!;
 import type { Game } from '../game';
 import type { Collider } from '../world/chunks';
 import { TwolegModel, randomLook, buildVehicle, Vehicle, TwolegLook } from '../world/twolegModel';
@@ -28,7 +30,7 @@ interface Walker {
   kind: 'street' | 'yard'; center?: P2; side: number; dirSign: number; s: number;
   mode: 'walk' | 'stop' | 'photo' | 'run'; timer: number; bubble: Bubble | null; name: string; kid: boolean; noticed: boolean; target?: P2;
 }
-interface Car { v: Vehicle; s: number; sign: number; speed: number; van: boolean; state: 'drive' | 'stop' | 'leave'; stopS: number; timer: number; honked: number; doors: number; catcher: Catcher | null; family?: 'leave' | 'arrive' }
+interface Car { v: Vehicle; s: number; sign: number; speed: number; van: boolean; state: 'drive' | 'stop' | 'leave'; stopS: number; timer: number; honked: number; doors: number; catcher: Catcher | null; family?: 'leave' | 'arrive'; bait?: { mesh: THREE.Group; x: number; z: number } }
 interface Catcher { model: TwolegModel; pos: THREE.Vector3; heading: number; state: 'out' | 'search' | 'chase' | 'return'; timer: number; target: Target | null; bubble: Bubble | null; caught: number; lost: number; stun?: number; hurt?: number }
 type Target = { kind: 'player' } | { kind: 'npc'; id: string } | { kind: 'town'; idx: number };
 interface Owner {
@@ -73,6 +75,10 @@ export class TwolegSystem {
   private lastPetDay = -1;
   private reunionPending = false;
   private leashAsked = -1;
+  private lastVan = -99;
+  private trap: { g: THREE.Group; door: THREE.Group; x: number; z: number; dirX: number; dirZ: number; sprung: boolean } | null = null;
+  private baitHint = false;
+  private outageHere = false;
   /** A power cut in the Twolegplace or the pound: everything goes black but cats' eyes. */
   outage: { until: number; start: number; where: 'town' | 'pound' } | null = null;
   private outageApplied = false;
@@ -117,6 +123,8 @@ export class TwolegSystem {
     this.worker?.model.dispose();
     this.walkers = []; this.cars = []; this.owners = []; this.townCats = []; this.occupants = []; this.worker = null;
     this.ac = null; this.leash = null; this.cutscene = false;
+    if (this.trap) { this.trap.g.parent?.remove(this.trap.g); this.trap = null; }
+    this.lastVan = -99;
     if (this.leashLine) { this.leashLine.parent?.remove(this.leashLine); this.leashLine = null; }
     this.postersUp = false;
     if (this.street) this.street.posters.clear();
@@ -265,6 +273,16 @@ export class TwolegSystem {
     } else if (this.walkers.length) { for (const w of this.walkers) w.model.dispose(); this.walkers = []; }
     this.updateCars(dt, nearTown);
     this.updateYardWalkers(dt);
+    // flashlights come out after dark and in power cuts
+    const darkOut = g.time.darkness > 0.45 || this.outageHere;
+    for (const w of this.walkers) w.model.setFlashlight(darkOut && !w.kid);
+    for (const o of this.owners) o.model.setFlashlight(this.outageHere && !o.away && o.task !== 'sleep' && !o.kid);
+    for (const c of this.cars) c.catcher?.model.setFlashlight(darkOut);
+    if (this.worker) this.worker.model.setFlashlight(this.outageHere && this.worker.state !== 'away');
+    // the smell of the bait
+    const bait = this.cars.find((c) => c.bait)?.bait;
+    if (bait && !this.baitHint && Math.hypot(pp.x - bait.x, pp.z - bait.z) < 16) { this.baitHint = true; g.ui.toast('🐟 Something smells AMAZING by the back of the monster… fish!', 'info'); }
+    if (!bait) this.baitHint = false;
     if (inFac || this.ac) this.updateFacility(dt);
   }
 
@@ -311,6 +329,7 @@ export class TwolegSystem {
       if (inFac || nearTown) { g.ui.toast('💡 The lights flicker back on.', 'info'); g.audio.click(); }
     }
     const here = !!this.outage && ((this.outage.where === 'pound' && inFac) || (this.outage.where === 'town' && nearTown && !inFac));
+    this.outageHere = here;
     if (here) {
       const t = g.clock - this.outage!.start, left = this.outage!.until - g.clock;
       // flicker at the start and the end
@@ -868,6 +887,12 @@ export class TwolegSystem {
         g.scene.add(model.root);
         const b = this.vanBack(c);
         c.catcher = { model, pos: new THREE.Vector3(b.x, 0, b.z), heading: 0, state: 'out', timer: 0, target: null, bubble: null, caught: 0, lost: 0 };
+        // a smelly can of tuna set out as bait just behind the open doors
+        const bp = this.st(c.s - c.sign * (c.v.length / 2 + 3.2), -c.sign * 1.8 + simRng.range(-0.6, 0.6));
+        const mesh = this.baitMesh();
+        mesh.position.set(bp.x, this.yAt(bp.x, bp.z) + 0.06, bp.z);
+        g.scene.add(mesh);
+        c.bait = { mesh, x: bp.x, z: bp.z };
       }
       if (c.catcher) this.updateCatcher(c, c.catcher, dt);
       if (c.timer > 75 && c.catcher?.state !== 'chase') { this.vanLeave(c); }
@@ -878,6 +903,7 @@ export class TwolegSystem {
 
   private vanLeave(c: Car) {
     if (c.catcher) { c.catcher.model.dispose(); c.catcher = null; }
+    if (c.bait) { c.bait.mesh.parent?.remove(c.bait.mesh); c.bait = undefined; }
     c.state = 'leave';
   }
 
@@ -998,6 +1024,87 @@ export class TwolegSystem {
     }
   }
 
+  private baitMesh() {
+    const g = new THREE.Group();
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 14), new THREE.MeshLambertMaterial({ color: '#b8bcc2' }));
+    g.add(can);
+    const fish = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.012, 14), new THREE.MeshLambertMaterial({ color: '#e89a8a' }));
+    fish.position.y = 0.025;
+    g.add(fish);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.004, 14), new THREE.MeshLambertMaterial({ color: '#d8dce0' }));
+    lid.position.set(0.05, 0.05, 0);
+    lid.rotation.z = 1.1;
+    g.add(lid);
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(0.071, 0.071, 0.03, 14, 1, true), new THREE.MeshLambertMaterial({ color: '#3a6ea8' }));
+    g.add(label);
+    return g;
+  }
+
+  /** Leave a wire box trap with tuna inside on the pavement. */
+  private placeTrap() {
+    const g = this.game;
+    const ps = this.streetCoords(g.player.pos.x, g.player.pos.z).s;
+    const s0 = clamp(ps + simRng.range(-25, 25), -this.L.len / 2 + 10, this.L.len / 2 - 10);
+    const side = simRng.chance(0.5) ? 1 : -1;
+    const p = this.st(s0, side * 6.3);
+    const grp = new THREE.Group();
+    const bar = new THREE.MeshLambertMaterial({ color: '#8a8a88' });
+    const L = 0.95, W = 0.42, H = 0.42;
+    const bars: THREE.BufferGeometry[] = [];
+    for (let x = -L / 2; x <= L / 2 + 0.001; x += 0.06) for (const z of [-W / 2, W / 2]) { const b = new THREE.CylinderGeometry(0.004, 0.004, H, 4); b.translate(x, H / 2, z); bars.push(b); }
+    for (let x = -L / 2; x <= L / 2 + 0.001; x += 0.06) { const b = new THREE.CylinderGeometry(0.004, 0.004, W, 4); b.rotateX(Math.PI / 2); b.translate(x, H, 0); bars.push(b); }
+    for (let y = 0.1; y < H; y += 0.1) for (const z of [-W / 2, W / 2]) { const b = new THREE.CylinderGeometry(0.004, 0.004, L, 4); b.rotateZ(Math.PI / 2); b.translate(0, y, z); bars.push(b); }
+    for (let z = -W / 2; z <= W / 2 + 0.001; z += 0.06) { const b = new THREE.CylinderGeometry(0.004, 0.004, H, 4); b.translate(-L / 2, H / 2, z); bars.push(b); }
+    const mesh = new THREE.Mesh(mergeGeometriesSafe(bars), bar);
+    grp.add(mesh);
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(L, 0.01, W), new THREE.MeshLambertMaterial({ color: '#5a5a58' }));
+    grp.add(floor);
+    const pan = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.01, 0.2), new THREE.MeshLambertMaterial({ color: '#b8b8b0' }));
+    pan.position.set(-0.25, 0.015, 0);
+    grp.add(pan);
+    const bait = this.baitMesh();
+    bait.position.set(-0.36, 0.04, 0);
+    bait.scale.setScalar(0.8);
+    grp.add(bait);
+    // the spring door at the open end, propped up
+    const door = new THREE.Group();
+    door.position.set(L / 2, H, 0);
+    const dbars: THREE.BufferGeometry[] = [];
+    for (let z = -W / 2; z <= W / 2 + 0.001; z += 0.06) { const b = new THREE.CylinderGeometry(0.004, 0.004, H, 4); b.translate(0, -H / 2, z); dbars.push(b); }
+    door.add(new THREE.Mesh(mergeGeometriesSafe(dbars), bar));
+    door.rotation.z = 1.4;
+    grp.add(door);
+    const ang = Math.atan2(this.L.dir.z, this.L.dir.x);
+    grp.rotation.y = -ang;
+    grp.position.set(p.x, this.yAt(p.x, p.z) + 0.1, p.z);
+    g.scene.add(grp);
+    this.trap = { g: grp, door, x: p.x, z: p.z, dirX: this.L.dir.x, dirZ: this.L.dir.z, sprung: false };
+  }
+
+  private removeTrap() {
+    if (!this.trap) return;
+    this.trap.g.parent?.remove(this.trap.g);
+    this.trap = null;
+  }
+
+  /** You crept into the box trap for the food — SNAP. */
+  private springTrap() {
+    const g = this.game;
+    const t = this.trap!;
+    t.sprung = true;
+    t.door.rotation.z = 0;
+    g.audio.slam();
+    g.player.placeAt(t.x - t.dirX * 0.2, t.z - t.dirZ * 0.2);
+    g.player.busy = true;
+    g.ui.toast('🪤 SNAP! The trap door slams shut behind you! You scrabble at the wire, but it won\'t budge…', 'danger');
+    g.audio.meow(1.3, 0.8, 0.06);
+    this.lastVan = g.time.totalHours;
+    setTimeout(() => {
+      g.ui.toast('Headlights. A white monster pulls up, and a Twoleg lifts your trap into the back…', 'danger');
+      setTimeout(() => { g.player.busy = false; this.removeTrap(); this.captured([], false); }, 2500);
+    }, 3000);
+  }
+
   /** A cat is taken away to the pound. */
   cageCat(cat: Cat) {
     const g = this.game;
@@ -1021,12 +1128,16 @@ export class TwolegSystem {
     const pp = g.player.pos;
     const near = this.nearTown(pp.x, pp.z, 60) && !this.inHome(pp.x, pp.z);
     const vanUp = this.cars.some((c) => c.van);
-    if (!vanUp && !this.ac && !this.cutscene && near) {
-      const rescue = g.objectives.list.some((o) => o.data?.rescue);
-      const night = hour < 6 || hour > 21;
-      const p = rescue ? 0.4 : night ? 0.1 : this.isKittypet ? 0.2 : 0.27;
-      if (simRng.chance(p)) this.callVan();
+    const rescue = g.objectives.list.some((o) => o.data?.rescue);
+    // vans need a long break between visits (a full day; less when a clanmate needs rescuing)
+    const rested = g.time.totalHours - this.lastVan > (rescue ? 8 : 26);
+    if (!vanUp && !this.ac && !this.cutscene && near && rested) {
+      const night = hour >= 19 || hour < 6;
+      const p = rescue ? 0.35 : night ? (this.isKittypet ? 0.16 : 0.22) : (this.isKittypet ? 0.05 : 0.08);
+      if (simRng.chance(p) && this.callVan()) this.lastVan = g.time.totalHours;
     }
+    // a wire box trap with food in it, left out on the pavement at night
+    if (!this.trap && !this.ac && near && (hour >= 20 || hour < 5) && g.time.totalHours - this.lastVan > 12 && simRng.chance(0.1)) this.placeTrap();
     // power cuts: at night or in storms in the Twolegplace, and now and then in the pound
     if (!this.outage) {
       const storm = g.weather.kind === 'thunderstorm';
@@ -1044,6 +1155,7 @@ export class TwolegSystem {
         if (!pc.exiled || pc.lifestyle !== 'clan') this.rescueObjective(c);
       }
     }
+    if (hour === 7 && this.trap && !this.trap.sprung) this.removeTrap();
     // caught cats who were never rescued: some escape home, some are taken in by Tallfolk
     if (hour === 7) for (const c of Object.values(g.clan.cats)) {
       if (!c.caged || !c.alive || (this.ac && this.occupants.some((o) => o.cat.id === c.id))) continue;
@@ -1245,8 +1357,14 @@ export class TwolegSystem {
   private workerWatching(): boolean {
     const w = this.worker;
     if (!w || w.state === 'away') return false;
-    if (this.outage?.where === 'pound') return false;
     const pp = this.game.player.pos;
+    if (this.outage?.where === 'pound') {
+      // pitch dark: only the torch beam can find you
+      if (!w.model.torchOn || w.state === 'desk') return false;
+      const d0 = Math.hypot(pp.x - w.pos.x, pp.z - w.pos.z);
+      const dot0 = ((pp.x - w.pos.x) * Math.sin(w.heading) + (pp.z - w.pos.z) * Math.cos(w.heading)) / Math.max(d0, 0.01);
+      return d0 < 6.5 && dot0 > 0.88;
+    }
     const d = Math.hypot(pp.x - w.pos.x, pp.z - w.pos.z);
     if (w.state === 'desk') return d < 2.5;
     if (d > 7.5) return false;
@@ -1520,6 +1638,33 @@ export class TwolegSystem {
       }
       if (near(this.fac.door, 1.5)) return { text: 'Scratch at the door (it\'s locked)', action: () => { g.audio.swipe(); g.ui.toast('The metal door is locked tight. The Twoleg has the key. There must be another way out…', 'info'); } };
       return null;
+    }
+    // bait set out by the van: a trick!
+    for (const c of this.cars) {
+      if (!c.bait || !near(c.bait, 1.0)) continue;
+      const bait = c.bait;
+      return { text: '🐟 Eat the delicious-smelling tuna', action: () => {
+        const k = c.catcher;
+        const watching = k && k.state !== 'return' && Math.hypot(k.pos.x - bait.x, k.pos.z - bait.z) < 10 && (k.stun ?? 0) <= 0;
+        bait.mesh.parent?.remove(bait.mesh);
+        c.bait = undefined;
+        g.audio.eat();
+        if (watching) {
+          this.say(k!, 'Gotcha! Works every time.', 3);
+          g.ui.toast('🐟 It was a TRAP! While you gulp the tuna, the Twoleg grabs you from behind!', 'danger');
+          this.vanLeave(c);
+          this.captured([], false);
+        } else {
+          pc.hunger = Math.min(100, pc.hunger + 50);
+          g.ui.toast('You gobble the tuna while the Twoleg isn\'t looking. Delicious — and risky!', 'good');
+        }
+      } };
+    }
+    // a wire box trap with food inside
+    if (this.trap && !this.trap.sprung) {
+      const t = this.trap;
+      const mouth = { x: t.x + t.dirX * 0.7, z: t.z + t.dirZ * 0.7 };
+      if (near(mouth, 0.9) || near(t, 0.7)) return { text: '🐟 Creep inside the wire box to get the food', action: () => this.springTrap() };
     }
     // the parked animal-control van: sneak in the back
     for (const c of this.cars) {

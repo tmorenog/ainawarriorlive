@@ -84,6 +84,12 @@ export class Camp {
       const beds: { x: number; z: number }[] = [];
       const nb = d.name === 'leader' ? 1 : d.name === 'warriors' ? 12 : 8;
       for (let i = 0; i < nb; i++) {
+        if (d.name === 'elders') {
+          // two rows of moss beds along the inside of the hollow log
+          const along = -1.9 + Math.floor(i / 2) * 1.0, side = i % 2 ? 0.55 : -0.55;
+          beds.push({ x: x + Math.cos(facing) * along - Math.sin(facing) * side, z: z + Math.sin(facing) * along + Math.cos(facing) * side });
+          continue;
+        }
         const a = (i / nb) * Math.PI * 2 + 0.3;
         const rr = nb === 1 ? 0 : d.radius * (i % 2 ? 0.35 : 0.62);
         beds.push({ x: x + Math.cos(a) * rr, z: z + Math.sin(a) * rr });
@@ -112,6 +118,105 @@ export class Camp {
             parts.push(prep(hb, i % 2 ? [0.55, 0.7, 0.35] : [0.8, 0.7, 0.3]));
           }
         }
+      } else if (d.name === 'elders') {
+        // a huge fallen hollow log, open at the end that faces the camp
+        const R = 1.75, L = 6.2;
+        const ax = Math.cos(facing), az = Math.sin(facing);
+        const cy = gy + R * 0.42;
+        const place = (g: THREE.BufferGeometry, along: number) => {
+          g.rotateX(Math.PI / 2);
+          g.rotateY(Math.PI / 2 - facing);
+          g.translate(x + ax * along, cy, z + az * along);
+          return g;
+        };
+        const bark = (g: THREE.BufferGeometry, k: number) => {
+          const p = g.getAttribute('position');
+          for (let i = 0; i < p.count; i++) {
+            const px = p.getX(i), py = p.getY(i), pz = p.getZ(i);
+            const n = 1 + noise.noise(px * 3.1 + py * 0.7, pz * 3.1 + 7) * k + Math.sin(Math.atan2(pz, px) * 22) * 0.012;
+            p.setXYZ(i, px * n, py, pz * n);
+          }
+          g.computeVertexNormals();
+        };
+        const flip = (g: THREE.BufferGeometry) => {
+          const idx = g.getIndex()!;
+          const arr = idx.array as Uint16Array | Uint32Array;
+          for (let i = 0; i < arr.length; i += 3) { const t = arr[i + 1]; arr[i + 1] = arr[i + 2]; arr[i + 2] = t; }
+          idx.needsUpdate = true;
+          g.computeVertexNormals();
+          const n = g.getAttribute('normal');
+          for (let i = 0; i < n.count; i++) n.setXYZ(i, -n.getX(i), -n.getY(i), -n.getZ(i));
+        };
+        // rough outer bark
+        const outer = new THREE.CylinderGeometry(R, R * 1.06, L, 28, 6, true);
+        bark(outer, 0.07);
+        parts.push(prep(place(outer, 0), (px, py, pz) => {
+          const n = noise.noise(px * 5, pz * 5 + py * 4);
+          const top = (py - cy) / R;
+          const mossy = top > 0.55 ? (top - 0.55) * 1.6 : 0;
+          const v = 0.32 + n * 0.08;
+          return [v * 1.05 - mossy * 0.12, v * 0.82 + mossy * 0.25, v * 0.62 - mossy * 0.05];
+        }));
+        // soft rotten wood inside
+        const inner = new THREE.CylinderGeometry(R * 0.86, R * 0.9, L - 0.05, 28, 4, true);
+        bark(inner, 0.04);
+        flip(inner);
+        parts.push(prep(place(inner, 0), (px, py, pz) => {
+          const n = noise.noise(px * 6, pz * 6 + py * 6);
+          const v = 0.42 + n * 0.08;
+          return [v * 1.1, v * 0.84, v * 0.6];
+        }));
+        // the open end: pale cut wood with growth rings
+        const ring = new THREE.RingGeometry(R * 0.86, R * 1.03, 28, 3);
+        const front = ring.clone();
+        front.rotateY(Math.PI / 2 - facing);
+        front.translate(x + ax * L / 2, cy, z + az * L / 2);
+        parts.push(prep(front, (px, py, pz) => {
+          const r = Math.hypot(px - (x + ax * L / 2), py - cy, pz - (z + az * L / 2));
+          const rings = Math.sin(r * 38) * 0.05;
+          return [0.72 + rings, 0.58 + rings, 0.4 + rings];
+        }));
+        // the far end is choked with old wood and moss
+        const back = new THREE.CircleGeometry(R * 0.9, 24);
+        back.rotateY(-Math.PI / 2 - facing);
+        back.translate(x - ax * (L / 2 - 0.1), cy, z - az * (L / 2 - 0.1));
+        parts.push(prep(back, [0.28, 0.22, 0.16]));
+        // moss cushions and ferns on top, bracket fungus on the sides, broken branch stubs
+        for (let i = 0; i < 9; i++) {
+          const along = -L / 2 + 0.4 + i * (L - 0.8) / 8;
+          const m = new THREE.SphereGeometry(0.35 + (i % 3) * 0.1, 8, 5);
+          m.scale(1.4, 0.35, 1);
+          m.rotateY(-facing);
+          m.translate(x + ax * along, cy + R * 0.97, z + az * along);
+          parts.push(prep(m, [0.3 + (i % 2) * 0.05, 0.48, 0.2]));
+        }
+        for (let i = 0; i < 6; i++) {
+          const along = -L / 2 + 0.8 + i * 0.9, side = i % 2 ? 1 : -1;
+          const f = new THREE.CylinderGeometry(0.22, 0.24, 0.05, 12, 1, false, 0, Math.PI);
+          f.rotateY(-facing + (side > 0 ? 0 : Math.PI));
+          const lx = -Math.sin(facing) * side * R * 1.02, lz = Math.cos(facing) * side * R * 1.02;
+          f.translate(x + ax * along + lx, cy + 0.2 + (i % 3) * 0.25, z + az * along + lz);
+          parts.push(prep(f, [0.82, 0.62, 0.36]));
+        }
+        for (const [along, ang, len] of [[-1.5, 0.55, 1.1], [1.2, -0.5, 0.8], [0.2, 0.25, 0.7]] as [number, number, number][]) {
+          const b = new THREE.CylinderGeometry(0.1, 0.16, len, 7);
+          b.translate(0, len / 2, 0);
+          b.rotateZ(ang);
+          b.rotateY(-facing);
+          b.translate(x + ax * along, cy + R * 0.97, z + az * along);
+          parts.push(prep(b, [0.3, 0.24, 0.17]));
+        }
+        // the log's walls are solid
+        for (let a2 = -L / 2; a2 <= L / 2; a2 += 0.55) {
+          for (const side of [-1, 1]) {
+            const lx = -Math.sin(facing) * side * (R * 0.98 + 0.15), lz = Math.cos(facing) * side * (R * 0.98 + 0.15);
+            this.colliders.push({ x: x + ax * a2 + lx, z: z + az * a2 + lz, r: 0.32 });
+          }
+        }
+        for (const side of [-0.9, -0.3, 0.3, 0.9]) {
+          const lx = -Math.sin(facing) * side * R, lz = Math.cos(facing) * side * R;
+          this.colliders.push({ x: x - ax * (L / 2 + 0.1) + lx, z: z - az * (L / 2 + 0.1) + lz, r: 0.35 });
+        }
       } else {
         const opening = d.name === 'nursery' ? 1.0 : 1.3;
         const g = new THREE.SphereGeometry(d.radius, 18, 9, 0, Math.PI * 2 - opening, 0, Math.PI / 2);
@@ -121,7 +226,7 @@ export class Camp {
         for (let i = 0; i < p.count; i++) {
           const px = p.getX(i), py = p.getY(i), pz = p.getZ(i);
           const k = 1 + noise.noise(px * 2.5 + d.r, pz * 2.5 + py * 2) * 0.16;
-          p.setXYZ(i, px * k, py * k * (d.name === 'elders' ? 0.7 : 0.85), pz * k);
+          p.setXYZ(i, px * k, py * k * 0.85, pz * k);
         }
         g.computeVertexNormals();
         g.translate(x, gy - 0.15, z);
@@ -137,13 +242,6 @@ export class Camp {
           if (dA > Math.PI) dA = Math.PI * 2 - dA;
           if (dA < opening / 2 + 0.25) continue;
           this.colliders.push({ x: x + Math.cos(a) * d.radius, z: z + Math.sin(a) * d.radius, r: 0.55 });
-        }
-        if (d.name === 'elders') {
-          const lg = A.log.clone();
-          lg.scale(d.radius * 2.4, 0.9, 0.9);
-          lg.rotateY(facing + Math.PI / 2);
-          lg.translate(x - Math.cos(facing) * d.radius * 0.8, gy + d.radius * 0.55, z - Math.sin(facing) * d.radius * 0.8);
-          parts.push(lg);
         }
       }
       // moss beds

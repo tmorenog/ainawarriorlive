@@ -499,6 +499,7 @@ export class ClanSim {
       if (c.isPlayer) p *= 0.8;
       if (p > 0 && rng.chance(p)) this.kill(c, cause);
     }
+    this.medApprenticeTick();
     this.romanceTick();
     this.politicsTick();
     this.rivalTick();
@@ -522,6 +523,32 @@ export class ClanSim {
       if (p.expiresDay < day) { this.game.decisions.autoResolve(p); return false; }
       return true;
     });
+  }
+
+  /** A medicine cat with no apprentice: now and then a young cat asks to learn from them. */
+  private medApprenticeTick() {
+    const med = this.medicine;
+    if (!med || !med.alive || med.apprentice || this.home().some((x) => x.role === 'medicineApprentice')) return;
+    const cands = this.home().filter((x) => x.stage === 'apprentice' && x.role === 'none' && !x.isPlayer && x.age < 10 && (x.pers.kindness > 0.5 || x.traits.includes('curious') || x.traits.includes('kind') || x.traits.includes('calm')));
+    if (!cands.length || !simRng.chance(med.isPlayer ? 0.3 : 0.15)) return;
+    const ap = simRng.pick(cands);
+    const take = () => {
+      const old = this.get(ap.mentor);
+      if (old && old.apprentice === ap.id) old.apprentice = null;
+      ap.role = 'medicineApprentice';
+      ap.mentor = med.id;
+      med.apprentice = ap.id;
+      ap.training = { hunting: 0, tracking: 0, fighting: 0, exploring: 0, territory: 0, rules: 0 };
+      this.adjust(ap, med, 12);
+      this.log(`${displayName(ap)} left warrior training to become ${displayName(med)}'s medicine cat apprentice.`, 'ceremony');
+      this.game.ceremony(`${displayName(ap)} has chosen the path of a medicine cat. ${displayName(med)} will be their mentor.`, [ap.id, med.id]);
+    };
+    if (med.isPlayer) {
+      this.game.ui.choice('🌿 A new apprentice?', `${displayName(ap)} creeps into your den, eyes shining. "I've been watching you heal the clan. I don't want to be a warrior — I want to learn herbs, like you. Will you teach me?"`, [
+        { label: `Take ${displayName(ap)} as your apprentice`, action: () => { take(); this.game.notify(`🌿 ${displayName(ap)} is your apprentice now. Talk to them to teach them.`); } },
+        { label: 'Not yet', action: () => this.adjust(ap, med, -2) },
+      ]);
+    } else take();
   }
 
   checkStage(c: Cat) {
@@ -586,14 +613,22 @@ export class ClanSim {
       this.game.onPlayerStageChange();
       return;
     }
-    const medApprentice = !c.isPlayer && med && !med.apprentice && (c.pers.kindness > 0.6 || c.traits.includes('curious')) && simRng.chance(0.5);
+    // medicine cats want an apprentice to pass their knowledge on to (a player medicine cat especially)
+    const medWants = med && med.alive && !med.apprentice && !this.home().some((x) => x.role === 'medicineApprentice');
+    const gentle = c.pers.kindness > 0.55 || c.traits.includes('curious') || c.traits.includes('calm') || c.traits.includes('kind');
+    const medApprentice = !c.isPlayer && !!medWants && simRng.chance(med!.isPlayer ? (gentle ? 0.8 : 0.55) : (gentle ? 0.65 : 0.3));
     c.stage = 'apprentice';
     if (medApprentice && med) {
       c.role = 'medicineApprentice';
       c.mentor = med.id;
       med.apprentice = c.id;
-      this.game.ceremony(`${displayName(med)} will teach ${c.given} the healer's craft.`, [c.id, med.id]);
+      this.adjust(c, med, 10);
+      this.game.ceremony(`${displayName(med)} will teach ${displayName(c)} the healer's craft.`, [c.id, med.id]);
       this.log(`${c.given} became ${displayName(med)}'s healer apprentice.`, 'ceremony');
+      if (med.isPlayer) {
+        this.game.notify(`🌿 ${displayName(c)} is your medicine cat apprentice! Talk to them to teach them herbs and healing.`);
+        this.remember(med, `${displayName(c)} became my medicine cat apprentice.`, 6, c.id);
+      }
       return;
     }
     // choose mentor

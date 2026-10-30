@@ -123,6 +123,40 @@ export class TwolegModel {
   private screenMat: THREE.MeshBasicMaterial | null = null;
   carrier: THREE.Group | null = null;
   private flash = 0;
+  /** A torch / phone flashlight with a visible beam (for night and power cuts). */
+  private torch: THREE.Group | null = null;
+  torchOn = false;
+  setFlashlight(on: boolean) {
+    if (on === this.torchOn) return;
+    this.torchOn = on;
+    if (on && !this.torch) {
+      const t = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.018, 0.16, 8), new THREE.MeshLambertMaterial({ color: '#2a2a30' }));
+      body.rotation.x = Math.PI / 2;
+      t.add(body);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.024, 12), new THREE.MeshBasicMaterial({ color: '#fff8e0', toneMapped: false }));
+      lens.position.z = 0.081;
+      t.add(lens);
+      // the beam: a long soft cone of light
+      const len = 7;
+      const cone = new THREE.ConeGeometry(1.5, len, 20, 1, true);
+      cone.translate(0, -len / 2, 0);
+      cone.rotateX(-Math.PI / 2);
+      const beam = new THREE.Mesh(cone, new THREE.MeshBasicMaterial({ color: '#fff2c8', transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+      beam.position.z = 0.08;
+      t.add(beam);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ color: '#fff4d0', transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      glow.scale.setScalar(0.14);
+      glow.position.z = 0.09;
+      t.add(glow);
+      // held out in front at chest height, tilted down at the ground
+      t.position.set(0.2, 1.12, 0.38);
+      t.rotation.x = 0.32;
+      this.root.add(t);
+      this.torch = t;
+    }
+    if (this.torch) this.torch.visible = on;
+  }
 
   constructor(look: TwolegLook) {
     this.look = look;
@@ -385,6 +419,12 @@ export class TwolegModel {
       case 'run': break;
     }
     if (this.carrier) { this.armL.rotation.set(sw * 0.15, 0, -0.15); this.elbowL.rotation.set(0, 0, 0); }
+    if (this.torchOn && p !== 'sit' && p !== 'lie' && p !== 'crouch' && p !== 'pet') {
+      // arm out in front, pointing the torch
+      this.armR.rotation.set(-1.05, 0, 0.1); this.elbowR.rotation.set(-0.35, 0, 0);
+      if (this.phone) this.phone.visible = false;
+      if (this.torch) this.torch.rotation.y = Math.sin(t * 0.9) * 0.18;
+    }
     if (this.screenMat) {
       this.flash = Math.max(0, this.flash - dt);
       this.screenMat.color.setScalar(this.flash > 0 ? 3 : 1);
