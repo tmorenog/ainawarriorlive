@@ -29,7 +29,7 @@ interface Walker {
   mode: 'walk' | 'stop' | 'photo' | 'run'; timer: number; bubble: Bubble | null; name: string; kid: boolean; noticed: boolean; target?: P2;
 }
 interface Car { v: Vehicle; s: number; sign: number; speed: number; van: boolean; state: 'drive' | 'stop' | 'leave'; stopS: number; timer: number; honked: number; doors: number; catcher: Catcher | null; family?: 'leave' | 'arrive' }
-interface Catcher { model: TwolegModel; pos: THREE.Vector3; heading: number; state: 'out' | 'search' | 'chase' | 'return'; timer: number; target: Target | null; bubble: Bubble | null; caught: number; lost: number }
+interface Catcher { model: TwolegModel; pos: THREE.Vector3; heading: number; state: 'out' | 'search' | 'chase' | 'return'; timer: number; target: Target | null; bubble: Bubble | null; caught: number; lost: number; stun?: number; hurt?: number }
 type Target = { kind: 'player' } | { kind: 'npc'; id: string } | { kind: 'town'; idx: number };
 interface Owner {
   model: TwolegModel; pos: THREE.Vector3; heading: number; kid: boolean; name: string;
@@ -52,7 +52,7 @@ export class TwolegSystem {
   owners: Owner[] = [];
   private townCats: TownCat[] = [];
   private occupants: Occupant[] = [];
-  private worker: { model: TwolegModel; pos: THREE.Vector3; heading: number; state: 'desk' | 'round' | 'chase' | 'away'; timer: number; wp: number; bubble: Bubble | null } | null = null;
+  private worker: { model: TwolegModel; pos: THREE.Vector3; heading: number; state: 'desk' | 'round' | 'chase' | 'away'; timer: number; wp: number; bubble: Bubble | null; stun?: number } | null = null;
   /** The player's escape from the pound. */
   ac: { cage: number | null; latch: number; need: number; vent: number; ventOpen: boolean; since: number; fedAt: number; seen: number; ownerCame: boolean } | null = null;
   private light = new THREE.PointLight('#ffd9a0', 0, 22, 1.2);
@@ -671,7 +671,8 @@ export class TwolegSystem {
     }
     if (dPlayer > 14) w.noticed = false;
     if (w.mode === 'run') {
-      this.headTo(w, pp.x, pp.z, 2.4, dt);
+      if (w.bubble && /OW|Ouch|Get away|wild|Argh|Yow/i.test(w.bubble.text)) this.headTo(w, w.pos.x + (w.pos.x - pp.x), w.pos.z + (w.pos.z - pp.z), 3, dt);
+      else this.headTo(w, pp.x, pp.z, 2.4, dt);
       w.model.pose = 'run';
       if (w.timer <= 0 || dPlayer < 1.2) { w.mode = 'walk'; if (dPlayer < 1.5) this.say(w, 'Aww, it ran away…'); }
     } else if (w.mode === 'photo') {
@@ -859,6 +860,17 @@ export class TwolegSystem {
     const g = this.game;
     k.timer += dt;
     const back = this.vanBack(c);
+    if ((k.stun ?? 0) > 0) {
+      // clutching a bitten hand
+      k.stun! -= dt;
+      k.model.pose = 'crouch';
+      k.model.speed = 0;
+      k.pos.y = this.yAt(k.pos.x, k.pos.z) + (Math.abs(this.streetCoords(k.pos.x, k.pos.z).off) < 5.4 ? 0.1 : 0);
+      k.model.root.position.copy(k.pos);
+      k.model.update(dt);
+      if (k.bubble && k.bubble.until < g.clock) k.bubble = null;
+      return;
+    }
     if (k.state === 'out' || k.state === 'search') {
       if (!k.target || k.timer > 4) {
         const list = this.catchables(back).filter((x) => x.d < 32);
@@ -966,7 +978,7 @@ export class TwolegSystem {
     if (!vanUp && !this.ac && !this.cutscene && near) {
       const rescue = g.objectives.list.some((o) => o.data?.rescue);
       const night = hour < 6 || hour > 21;
-      const p = rescue ? 0.35 : night ? 0.03 : this.isKittypet ? 0.07 : 0.11;
+      const p = rescue ? 0.4 : night ? 0.1 : this.isKittypet ? 0.2 : 0.27;
       if (simRng.chance(p)) this.callVan();
     }
     // now and then a clanmate who hunts too close to the Thunderpath is taken
@@ -1203,6 +1215,9 @@ export class TwolegSystem {
         const p = toWorld(this.fac.frame, xs[w.wp % 7], -6 + 2.3);
         if (this.headTo(w, p.x, p.z, 1.1, dt)) { w.wp++; if (w.wp >= 7) { w.state = 'desk'; w.timer = simRng.range(25, 50); ac.fedAt = g.time.totalHours; } }
         w.model.pose = 'walk';
+      } else if ((w.stun ?? 0) > 0) {
+        w.stun! -= dt;
+        w.model.pose = 'crouch';
       } else if (w.state === 'chase') {
         this.headTo(w, pp.x, pp.z, 2.5, dt);
         w.model.pose = 'run';
@@ -1289,6 +1304,72 @@ export class TwolegSystem {
     this.say(w, 'Back you go. And I\'m tying that latch with wire this time.', 4);
     g.ui.toast('The Tallfolk scoops you up and locks you back in your cage — the latch is tighter now.', 'danger');
     g.audio.rattle();
+  }
+
+  /** You bite or scratch a Twoleg in front of you. Returns true if you hit one. */
+  playerAttack(heavy: boolean, reach: number): boolean {
+    const g = this.game;
+    if (!this.L) return false;
+    const pp = g.player.pos;
+    const f = g.player.forward();
+    type Hit = { pos: THREE.Vector3; model: TwolegModel; kind: 'catcher' | 'walker' | 'owner' | 'worker'; ref: any };
+    const list: Hit[] = [];
+    for (const c of this.cars) if (c.catcher) list.push({ pos: c.catcher.pos, model: c.catcher.model, kind: 'catcher', ref: c.catcher });
+    for (const w of this.walkers) list.push({ pos: w.pos, model: w.model, kind: 'walker', ref: w });
+    for (const o of this.owners) if (!o.away) list.push({ pos: o.pos, model: o.model, kind: 'owner', ref: o });
+    if (this.worker && this.worker.state !== 'away') list.push({ pos: this.worker.pos, model: this.worker.model, kind: 'worker', ref: this.worker });
+    let best: Hit | null = null, bd = reach;
+    for (const h of list) {
+      const dx = h.pos.x - pp.x, dz = h.pos.z - pp.z;
+      const d = Math.hypot(dx, dz);
+      if (d > bd || (d > 0.4 && (dx * f.x + dz * f.z) / d < 0.25)) continue;
+      best = h; bd = d;
+    }
+    if (!best) return false;
+    const h = best;
+    g.audio.hiss();
+    g.audio.hit(heavy);
+    g.ui.floatText(heavy ? '*CHOMP!*' : '*SCRATCH!*', '#ff9a7a');
+    g.combat.puff(new THREE.Vector3(h.pos.x, h.pos.y + (heavy ? 0.5 : 0.25), h.pos.z), 8, 0.2);
+    // the Twoleg stumbles back
+    const dx = h.pos.x - pp.x, dz = h.pos.z - pp.z, d = Math.max(0.1, Math.hypot(dx, dz));
+    h.pos.x += (dx / d) * 0.5; h.pos.z += (dz / d) * 0.5;
+    const ouch = simRng.pick(['OW!', 'Ouch! It bit me!', 'Argh, my ankle!', 'Yow! Bad kitty!']);
+    if (h.kind === 'catcher') {
+      const k = h.ref as Catcher;
+      k.hurt = (k.hurt ?? 0) + (heavy ? 2 : 1);
+      k.stun = heavy ? 2.2 : 1.3;
+      if (k.hurt >= 3 || simRng.chance(heavy ? 0.45 : 0.2)) {
+        k.state = 'return'; k.target = null;
+        this.say(k, simRng.pick(['Forget it! That one\'s feral!', 'I\'m not paid enough for this!', 'Ow ow ow — I\'m done!']), 4);
+        g.ui.toast('🐾 You bit and scratched the Twoleg until they gave up! They limp back to their monster.', 'good');
+        g.clan.player.reputation = clamp(g.clan.player.reputation + 1, -100, 100);
+      } else this.say(k, ouch, 2);
+      return true;
+    }
+    if (h.kind === 'worker') {
+      const w = h.ref;
+      w.stun = heavy ? 3.5 : 2;
+      w.state = 'chase'; w.timer = 9;
+      this.say(w, simRng.pick(['ARGH! My hand!', 'You little monster!', 'OW! That\'s it, you\'re going back in!']), 3);
+      g.ui.toast('The worker clutches their hand — run while you can!', 'good');
+      return true;
+    }
+    if (h.kind === 'walker') {
+      const w = h.ref as Walker;
+      w.mode = 'run'; w.timer = 2.5; w.target = undefined;
+      this.say(w, simRng.pick([ouch, 'Get away from me!', 'That cat is wild! Someone call animal control!']), 3);
+      // the walker runs off, and might report a wild cat
+      w.dirSign = -w.dirSign;
+      if (simRng.chance(0.3) && !this.cars.some((c) => c.van)) setTimeout(() => { if (g.state === 'playing' && this.nearTown(g.player.pos.x, g.player.pos.z, 60)) this.callVan(); }, 15000);
+      return true;
+    }
+    // your own family
+    const o = h.ref as Owner;
+    o.petT = 0;
+    this.say(o, this.isKittypet ? simRng.pick([`Ow! ${this.pc.given}, what's gotten into you?`, 'Hey! No biting!', '*sniffles* That hurt…']) : ouch, 3);
+    if (this.isKittypet && o.kid) g.ui.toast('The little Twoleg starts to cry. You feel a bit bad.', 'info');
+    return true;
   }
 
   /** Interaction prompt for anything Twoleg-related near the player. */

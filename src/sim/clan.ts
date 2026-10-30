@@ -527,10 +527,14 @@ export class ClanSim {
   checkStage(c: Cat) {
     const want = stageForAge(c.age);
     if (c.stage === 'kit' && c.age >= 6 + (c.ceremonyDelay ?? 0)) this.apprenticeCeremony(c);
-    else if (c.stage === 'apprentice' && c.age >= 12) {
+    else if (c.isPlayer && c.stage === 'apprentice' && c.age < 12) {
+      // a hard-working apprentice can earn their name early
+      const ready = LESSONS.every((l) => c.training[l] >= 1) && LESSONS.reduce((s, l) => s + c.training[l], 0) >= 9;
+      if (ready && c.age >= 8 && !this.game.objectives.has('assessment')) this.game.training.offerAssessment();
+    } else if (c.stage === 'apprentice' && c.age >= 12) {
       const ready = LESSONS.every((l) => c.training[l] >= 1) && LESSONS.reduce((s, l) => s + c.training[l], 0) >= 9;
       if (c.isPlayer) {
-        if ((ready || c.age >= 18) && !this.game.objectives.has('assessment')) this.game.training.offerAssessment();
+        if ((ready || c.age >= 15) && !this.game.objectives.has('assessment')) this.game.training.offerAssessment();
         if (c.age >= 20 && !ready) {
           c.reputation -= 2;
           if (simRng.chance(0.3)) this.game.notify('The clan wonders why your training is taking so long.');

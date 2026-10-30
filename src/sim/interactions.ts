@@ -456,6 +456,29 @@ export class Interactions {
       g.audio.purr();
       g.ui.dialog({ speaker: c, text: simRng.pick(['*purrs* That\'s nice.', 'Mm, right behind the ears.', 'You\'re a good friend.', '*rumbles contentedly*']), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
     } });
+    // ask your mentor for a lesson yourself instead of waiting to be found
+    if (pc.stage === 'apprentice' && c.id === pc.mentor && !g.objectives.busy()) opts.push({ label: 'Ask for a lesson', action: () => {
+      const since = g.time.totalHours - g.training.lastLessonHour;
+      if (since < 2) { g.ui.dialog({ speaker: c, text: 'We just trained! Rest your paws a little, then come back.', options: [{ label: 'Alright', action: again }], onClose: done }); return; }
+      if (g.time.isNight) { g.ui.dialog({ speaker: c, text: 'It\'s too dark to train now. Find me in the morning.', options: [{ label: 'Alright', action: again }], onClose: done }); return; }
+      done();
+      g.training.offerLesson(a);
+    } });
+    // apprentices can ask their mentor (or the leaders) for their assessment
+    if (pc.stage === 'apprentice' && (c.id === pc.mentor || c.role === 'leader' || c.role === 'deputy' || (pc.role === 'medicineApprentice' && c.role === 'medicine'))) {
+      const med = pc.role === 'medicineApprentice';
+      opts.push({ label: med ? 'Am I ready to be a full medicine cat?' : 'Am I ready for my warrior name?', action: () => {
+        const missing = g.training.missingLessons(pc);
+        if (g.objectives.has('assessment')) { g.ui.dialog({ speaker: c, text: med ? 'You already have your task: bring three healing herbs to the medicine den.' : 'You already have your assessment: hunt alone and bring two pieces of prey to the fresh-kill pile.', options: [{ label: 'Right!', action: again }], onClose: done }); return; }
+        if (!missing.length || pc.age >= 15) {
+          g.training.offerAssessment();
+          g.objectives.focus('assessment');
+          g.ui.dialog({ speaker: c, text: med ? `Yes, ${pc.given}. You know your herbs. Gather three on your own and bring them to the medicine den, and you'll earn your full name.` : `Yes, ${pc.given}. You've learned everything I can teach. Hunt alone and bring two pieces of prey to the fresh-kill pile — then you'll earn your warrior name!`, options: [{ label: 'I won\'t let you down!', action: done }], onClose: done });
+        } else {
+          g.ui.dialog({ speaker: c, text: `Not yet. You still need: ${missing.join(', ')}. ${c.id === pc.mentor ? 'I\'ll find you for lessons — or come and ask me.' : 'Ask your mentor for lessons.'}`, options: [{ label: 'I\'ll keep training', action: again }], onClose: done });
+        }
+      } });
+    }
     opts.push({ label: 'Ask for advice or news', action: () => {
       const pr = g.prey.nearestOfKind(g.player.pos.x, g.player.pos.z, 60);
       const ev = g.events.active.find((e) => e.type !== 'gathering');

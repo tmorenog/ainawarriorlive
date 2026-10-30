@@ -459,6 +459,8 @@ export class Player implements Fighter {
     this.stamina -= cost;
     this.attackCd = heavy ? 1.2 : 0.45;
     this.model.pose = 'fight';
+    // Twolegs can be bitten and scratched too
+    if (game.twolegs.playerAttack(heavy, (heavy ? 1.6 : 0.9) * scale + 0.6)) return;
     const target = this.findTarget((heavy ? 1.6 : 0.8) * scale + 0.3);
     if (heavy) {
       const f = this.forward();

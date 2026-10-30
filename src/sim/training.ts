@@ -294,7 +294,7 @@ export class TrainingSystem {
       m?.say(simRng.pick(['Well done. You\'re getting there.', 'Good work today.', 'That\'s how a warrior does it.']), 3);
       g.ui.toast(`Training: ${LESSON_LABEL[lesson]} ${p.training[lesson]}/3`, 'good');
       g.clan.log(`Completed a ${LESSON_LABEL[lesson].toLowerCase()} lesson with ${m ? m.name : 'my mentor'}.`, 'memory');
-      if (this.readyForWarrior(p) && p.age >= 12) this.offerAssessment();
+      if (this.readyForWarrior(p) && p.age >= 8) this.offerAssessment();
     } else {
       // mentoring
       const ap = g.npcs.agents.get(o.targetId ?? '');
@@ -313,6 +313,14 @@ export class TrainingSystem {
       }
       this.lastMentorHour = g.time.totalHours;
     }
+  }
+
+  /** Which lessons an apprentice still needs before the assessment. */
+  missingLessons(c: Cat): string[] {
+    const out = LESSONS.filter((l) => c.training[l] < 1).map((l) => LESSON_LABEL[l].toLowerCase());
+    const total = LESSONS.reduce((s, l) => s + c.training[l], 0);
+    if (!out.length && total < 9) out.push(`${9 - total} more lesson${9 - total > 1 ? 's' : ''} of any kind`);
+    return out;
   }
 
   readyForWarrior(c: Cat) {
@@ -451,7 +459,7 @@ export class TrainingSystem {
     p.training[l] += 1;
     const label = { gather: 'Gathering herbs', treat: 'Treating the sick', herblore: 'Herb lore' }[kind];
     g.ui.toast(`Medicine training: ${label} (${LESSONS.reduce((s2, x) => s2 + p.training[x], 0)}/18)`, 'good');
-    if (this.readyForWarrior(p) && p.age >= 12) this.offerAssessment();
+    if (this.readyForWarrior(p) && p.age >= 8) this.offerAssessment();
   }
 
   medLessonComplete(o: Objective) {
@@ -466,7 +474,7 @@ export class TrainingSystem {
     const label = { gather: 'Gathering herbs', treat: 'Treating the sick', herblore: 'Herb lore' }[lesson];
     g.ui.toast(`Medicine training: ${label} (${LESSONS.reduce((s, l) => s + p.training[l], 0)}/18)`, 'good');
     g.clan.log(`Completed a medicine lesson: ${label.toLowerCase()}.`, 'memory');
-    if (this.readyForWarrior(p) && p.age >= 12) this.offerAssessment();
+    if (this.readyForWarrior(p) && p.age >= 8) this.offerAssessment();
   }
 
   // ------------------------------------------------------------ mentoring
