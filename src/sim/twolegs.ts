@@ -57,7 +57,7 @@ export class TwolegSystem {
   private worker: { model: TwolegModel; pos: THREE.Vector3; heading: number; state: 'desk' | 'round' | 'chase' | 'away'; timer: number; wp: number; bubble: Bubble | null; stun?: number } | null = null;
   /** The player's escape from the pound. */
   ac: { cage: number | null; latch: number; need: number; vent: number; ventOpen: boolean; since: number; fedAt: number; seen: number; ownerCame: boolean } | null = null;
-  private light = new THREE.PointLight('#ffd9a0', 0, 22, 1.2);
+  private light = new THREE.PointLight('#ffd9a0', 0, 30, 1.1);
   private carTimer = 4;
   private walkerTimer = 0;
   private bellT = 0;
@@ -319,7 +319,7 @@ export class TwolegSystem {
       this.light.position.set(w.x, this.fac.y + 3.0, w.z);
       const night = this.worker?.state === 'away';
       const flick = Math.random() < 0.04 ? 0.2 : 1;
-      this.light.intensity = (night ? 6 : 26) * flick;
+      this.light.intensity = (night ? 16 : 50) * flick;
       this.light.color.set('#d8f0d0');
       this.fac.tubeMats.forEach((m, i) => m.color.set(night && i > 0 ? '#3a3a38' : i === 2 && flick < 1 ? '#5a5a58' : '#e8f0e0'));
     } else if (Math.hypot(pp.x - this.L.home.x, pp.z - this.L.home.z) < 40) {
@@ -1957,6 +1957,14 @@ export class TwolegSystem {
   }
 
   places(): { label: string; icon: string; x: number; z: number; y: number }[] {
+    const pp = this.game.player.pos;
+    if (this.ac && this.fac && this.inFacility(pp.x, pp.z)) {
+      const v = this.fac.vent.pos, d = this.fac.door;
+      return [
+        { label: this.ac.ventOpen ? 'Open vent — escape!' : 'Loose vent', icon: '🌀', x: v.x, z: v.z, y: this.fac.y + 0.9 },
+        { label: 'Locked door', icon: '🚪', x: d.x, z: d.z, y: this.fac.y + 2.6 },
+      ];
+    }
     if (!this.home || !this.isKittypet) return [];
     const s = this.home.spots, y = this.L.home.y;
     return [

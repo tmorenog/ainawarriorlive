@@ -997,10 +997,16 @@ export function buildFacility(scene: THREE.Scene, f: { x: number; z: number; y: 
   // the loose vent in the left wall, low down
   const cover = new THREE.Group();
   cover.position.set(-hw + 0.12, 0.02, 3.0);
-  for (let k = 0; k < 5; k++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.56), lam('#8a5a3a')); s.position.set(0, 0.06 + k * 0.09, 0); cover.add(s); }
+  for (let k = 0; k < 5; k++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.56), lam('#d08a4a')); s.position.set(0, 0.06 + k * 0.09, 0); cover.add(s); }
   for (const z of [-0.29, 0.29]) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.48, 0.04), lam('#7a4a2a')); s.position.set(0, 0.24, z); cover.add(s); }
   g.add(cover);
-  const ductBack = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.48), lam('#0a0a0c'));
+  // a pale metal frame around the vent, and daylight showing through the slats
+  for (const [w, h2, y, z] of [[0.05, 0.6, 0.27, 2.68], [0.05, 0.6, 0.27, 3.32], [0.05, 0.05, 0.56, 3.0], [0.05, 0.05, 0.0, 3.0]] as [number, number, number, number][]) {
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(0.06, h2, z === 3.0 ? 0.7 : w), lam('#c8ccd0'));
+    fr.position.set(-hw + 0.13, y, z);
+    g.add(fr);
+  }
+  const ductBack = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.48), new THREE.MeshBasicMaterial({ color: '#7aa8d0' }));
   ductBack.position.set(-hw - 0.05, 0.26, 3.0);
   ductBack.rotation.y = Math.PI / 2;
   g.add(ductBack);
