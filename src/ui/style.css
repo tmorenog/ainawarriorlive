@@ -281,3 +281,10 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 .van-inside .caption { position: absolute; left: 6%; right: 6%; top: 8%; color: #f4ecd8; font-size: 19px; line-height: 1.4; text-align: center; text-shadow: 0 2px 8px #000; opacity: 0; }
 .van-inside .caption.in { animation: capIn 0.6s ease-out forwards; }
 @keyframes capIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.van-scene3d { position: fixed; inset: 0; z-index: 70; pointer-events: none; animation: vanFade 1.2s ease-out; }
+.van-scene3d.out { animation: vanOut 0.7s ease-in forwards; background: #000; }
+@keyframes vanFade { from { background: #000; } to { background: transparent; } }
+.van-scene3d .van-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.75) 100%); }
+.van-scene3d .caption { position: absolute; left: 8%; right: 8%; top: 7%; color: #f4ecd8; font-size: 20px; line-height: 1.4; text-align: center; text-shadow: 0 2px 10px #000, 0 0 4px #000; opacity: 0; }
+.van-scene3d .caption.in { animation: capIn 0.6s ease-out forwards; }
+.van-tag { position: fixed; transform: translate(-50%, -100%); color: #e8d9a8; font-weight: 700; font-size: 14px; text-shadow: 0 2px 4px #000; pointer-events: none; z-index: 71; white-space: nowrap; }

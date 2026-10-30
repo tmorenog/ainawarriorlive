@@ -90,6 +90,7 @@ export class Game {
   bees: Bees;
   discoveries: Discoveries;
   twolegs: TwolegSystem;
+  overlay: { scene: THREE.Scene; camera: THREE.Camera; update(dt: number): void } | null = null;
   scent: ScentSystem;
   ui: UI;
   menus: Menus;
@@ -977,6 +978,8 @@ export class Game {
     else this.idleUpdate(dt);
     this.ui.update(dt);
     this.input.endFrame();
+    // a 3D cutscene (the ride in the animal-control van) takes over the screen
+    if (this.overlay) { this.overlay.update(dt); this.renderer.render(this.overlay.scene, this.overlay.camera); return; }
     this.renderer.render(this.scene, this.camera);
   };
 

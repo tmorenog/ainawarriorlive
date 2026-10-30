@@ -7,6 +7,7 @@ import type { Territories } from './territory';
 import type { Collider } from './chunks';
 import { RNG } from '../core/rng';
 import { buildVehicle, Vehicle } from './twolegModel';
+import { ENTRANCE_ANGLE } from './camp';
 
 export interface P2 { x: number; z: number }
 
@@ -38,7 +39,7 @@ const noiseDots = (c: CanvasRenderingContext2D, w: number, h: number, n: number,
 };
 
 const T: Record<string, THREE.CanvasTexture> = {};
-function textures() {
+export function textures() {
   if (T.siding) return T;
   T.siding = tex(128, 128, (c) => {
     c.fillStyle = '#e8e0cc'; c.fillRect(0, 0, 128, 128);
@@ -150,28 +151,28 @@ export function toLocal(o: { x: number; z: number; rot: number }, wx: number, wz
 // ------------------------------------------------------------------ layout
 export function planTown(seed: number, terrain: Terrain, terr: Territories): TownLayout {
   const rng = new RNG(seed ^ 0x7a11);
-  // between rivals 1 and 2 (the Council Stones sit between 0 and 1)
-  const a1 = Math.atan2(terr.rivals[1].cz, terr.rivals[1].cx);
-  const a2 = Math.atan2(terr.rivals[2].cz, terr.rivals[2].cx);
-  let mid = (a1 + a2) / 2;
-  if (Math.abs(a1 - a2) > Math.PI) mid += Math.PI;
+  // straight out in front of the camp entrance, a little way past the border
+  const front = ENTRANCE_ANGLE;
   let best: { a: number; d: number; score: number } | null = null;
-  for (let i = 0; i < 24; i++) {
-    const a = mid + (i - 12) * 0.05;
-    for (const extra of [52, 62, 74]) {
+  for (let i = 0; i <= 28; i++) {
+    const off = (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.04;
+    const a = front + off;
+    for (const extra of [62, 72, 84]) {
       const d = terr.homeRadiusAt(a) + extra;
       const cx = Math.cos(a) * d, cz = Math.sin(a) * d;
       const dir = { x: -Math.sin(a), z: Math.cos(a) };
       let score = 0;
       for (let k = -6; k <= 6; k++) {
-        for (const off of [0, -16]) {
-          const s = terrain.sample(cx + dir.x * k * 17 - Math.cos(a) * off, cz + dir.z * k * 17 - Math.sin(a) * off);
+        for (const o of [0, -17, 17]) {
+          const px = cx + dir.x * k * 17 - Math.cos(a) * o, pz = cz + dir.z * k * 17 - Math.sin(a) * o;
+          const s = terrain.sample(px, pz);
           score -= (s.river + s.lake + s.stream * 0.6 + s.mountain + s.marsh * 0.5 + s.bank * 0.4) * 10;
           if (s.h < 1.5) score -= 5;
-          if (typeof terr.ownerAt(cx + dir.x * k * 17, cz + dir.z * k * 17) === 'number') score -= 3;
+          if (typeof terr.ownerAt(px, pz) === 'number') score -= 12;
+          if (Math.hypot(px - terr.council.x, pz - terr.council.z) < 30) score -= 20;
         }
       }
-      score -= Math.abs(i - 12) * 0.2;
+      score -= Math.abs(off) * 40 + (extra - 62) * 0.05;
       if (!best || score > best.score) best = { a, d, score };
     }
   }

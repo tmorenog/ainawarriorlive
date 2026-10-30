@@ -18,6 +18,7 @@ import { Cat, displayName, Lifestyle } from '../cats/types';
 import { createCat, makeEpithet, randomAppearance } from '../cats/generate';
 import { isClassic, lifestyleLabel, loreText } from '../lore';
 import type { Prompt } from './interactions';
+import { VanCutscene } from '../world/vanScene';
 
 const STRAY_NAMES = ['Scraps', 'Biscuit', 'Tiny', 'Pepper', 'Muffin', 'Socks', 'Ginger', 'Patch', 'Bella', 'Max', 'Tigger', 'Oreo', 'Milo', 'Luna', 'Smokey', 'Daisy', 'Jasper', 'Princess', 'Noodle', 'Pickles', 'Bean', 'Toffee'];
 
@@ -54,7 +55,7 @@ export class TwolegSystem {
   private worker: { model: TwolegModel; pos: THREE.Vector3; heading: number; state: 'desk' | 'round' | 'chase' | 'away'; timer: number; wp: number; bubble: Bubble | null } | null = null;
   /** The player's escape from the pound. */
   ac: { cage: number | null; latch: number; need: number; vent: number; ventOpen: boolean; since: number; fedAt: number; seen: number; ownerCame: boolean } | null = null;
-  private light = new THREE.PointLight('#ffd9a0', 0, 16, 1.6);
+  private light = new THREE.PointLight('#ffd9a0', 0, 22, 1.2);
   private carTimer = 4;
   private walkerTimer = 0;
   private bellT = 0;
@@ -271,7 +272,7 @@ export class TwolegSystem {
       this.light.position.set(w.x, this.fac.y + 3.0, w.z);
       const night = this.worker?.state === 'away';
       const flick = Math.random() < 0.04 ? 0.2 : 1;
-      this.light.intensity = (night ? 1.2 : 5) * flick;
+      this.light.intensity = (night ? 6 : 26) * flick;
       this.light.color.set('#d8f0d0');
       this.fac.tubeMats.forEach((m, i) => m.color.set(night && i > 0 ? '#3a3a38' : i === 2 && flick < 1 ? '#5a5a58' : '#e8f0e0'));
     } else if (Math.hypot(pp.x - this.L.home.x, pp.z - this.L.home.z) < 40) {
@@ -910,7 +911,8 @@ export class TwolegSystem {
       // friends close by may be taken too
       const friends: Cat[] = [];
       for (const a of g.npcs.agents.values()) {
-        if (Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 10 && a.cat.clan === 'home' && (a.activity === 'follow' || g.npcs.isPlayerFriend(a)) && simRng.chance(0.55) && friends.length < 2) friends.push(a.cat);
+        const d = Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z);
+        if (d < 18 && a.cat.clan === 'home' && a.cat.stage !== 'kit' && simRng.chance(a.activity === 'follow' || g.npcs.isPlayerFriend(a) ? 0.8 : 0.5) && friends.length < 3) friends.push(a.cat);
       }
       for (const f of friends) this.cageCat(f);
       this.vanLeave(c);
@@ -1048,30 +1050,34 @@ export class TwolegSystem {
     const pc = this.pc;
     const riders: Cat[] = [...(stowaway ? [] : [pc]), ...friends];
     const strays = this.townCats.filter((t) => t.cat.caged).map((t) => t.cat);
+    const newStrays: Cat[] = [];
+    // fill the van: you, the clanmates taken with you, and strays caught on the same round
+    const strayRiders = [...strays];
+    while (riders.length + strayRiders.length < 3) {
+      const st = createCat({ age: simRng.range(10, 40), given: simRng.pick(STRAY_NAMES), day: g.time.day });
+      st.clan = 'loner'; st.lifestyle = simRng.chance(0.5) ? 'kittypet' : 'loner'; st.app = randomAppearance(simRng);
+      strayRiders.push(st);
+    }
+    newStrays.push(...strayRiders.filter((x) => !strays.includes(x)));
     const ov = document.createElement('div');
-    ov.className = 'van-scene';
-    const face = (c: Cat) => {
-      const e1 = c.app.eye, e2 = c.app.eye2 ?? c.app.eye;
-      return `<svg viewBox="0 0 60 50" class="cat-face"><path d="M10 22 L14 4 L24 14 Z M50 22 L46 4 L36 14 Z" fill="${c.app.base}"/><path d="M14 8 L16 16 L21 14Z M46 8 L44 16 L39 14Z" fill="#e8a0a8"/><ellipse cx="30" cy="28" rx="21" ry="18" fill="${c.app.base}"/>${c.app.white > 0.2 ? `<ellipse cx="30" cy="38" rx="11" ry="8" fill="#f4f1ea"/>` : ''}<ellipse cx="22" cy="25" rx="4.5" ry="5" fill="${e1}"/><ellipse cx="38" cy="25" rx="4.5" ry="5" fill="${e2}"/><ellipse cx="22" cy="25" rx="1.4" ry="4" fill="#111"/><ellipse cx="38" cy="25" rx="1.4" ry="4" fill="#111"/><path d="M28 32 L32 32 L30 34.5Z" fill="#d87a8a"/><path d="M30 35 Q27 38 24 36 M30 35 Q33 38 36 36" stroke="#333" fill="none" stroke-width="0.8"/><path d="M8 31 L20 32 M8 35 L20 34 M52 31 L40 32 M52 35 L40 34" stroke="#ddd" stroke-width="0.6"/></svg>`;
-    };
-    const carriers = riders.map((c, i) => `<div class="carrier" style="--d:${(0.55 + Math.random() * 0.4).toFixed(2)}s;--o:${(i * 0.13).toFixed(2)}s">${face(c)}<div class="grate"></div><span>${c.isPlayer ? 'You' : displayName(c)}</span></div>`).join('')
-      + `<div class="carrier empty" style="--d:0.8s;--o:0.3s"><div class="grate"></div><span></span></div>`;
-    ov.innerHTML = `<div class="van-inside"><div class="van-window"></div><div class="carriers">${carriers}</div>${stowaway ? `<div class="stow">${face(pc)}</div>` : ''}<div class="caption"></div></div>`;
+    ov.className = 'van-scene3d';
+    ov.innerHTML = `<div class="van-vignette"></div><div class="caption"></div>`;
     document.body.appendChild(ov);
+    const scene = new VanCutscene([...riders, ...strayRiders].map((cat) => ({ cat, isPlayer: cat.id === pc.id })), ov, stowaway ? { cat: pc, isPlayer: true } : null);
+    g.overlay = scene;
+    g.ui.showHud(false);
     const cap = ov.querySelector('.caption') as HTMLElement;
     const lines: string[] = stowaway
-      ? ['You leap into the back of the monster and squeeze between the empty carriers…', 'The doors slam. The monster roars and everything bumps and rattles on the Thunderpath.', 'You hold on with every claw. The air smells of fear and old metal.', 'The monster stops. Cold light. A smell of rust. You slip out unseen…']
-      : ['A Tallfolk\'s paws close around you — and you\'re stuffed into a plastic box with a wire door!',
-        'The monster roars. The carriers bump and shake as it races along the Thunderpath…',
-        friends.length ? `${displayName(friends[0])} yowls from the carrier beside you: "${simRng.pick(['We\'ll get out of this, I promise!', 'I\'m scared! Where are they taking us?', 'Stay brave! We\'re together!'])}"` : 'Other cats cry out in the dark. You press your nose to the wire.',
+      ? ['You leap into the back of the monster and hide between the rattling, rusty cages…', 'The doors slam. The monster roars and everything bumps and rattles on the Thunderpath.', 'You hold on with every claw. The air smells of fear and old metal.', 'The monster stops. Cold light. A smell of rust. You slip out unseen…']
+      : ['A Tallfolk\'s paws close around you — and you\'re shoved into a rusty cage in the back of the monster!',
+        'The monster roars. The cages rattle and bump as it races along the Thunderpath…',
+        friends.length ? `${displayName(friends[0])} yowls from the carrier beside you: "${simRng.pick(['We\'ll get out of this, I promise!', 'I\'m scared! Where are they taking us?', 'Stay brave! We\'re together!'])}"` : 'Strange cats cry out from the other cages. You press your nose to the cold, rusty bars.',
         'The monster stops. The doors swing open. Cold light… and the smell of rust and fear.'];
     lines.forEach((l, i) => setTimeout(() => { cap.textContent = this.twoleg(l); cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in'); }, i * 2600));
     for (let i = 0; i < 5; i++) setTimeout(() => { g.audio.engine(0.05); if (i % 2) g.audio.meow(0.9 + Math.random() * 0.4, 0.5, 0.04); g.audio.rattle(); }, i * 2000);
     setTimeout(() => {
       ov.classList.add('out');
-      setTimeout(() => ov.remove(), 800);
-      this.cutscene = false;
-      this.arriveAtPound(friends, caged, strays, stowaway);
+      setTimeout(() => { ov.remove(); g.overlay = null; scene.dispose(); g.ui.showHud(true); this.cutscene = false; this.arriveAtPound(friends, caged, [...strays, ...newStrays], stowaway); }, 700);
     }, lines.length * 2600 + 600);
   }
 
@@ -1127,6 +1133,7 @@ export class TwolegSystem {
     } else {
       const cg = cages[0];
       g.player.placeAt(cg.inner.x, cg.inner.z, Math.PI);
+      g.player.pitch = -0.12;
     }
     g.player.busy = false;
     g.player.frozen = false;
