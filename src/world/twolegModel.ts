@@ -123,6 +123,7 @@ export class TwolegModel {
   private screenMat: THREE.MeshBasicMaterial | null = null;
   carrier: THREE.Group | null = null;
   private flash = 0;
+  private phase = Math.random() * 6;
   /** A torch / phone flashlight with a visible beam (for night and power cuts). */
   private torch: THREE.Group | null = null;
   torchOn = false;
@@ -356,23 +357,36 @@ export class TwolegModel {
     const p = this.pose;
     const moving = this.speed > 0.15;
     const run = p === 'run' || this.speed > 2.8;
-    const freq = run ? 9 : 6.2;
-    const sw = moving ? Math.sin(t * freq) * (run ? 0.85 : 0.5) : 0;
+    // the stride keeps time with how fast they move, so feet don't slide
+    if (moving) this.phase += dt * Math.max(2.5, this.speed * (run ? 2.3 : 3.3));
+    const ph = this.phase;
+    const amp = moving ? (run ? 0.85 : Math.min(0.55, 0.28 + this.speed * 0.16)) : 0;
+    const sw = Math.sin(ph) * amp;
     // reset
     this.hips.position.y = 0.92;
     this.hips.rotation.set(0, 0, 0);
     this.torso.rotation.set(0, 0, 0);
     this.head.rotation.set(0, 0, 0);
+    // legs: the back leg's knee bends as it lifts and swings through
     this.legL.rotation.set(sw, 0, 0);
     this.legR.rotation.set(-sw, 0, 0);
-    this.kneeL.rotation.set(moving ? Math.max(0, -Math.sin(t * freq - 1)) * 0.9 : 0, 0, 0);
-    this.kneeR.rotation.set(moving ? Math.max(0, Math.sin(t * freq - 1)) * 0.9 : 0, 0, 0);
-    this.armL.rotation.set(-sw * 0.7, 0, -0.08);
-    this.armR.rotation.set(sw * 0.7, 0, 0.08);
-    this.elbowL.rotation.set(run ? -1.3 : -0.15, 0, 0);
-    this.elbowR.rotation.set(run ? -1.3 : -0.15, 0, 0);
-    if (moving) this.hips.position.y += Math.abs(Math.sin(t * freq)) * (run ? 0.05 : 0.025);
-    if (run) this.torso.rotation.x = 0.18;
+    const lift = run ? 1.5 : 0.85;
+    this.kneeL.rotation.set(moving ? Math.max(0, Math.sin(ph - 0.6)) * lift + 0.05 : 0, 0, 0);
+    this.kneeR.rotation.set(moving ? Math.max(0, Math.sin(ph + Math.PI - 0.6)) * lift + 0.05 : 0, 0, 0);
+    // arms swing against the legs, elbows soft
+    this.armL.rotation.set(-sw * (run ? 1.0 : 0.8), 0, -0.08);
+    this.armR.rotation.set(sw * (run ? 1.0 : 0.8), 0, 0.08);
+    this.elbowL.rotation.set(run ? -1.4 : -0.25 - Math.max(0, -sw) * 0.4, 0, 0);
+    this.elbowR.rotation.set(run ? -1.4 : -0.25 - Math.max(0, sw) * 0.4, 0, 0);
+    if (moving) {
+      // bob twice per stride, sway the hips, twist the shoulders against them
+      this.hips.position.y += Math.abs(Math.cos(ph)) * (run ? 0.06 : 0.03) - (run ? 0.03 : 0.015);
+      this.hips.rotation.y = Math.sin(ph) * (run ? 0.1 : 0.14);
+      this.hips.rotation.z = Math.cos(ph) * 0.035;
+      this.torso.rotation.y = -Math.sin(ph) * (run ? 0.18 : 0.22);
+      this.head.rotation.y = Math.sin(ph) * 0.08;
+    }
+    if (run) this.torso.rotation.x = 0.2;
     const phoneHand = () => { this.armR.rotation.set(-0.5, 0, 0.1); this.elbowR.rotation.set(-1.45, 0, 0); this.head.rotation.x = 0.45; };
     if (this.phone) this.phone.visible = p === 'phone' || p === 'photo' || p === 'call' || (p === 'walk' && !!this.look.devices.length && this.look.devices[0] !== 'headphones');
     switch (p) {

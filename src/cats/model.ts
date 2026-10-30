@@ -7,6 +7,8 @@ import { Accessory, Appearance, LifeStage } from './types';
 import { RNG, hashString } from '../core/rng';
 import { clamp } from '../core/math';
 
+const _footV = new THREE.Vector3();
+const _rootV = new THREE.Vector3();
 export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink';
 export type Mood = 'neutral' | 'happy' | 'angry' | 'afraid' | 'alert' | 'sad';
 
@@ -294,6 +296,8 @@ export class CatModel {
   head = new THREE.Group();
   tailPivot = new THREE.Group();
   legs: THREE.Group[] = [];
+  /** Paws sit at the end of each leg but keep their round shape when the leg stretches. */
+  private feet: THREE.Group[] = [];
   tailSegs: THREE.Group[] = [];
   ears: THREE.Mesh | null = null;
   eyes: THREE.Mesh | null = null;
@@ -347,6 +351,7 @@ export class CatModel {
     this.head = new THREE.Group();
     this.tailPivot = new THREE.Group();
     this.legs = [];
+    this.feet = [];
     this.tailSegs = [];
     const carrying = this.carryMesh;
     this.carryMesh = null;
@@ -729,13 +734,35 @@ export class CatModel {
       const pivot = new THREE.Group();
       pivot.position.set(lx + (lx < 0 ? -0.004 : 0.004), -torsoH * 0.35 + (lx < 0 ? -0.05 * K : 0), lz);
       this.body.add(pivot);
-      const lg = new THREE.CylinderGeometry(legR * (lx < 0 ? 1.25 : 1), legR * 0.85, legLocal, 7);
+      const lg = new THREE.CylinderGeometry(legR * (lx < 0 ? 1.25 : 1), legR * 0.85, legLocal, 12);
       lg.translate(0, -legLocal / 2, 0);
       this.addMesh(pivot, lg, legMat, true);
-      const pg = new THREE.SphereGeometry(legR * 1.15, 8, 6);
-      pg.scale(1.5, 0.7, 1.1);
-      pg.translate(0.008, -legLocal + 0.004, 0);
-      this.addMesh(pivot, pg, pawMat, true);
+      // a soft, rounded paw: a plump pad with four little toe beans at the front
+      const pr = legR * 1.12;
+      const pawParts: THREE.BufferGeometry[] = [];
+      const ankle = new THREE.SphereGeometry(legR * 0.95, 12, 8);
+      ankle.translate(0, pr * 0.3, 0);
+      pawParts.push(ankle);
+      const pad = new THREE.SphereGeometry(pr, 16, 12);
+      pad.scale(1.22, 0.78, 1.08);
+      pad.translate(0.004, -pr * 0.05, 0);
+      pawParts.push(pad);
+      for (let tI = 0; tI < 4; tI++) {
+        const a = (tI - 1.5) * 0.42;
+        const toe = new THREE.SphereGeometry(pr * 0.42, 10, 8);
+        toe.scale(1.1, 0.85, 1);
+        toe.translate(0.004 + Math.cos(a) * pr * 0.95, -pr * 0.22, Math.sin(a) * pr * 0.85);
+        pawParts.push(toe);
+      }
+      const pg = mergeGeometries(pawParts)!;
+      const foot = new THREE.Group();
+      foot.position.y = -legLocal;
+      foot.userData.baseY = -legLocal;
+      foot.userData.pad = pr * 0.8;
+      foot.userData.corr = 0;
+      pivot.add(foot);
+      this.addMesh(foot, pg, pawMat, true);
+      this.feet.push(foot);
       this.legs.push(pivot);
     }
 
@@ -897,6 +924,24 @@ export class CatModel {
         scaleY = clamp((hipY / Math.max(0.01, refY)) / Math.max(0.35, Math.cos(worldAng)), 0.3, 1.5);
       }
       leg.scale.y += (scaleY - leg.scale.y) * Math.min(1, dt * 14);
+      // undo the stretch on the paw so it stays round, and keep it flat on the ground
+      const ft = this.feet[i];
+      if (ft) {
+        ft.scale.y = 1 / Math.max(0.2, leg.scale.y);
+        ft.rotation.z = moving ? -leg.rotation.z * 0.6 : -(leg.rotation.z + p);
+        // when standing still, measure how far the pad is from the ground and lift it so it rests on top
+        if (!moving && pb.lie < 0.5 && pose !== 'swim') {
+          ft.position.y = ft.userData.baseY + ft.userData.corr;
+          ft.updateWorldMatrix(true, false);
+          ft.getWorldPosition(_footV);
+          this.root.getWorldPosition(_rootV);
+          const rs = this.root.scale.y * Math.max(0.2, leg.scale.y);
+          const want = _rootV.y + ft.userData.pad * this.root.scale.y * (this.scale || 1);
+          const corr = clamp(ft.userData.corr + (want - _footV.y) / Math.max(0.05, rs), 0, 0.09);
+          ft.userData.corr += (corr - ft.userData.corr) * Math.min(1, dt * 10);
+        } else if (pb.lie >= 0.5) ft.userData.corr *= 0.9;
+        ft.position.y = ft.userData.baseY + ft.userData.corr;
+      }
     }
     // head: steady and level (cats keep their head still while the body moves)
     const hy = this.lookYaw;

@@ -38,7 +38,7 @@ interface Owner {
   path: P2[]; task: string; timer: number; bubble: Bubble | null; away: boolean; still: string | null; petT: number;
 }
 interface TownCat { cat: Cat; model: CatModel; pos: THREE.Vector3; heading: number; home: P2; sitY: number; kind: 'fence' | 'stray'; target: P2 | null; timer: number; gone: boolean }
-interface Occupant { cat: Cat; model: CatModel | null; cage: number; freed: boolean; pos: THREE.Vector3; heading: number; stray: boolean; player: boolean }
+interface Occupant { cat: Cat; model: CatModel | null; cage: number; freed: boolean; pos: THREE.Vector3; heading: number; stray: boolean; player: boolean; bubble?: Bubble | null; talked?: number }
 
 export class TwolegSystem {
   L!: TownLayout;
@@ -498,9 +498,9 @@ export class TwolegSystem {
       if (o.path.length) {
         const p = o.path[0];
         const run = o.task === 'chase';
-        if (this.headTo(o, p.x, p.z, run ? 2.6 : 1.3, dt)) o.path.shift();
+        if (this.headTo(o, p.x, p.z, run ? 3.2 : 1.8, dt)) o.path.shift();
         o.model.pose = 'walk';
-        o.model.speed = 1.3;
+        o.model.speed = run ? 3.2 : 1.8;
         if (!o.path.length) {
           o.still = (o as any).nextStill ?? 'stand';
           o.timer = 0;
@@ -712,7 +712,7 @@ export class TwolegSystem {
     let p: P2;
     if (kind === 'street') p = this.st(s + simRng.range(0, 30) * dirSign, side * 4.4);
     else p = { x: center!.x + simRng.range(-9, 9), z: center!.z + simRng.range(-9, 9) };
-    const w: Walker = { model, pos: new THREE.Vector3(p.x, 0, p.z), heading: 0, speed: kid ? 1.5 : 1.25, kind, center, side, dirSign, s, mode: 'walk', timer: simRng.range(5, 20), bubble: null, name: kid ? 'Tallfolk kit' : 'Tallfolk', kid, noticed: false };
+    const w: Walker = { model, pos: new THREE.Vector3(p.x, 0, p.z), heading: 0, speed: kid ? 2.1 : 1.75, kind, center, side, dirSign, s, mode: 'walk', timer: simRng.range(5, 20), bubble: null, name: kid ? 'Tallfolk kit' : 'Tallfolk', kid, noticed: false };
     this.walkers.push(w);
     return w;
   }
@@ -762,7 +762,7 @@ export class TwolegSystem {
     if (dPlayer > 14) w.noticed = false;
     if (w.mode === 'run') {
       if (w.bubble && /OW|Ouch|Get away|wild|Argh|Yow/i.test(w.bubble.text)) this.headTo(w, w.pos.x + (w.pos.x - pp.x), w.pos.z + (w.pos.z - pp.z), 3, dt);
-      else this.headTo(w, pp.x, pp.z, 2.4, dt);
+      else this.headTo(w, pp.x, pp.z, 3.0, dt);
       w.model.pose = 'run';
       if (w.timer <= 0 || dPlayer < 1.2) { w.mode = 'walk'; if (dPlayer < 1.5) this.say(w, 'Aww, it ran away…'); }
     } else if (w.mode === 'photo') {
@@ -786,7 +786,7 @@ export class TwolegSystem {
       w.model.pose = 'walk';
       if (w.timer <= 0) { w.mode = 'stop'; w.timer = simRng.range(3, 9); w.model.pose = simRng.chance(0.4) ? 'call' : 'phone'; if (w.model.pose === 'call') this.say(w, simRng.pick(['…no, I said the BLUE one.', 'Hello? Can you hear me?', '…uh huh… uh huh…', 'I\'m almost there!']), 4); }
     }
-    w.model.speed = w.mode === 'walk' ? w.speed : w.mode === 'run' ? 2.4 : 0;
+    w.model.speed = w.mode === 'walk' ? w.speed : w.mode === 'run' ? 3.0 : 0;
     w.pos.y = this.yAt(w.pos.x, w.pos.z) + (this.onRoad(w.pos.x, w.pos.z) || Math.abs(this.streetCoords(w.pos.x, w.pos.z).off) < 5.4 ? 0.1 : 0);
     w.model.root.position.copy(w.pos);
     w.model.root.rotation.y = w.heading;
@@ -979,18 +979,18 @@ export class TwolegSystem {
       const tp = k.target ? this.targetPos(k.target) : null;
       if (tp) {
         const d = Math.hypot(tp.x - k.pos.x, tp.z - k.pos.z);
-        this.headTo(k, tp.x, tp.z, 1.5, dt);
+        this.headTo(k, tp.x, tp.z, 2.0, dt);
         if (d < 7) { k.state = 'chase'; k.timer = 0; this.say(k, 'Gotcha now…', 2); }
       }
-      k.model.pose = 'carry';
-      k.model.speed = 1.5;
+      k.model.pose = 'walk';
+      k.model.speed = 2.0;
     } else if (k.state === 'chase') {
       const tp = k.target ? this.targetPos(k.target) : null;
       if (!tp) { k.state = 'search'; k.target = null; }
       else {
-        this.headTo(k, tp.x, tp.z, 3.7, dt);
+        this.headTo(k, tp.x, tp.z, 4.3, dt);
         k.model.pose = 'run';
-        k.model.speed = 3.7;
+        k.model.speed = 4.3;
         const d = Math.hypot(tp.x - k.pos.x, tp.z - k.pos.z);
         // a cat that crouches still, far enough away, can be lost
         if (k.target!.kind === 'player' && g.player.crouching && g.player.speed < 0.3 && d > 5.5) { k.lost += dt; if (k.lost > 2.5) { k.state = 'search'; k.target = null; k.timer = 0; this.say(k, 'Where\'d it go?', 3); g.ui.toast('You crouch perfectly still in the shadows… the Twoleg loses sight of you!', 'good'); return; } }
@@ -1000,9 +1000,9 @@ export class TwolegSystem {
       }
     } else {
       // back to the van, then drive away
-      if (this.headTo(k, back.x, back.z, 1.6, dt)) { this.vanLeave(c); return; }
-      k.model.pose = 'carry';
-      k.model.speed = 1.6;
+      if (this.headTo(k, back.x, back.z, 2.0, dt)) { this.vanLeave(c); return; }
+      k.model.pose = 'walk';
+      k.model.speed = 2.0;
     }
     k.pos.y = this.yAt(k.pos.x, k.pos.z) + (Math.abs(this.streetCoords(k.pos.x, k.pos.z).off) < 5.4 ? 0.1 : 0);
     k.model.root.position.copy(k.pos);
@@ -1430,7 +1430,7 @@ export class TwolegSystem {
       w.model.root.visible = true;
       if (w.state === 'desk') {
         const d = this.fac.desk;
-        this.headTo(w, d.x, d.z, 1.3, dt);
+        this.headTo(w, d.x, d.z, 1.8, dt);
         w.model.pose = Math.hypot(d.x - w.pos.x, d.z - w.pos.z) < 0.2 ? 'sit' : 'walk';
         if (w.model.pose === 'sit') w.heading = Math.PI;
         if (w.timer <= 0) { w.state = 'round'; w.wp = 0; w.timer = 40; if (simRng.chance(0.5)) this.say(w, simRng.pick(['Feeding time.', 'Right, let\'s check on you lot.', '*sighs* Another long shift.'])); }
@@ -1438,13 +1438,13 @@ export class TwolegSystem {
       } else if (w.state === 'round') {
         const xs = [-6, -4, -2, 0, 2, 4, 6];
         const p = toWorld(this.fac.frame, xs[w.wp % 7], -6 + 2.3);
-        if (this.headTo(w, p.x, p.z, 1.1, dt)) { w.wp++; if (w.wp >= 7) { w.state = 'desk'; w.timer = simRng.range(25, 50); ac.fedAt = g.time.totalHours; } }
+        if (this.headTo(w, p.x, p.z, 1.6, dt)) { w.wp++; if (w.wp >= 7) { w.state = 'desk'; w.timer = simRng.range(25, 50); ac.fedAt = g.time.totalHours; } }
         w.model.pose = 'walk';
       } else if ((w.stun ?? 0) > 0) {
         w.stun! -= dt;
         w.model.pose = 'crouch';
       } else if (w.state === 'chase') {
-        this.headTo(w, pp.x, pp.z, 2.5, dt);
+        this.headTo(w, pp.x, pp.z, 3.0, dt);
         w.model.pose = 'run';
         if (Math.hypot(pp.x - w.pos.x, pp.z - w.pos.z) < 0.8) this.putBack();
         else if (w.timer <= 0) { w.state = 'desk'; w.timer = 20; this.say(w, '*pants* Where did it go…', 3); }
@@ -1454,7 +1454,7 @@ export class TwolegSystem {
         this.say(w, simRng.pick(['Hey! How did you get out?!', 'Oi! Back in your cage!', 'Come here, you little escape artist!']), 3);
         g.audio.alarm();
       }
-      w.model.speed = w.model.pose === 'run' ? 2.5 : 1.1;
+      w.model.speed = w.model.pose === 'run' ? 3.0 : w.model.pose === 'walk' ? 1.7 : 0;
       w.pos.y = this.fac.y;
       w.model.root.position.copy(w.pos);
       w.model.root.rotation.y = w.heading;
@@ -1479,7 +1479,11 @@ export class TwolegSystem {
         o.model.pose = cg.open ? 'stand' : (Math.sin(g.clock * 0.3 + o.cage) > 0.4 ? 'lie' : 'sit');
         o.heading = Math.atan2(pp.z - o.pos.z, pp.x - o.pos.x);
         if (simRng.chance(dt * 0.02)) g.audio.meow(0.8 + Math.random() * 0.5, 0.6, 0.02, o.pos);
+        // caged cats call out to you now and then
+        if (!o.bubble && simRng.chance(dt * 0.035) && Math.hypot(o.pos.x - pp.x, o.pos.z - pp.z) < 9) o.bubble = { text: this.poundLine(o, false), until: g.clock + 4.5 };
       }
+      if (o.freed && !o.bubble && simRng.chance(dt * 0.02)) o.bubble = { text: this.poundLine(o, true), until: g.clock + 4 };
+      if (o.bubble && o.bubble.until < g.clock) o.bubble = null;
       o.pos.y = this.fac.y;
       o.model.root.position.copy(o.pos);
       o.model.root.rotation.y = -o.heading;
@@ -1655,12 +1659,14 @@ export class TwolegSystem {
         const cg = this.fac.cages[i];
         const occ = this.occupants.find((o) => o.cage === i && !o.player && !o.freed);
         if (!occ || !near(cg.front, 1.1)) continue;
-        return { text: `Open ${occ.cat.given}'s cage${watching ? ' (the Twoleg is watching!)' : ''}`, action: () => this.freeCat(occ) };
+        return { text: `${occ.cat.given}'s cage — talk or open it${watching ? ' (the Twoleg is watching!)' : ''}`, action: () => this.talkPound(occ) };
       }
       if (near(this.fac.vent.inside, 1.2)) {
         if (!ac.ventOpen) return { text: `Pry at the loose, rusty vent cover (${ac.vent}/4)`, action: () => this.pryVent() };
         return { text: 'Squeeze through the vent and escape!', action: () => this.escape('vent') };
       }
+      const pal = this.occupants.find((o) => o.freed && !o.player && near(o.pos, 1.3));
+      if (pal && !near(this.fac.door, 1.5)) return { text: `Talk to ${pal.cat.given}`, action: () => this.talkPound(pal) };
       if (near(this.fac.door, 1.5)) return { text: 'Scratch at the door (it\'s locked)', action: () => { g.audio.swipe(); g.ui.toast('The metal door is locked tight. The Twoleg has the key. There must be another way out…', 'info'); } };
       return null;
     }
@@ -1724,6 +1730,57 @@ export class TwolegSystem {
     if (near(yarnW, 0.8)) return { text: 'Bat the yarn ball', action: () => { const f = g.player.forward(); const l = toLocal({ x: 0, z: 0, rot: this.home.frame.rot }, f.x, f.z); this.yarnVel.set(l.x * 3, l.z * 3); g.audio.swipe(); } };
     if (near(s.tv, 1.0) && this.owners.some((o) => o.task === 'tv' && o.still === 'sit')) return { text: 'Stare at the flickering box', action: () => g.ui.toast(simRng.pick(['Tiny Twolegs are running around inside the glowing box. How did they get in there?', 'A bird flies across the box! You pounce at it — *bonk*. It\'s flat.', 'The box is showing… cats! You tilt your head.']), 'info') };
     return null;
+  }
+
+  /** Something a cat in the pound might say. */
+  private poundLine(o: Occupant, free: boolean): string {
+    const pc = this.pc;
+    const friend = o.cat.clan === 'home';
+    const ac = this.ac;
+    if (free) return simRng.pick([
+      'Which way out? The vent?', 'Stay close — I don\'t like the dark corners.', 'Watch the Twoleg! Go when they\'re on their phone.',
+      friend ? `Thanks for getting me out, ${pc.given}!` : 'I can smell fresh air from that vent…', 'Let\'s free the others too!',
+    ]);
+    const stillLocked = ac?.cage !== null && ac?.cage !== undefined && !this.fac.cages[ac.cage].open;
+    if (stillLocked && simRng.chance(0.5)) return simRng.pick([
+      `${pc.given}! Wiggle the latch when the Twoleg isn\'t looking!`, 'Psst — the Twoleg plays with that glowing thing at the desk. Go then!', 'Rattle it harder! It\'s old and rusty!',
+    ]);
+    return friend
+      ? simRng.pick([`${pc.given}! Please get me out of here!`, 'I want to go home to the clan…', 'I can\'t smell the forest anymore.', 'Is the leader looking for us?', '*presses nose to the bars* We have to get out.'])
+      : simRng.pick(['Help me… please.', 'They took me from behind the bins.', 'I\'ve been in here so long…', 'My Twolegs never came for me.', 'Is it true you live in the forest?']);
+  }
+
+  /** Talk to a cat in the pound: comfort them, ask about them, or open their cage. */
+  private talkPound(o: Occupant) {
+    const g = this.game;
+    const pc = this.pc;
+    const c = o.cat;
+    const friend = c.clan === 'home';
+    const sub = friend ? `${displayName(c)} · your clanmate` : `${lifestyleLabel(c.lifestyle ?? 'loner')} · caught by the Twolegs`;
+    const back = () => this.talkPound(o);
+    const opts: { label: string; action: () => void }[] = [];
+    if (!o.freed) opts.push({ label: `Open the latch and let ${c.given} out`, action: () => this.freeCat(o) });
+    opts.push({ label: friend ? 'Comfort them' : 'Comfort them through the bars', action: () => {
+      g.audio.purr();
+      if (friend) g.clan.adjust(c, pc, (o.talked ?? 0) < 3 ? 4 : 0.5, { text: `${pc.given} comforted me in the Twoleg pound.`, weight: 2 });
+      o.talked = (o.talked ?? 0) + 1;
+      g.ui.dialog({ speaker: c, sub, text: simRng.pick([`*leans against the bars* Thank you, ${pc.given}. I feel braver with you here.`, '*purrs shakily* We\'ll get out of this. Together.', 'Just hearing a friendly voice helps.']), options: [{ label: 'Continue', action: back }, { label: 'Goodbye', action: () => {} }] });
+    } });
+    opts.push({ label: friend ? 'How did they catch you?' : 'Who are you?', action: () => {
+      const text = friend
+        ? simRng.pick([`I was hunting near the Thunderpath and smelled fish… then a Twoleg grabbed me.`, `A white monster came. I ran, but they had a net on a stick.`, `I tried to fight! I bit one. They just threw me in a box.`])
+        : c.lifestyle === 'kittypet'
+          ? simRng.pick([`I'm ${c.given}. I slipped out of my house and got lost. My collar fell off…`, `I'm ${c.given}. My Twolegs moved away and left me behind.`])
+          : simRng.pick([`Name's ${c.given}. I live off the bins behind the Twoleg dens. Lived, I mean.`, `${c.given}. Loner. I was asleep under a monster when they caught me.`]);
+      g.ui.dialog({ speaker: c, sub, text, options: [{ label: 'Continue', action: back }, { label: 'Goodbye', action: () => {} }] });
+    } });
+    opts.push({ label: 'How do we get out?', action: () => {
+      const vent = this.ac?.ventOpen;
+      g.ui.dialog({ speaker: c, sub, text: vent ? 'The vent is open! Go, go, go — I\'m right behind you!' : simRng.pick(['See that rusty vent low on the wall by the buckets? I\'ve heard wind whistling through it. Pry the cover off!', 'The door\'s locked. But the vent cover over there looks loose…', 'Wait until the lights go out, or until the Twoleg goes home at night. Then try the vent.']), options: [{ label: 'Continue', action: back }, { label: 'Goodbye', action: () => {} }] });
+    } });
+    opts.push({ label: 'Leave', action: () => {} });
+    g.audio.meow(1, 0.4, 0.03);
+    g.ui.dialog({ speaker: c, sub, text: o.freed ? this.poundLine(o, true) : this.poundLine(o, false), options: opts, input: (t) => g.ui.dialog({ speaker: c, sub, said: t, text: simRng.pick(['*blinks slowly at you*', 'Mm. Let\'s just get out of here first.', 'I\'m too scared to think straight…', 'You\'re brave, you know that?']), options: [{ label: 'Continue', action: back }] }) });
   }
 
   private wiggle() {
@@ -1953,6 +2010,7 @@ export class TwolegSystem {
     for (const o of this.owners) add(o, this.isKittypet ? (o.kid ? 'Your little Tallfolk' : 'Your Tallfolk') : (o.kid ? 'Tallfolk kit' : 'Tallfolk'));
     for (const c of this.cars) if (c.catcher) add(c.catcher, 'Animal control Tallfolk');
     if (this.worker) add(this.worker, 'Pound worker');
+    for (const o of this.occupants) if (o.bubble && o.model) out.push({ x: o.pos.x, y: o.pos.y + 0.5, z: o.pos.z, name: displayName(o.cat), text: o.bubble.text });
     return out;
   }
 

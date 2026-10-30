@@ -148,6 +148,9 @@ export function toLocal(o: { x: number; z: number; rot: number }, wx: number, wz
   return { x: dx * c - dz * s, z: dx * s + dz * c };
 }
 
+/** Floods raise the water about 2.6 above normal: the town is built higher than that. */
+const SAFE_H = 3.8;
+
 // ------------------------------------------------------------------ layout
 export function planTown(seed: number, terrain: Terrain, terr: Territories): TownLayout {
   const rng = new RNG(seed ^ 0x7a11);
@@ -167,7 +170,7 @@ export function planTown(seed: number, terrain: Terrain, terr: Territories): Tow
           const px = cx + dir.x * k * 17 - Math.cos(a) * o, pz = cz + dir.z * k * 17 - Math.sin(a) * o;
           const s = terrain.sample(px, pz);
           score -= (s.river + s.lake + s.stream * 0.6 + s.mountain + s.marsh * 0.5 + s.bank * 0.4) * 10;
-          if (s.h < 1.5) score -= 5;
+          if (s.h < 3) score -= 6 + (3 - s.h) * 4;
           if (typeof terr.ownerAt(px, pz) === 'number') score -= 12;
           if (Math.hypot(px - terr.council.x, pz - terr.council.z) < 30) score -= 20;
         }
@@ -211,17 +214,20 @@ export function planTown(seed: number, terrain: Terrain, terr: Territories): Tow
 /** Flatten the ground for the town and return the zones where nothing should grow. */
 export function shapeTown(L: TownLayout, terrain: Terrain): { x: number; z: number; r: number }[] {
   const clear: { x: number; z: number; r: number }[] = [];
+  // first lift the whole town (street, gardens and dens) above any dip, lake or flood
+  terrain.addFloor(L.c.x - L.dir.x * (L.len / 2 + 25), L.c.z - L.dir.z * (L.len / 2 + 25), L.c.x + L.dir.x * (L.len / 2 + 25), L.c.z + L.dir.z * (L.len / 2 + 25), 34, SAFE_H);
   const seg = 20;
   let prevH: number | undefined;
   for (let s = -L.len / 2 - 10; s < L.len / 2 + 10; s += seg) {
     const x = L.c.x + L.dir.x * s, z = L.c.z + L.dir.z * s;
     const x2 = x + L.dir.x * seg, z2 = z + L.dir.z * seg;
     // the road follows the land gently: average the natural height a little
-    prevH = terrain.addStrip(x, z, x2, z2, 6.5, prevH);
+    // keep the Thunderpath well above even the worst flood
+    prevH = terrain.addStrip(x, z, x2, z2, 6.5, prevH ?? Math.max(terrain.height(x, z), SAFE_H), Math.max(terrain.height(x2, z2), SAFE_H));
   }
   for (let s = -L.len / 2; s <= L.len / 2; s += 6) clear.push({ x: L.c.x + L.dir.x * s, z: L.c.z + L.dir.z * s, r: 7 });
   for (const hs of [L.home, ...L.neighbours]) {
-    const h = terrain.height(hs.x, hs.z);
+    const h = Math.max(terrain.height(hs.x, hs.z), SAFE_H); // Twoleg dens are a shelter from floods
     terrain.addMod(hs.x, hs.z, 11, 'flat', h);
     hs.y = h;
     clear.push({ x: hs.x, z: hs.z, r: 12.5 });
@@ -229,11 +235,15 @@ export function shapeTown(L: TownLayout, terrain: Terrain): { x: number; z: numb
   // the driveway between the house and the road
   const dw = toWorld(L.home, 10.5, 6);
   clear.push({ x: dw.x, z: dw.z, r: 5 });
-  const fh = terrain.height(L.facility.x, L.facility.z);
+  const fh = Math.max(terrain.height(L.facility.x, L.facility.z), SAFE_H);
+  terrain.addFloor(L.facility.x - 1, L.facility.z, L.facility.x + 1, L.facility.z, 22, fh);
   terrain.addMod(L.facility.x, L.facility.z, 18, 'flat', fh);
   L.facility.y = fh;
   clear.push({ x: L.facility.x, z: L.facility.z, r: 24 });
-  for (const n of [L.nest.loner, L.nest.rogue]) clear.push({ x: n.x, z: n.z, r: 3 });
+  for (const n of [L.nest.loner, L.nest.rogue]) {
+    clear.push({ x: n.x, z: n.z, r: 3 });
+    terrain.addMod(n.x, n.z, 3, 'flat', Math.max(terrain.height(n.x, n.z), SAFE_H));
+  }
   return clear;
 }
 
