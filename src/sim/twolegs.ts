@@ -76,6 +76,31 @@ export class TwolegSystem {
   private reunionPending = false;
   private leashAsked = -1;
   private lastVan = -99;
+  /** Testing: a van comes every hour near the Thunderpath, no break between visits. */
+  testVans = false;
+
+  /** Testing: go straight to being caught (with a couple of clanmates). */
+  testCapture() {
+    const g = this.game;
+    if (this.ac || this.cutscene) { g.ui.toast('You are already caught!', 'info'); return; }
+    const pc = this.pc;
+    const p = this.st(0, 4.6);
+    g.player.placeAt(p.x, p.z);
+    const mates = pc.lifestyle === 'clan' ? g.clan.home(false).filter((c) => c.stage !== 'kit' && c.role !== 'leader').sort(() => Math.random() - 0.5).slice(0, 2) : [];
+    for (const m of mates) this.cageCat(m);
+    this.captured(mates, false);
+  }
+
+  /** Testing: stand on the Thunderpath and bring a van right now. */
+  testVanNow() {
+    const g = this.game;
+    const p = this.st(-10, 5.2);
+    g.chunks.primeAround(p.x, p.z);
+    g.player.placeAt(p.x, p.z, Math.atan2(-this.L.dir.x, -this.L.dir.z));
+    this.lastVan = -99;
+    this.callVan(5);
+    g.ui.toast('🧪 Test vans ON: a van comes every hour while you\'re near the Thunderpath. One is on its way now!', 'info');
+  }
   private trap: { g: THREE.Group; door: THREE.Group; x: number; z: number; dirX: number; dirZ: number; sprung: boolean } | null = null;
   private baitHint = false;
   private outageHere = false;
@@ -1130,10 +1155,10 @@ export class TwolegSystem {
     const vanUp = this.cars.some((c) => c.van);
     const rescue = g.objectives.list.some((o) => o.data?.rescue);
     // vans need a long break between visits (a full day; less when a clanmate needs rescuing)
-    const rested = g.time.totalHours - this.lastVan > (rescue ? 8 : 26);
+    const rested = this.testVans || g.time.totalHours - this.lastVan > (rescue ? 8 : 26);
     if (!vanUp && !this.ac && !this.cutscene && near && rested) {
       const night = hour >= 19 || hour < 6;
-      const p = rescue ? 0.35 : night ? (this.isKittypet ? 0.16 : 0.22) : (this.isKittypet ? 0.05 : 0.08);
+      const p = this.testVans ? 1 : rescue ? 0.35 : night ? (this.isKittypet ? 0.16 : 0.22) : (this.isKittypet ? 0.05 : 0.08);
       if (simRng.chance(p) && this.callVan()) this.lastVan = g.time.totalHours;
     }
     // a wire box trap with food in it, left out on the pavement at night

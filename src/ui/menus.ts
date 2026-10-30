@@ -361,6 +361,14 @@ export class Menus {
       g.passTime(24);
     });
     add('Save game', () => { g.save(); g.ui.toast('Game saved.', 'good'); });
+    // testing helpers for the Twoleg capture
+    add('🧪 Test: get caught by Twolegs now', () => { g.resume(); g.twolegs.testCapture(); });
+    add(g.twolegs.testVans ? '🧪 Test: vans every time — ON (tap to turn off)' : '🧪 Test: vans every time — OFF', () => {
+      g.twolegs.testVans = !g.twolegs.testVans;
+      g.resume();
+      if (g.twolegs.testVans) g.twolegs.testVanNow();
+      else g.ui.toast('Test vans off. Vans are back to normal.', 'info');
+    });
     add('Settings', () => this.settings(() => this.pause()));
     add('How to play', () => this.help(() => this.pause()));
     add('Save & quit to title', () => { g.save(); g.toTitle(); });
