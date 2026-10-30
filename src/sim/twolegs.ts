@@ -1063,7 +1063,7 @@ export class TwolegSystem {
     ov.className = 'van-scene3d';
     ov.innerHTML = `<div class="van-vignette"></div><div class="caption"></div>`;
     document.body.appendChild(ov);
-    const scene = new VanCutscene([...riders, ...strayRiders].map((cat) => ({ cat, isPlayer: cat.id === pc.id })), ov, stowaway ? { cat: pc, isPlayer: true } : null);
+    const scene = new VanCutscene([...riders, ...strayRiders].map((cat) => ({ cat, isPlayer: cat.id === pc.id })), ov, stowaway ? { cat: pc, isPlayer: true } : null, { clank: (v) => g.audio.clank(v), click: () => { g.audio.click(); g.audio.clank(0.6); }, slam: () => g.audio.slam() });
     g.overlay = scene;
     g.ui.showHud(false);
     const cap = ov.querySelector('.caption') as HTMLElement;
@@ -1074,7 +1074,7 @@ export class TwolegSystem {
         friends.length ? `${displayName(friends[0])} yowls from the carrier beside you: "${simRng.pick(['We\'ll get out of this, I promise!', 'I\'m scared! Where are they taking us?', 'Stay brave! We\'re together!'])}"` : 'Strange cats cry out from the other cages. You press your nose to the cold, rusty bars.',
         'The monster stops. The doors swing open. Cold light… and the smell of rust and fear.'];
     lines.forEach((l, i) => setTimeout(() => { cap.textContent = this.twoleg(l); cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in'); }, i * 2600));
-    for (let i = 0; i < 5; i++) setTimeout(() => { g.audio.engine(0.05); if (i % 2) g.audio.meow(0.9 + Math.random() * 0.4, 0.5, 0.04); g.audio.rattle(); }, i * 2000);
+    for (let i = 0; i < 5; i++) setTimeout(() => { g.audio.engine(0.05); if (i % 2) g.audio.meow(0.9 + Math.random() * 0.4, 0.5, 0.04); }, i * 2000);
     setTimeout(() => {
       ov.classList.add('out');
       setTimeout(() => { ov.remove(); g.overlay = null; scene.dispose(); g.ui.showHud(true); this.cutscene = false; this.arriveAtPound(friends, caged, [...strays, ...newStrays], stowaway); }, 700);

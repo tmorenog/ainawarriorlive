@@ -440,6 +440,10 @@ export class AudioEngine {
   honk() { this.tone(420, 0.35, 0.05, 'square'); this.tone(530, 0.35, 0.04, 'square'); }
   camera() { this.burst(0.06, 0.05, 'highpass', 4000, 1); this.tone(2200, 0.04, 0.015, 'square', undefined, undefined, 0.05); }
   rattle() { for (let i = 0; i < 3; i++) this.burst(0.06, 0.05, 'bandpass', 2400 + Math.random() * 800, 4, undefined, i * 0.08); }
+  /** Metal on metal: a padlock banging against cage bars. */
+  clank(v = 1) { this.tone(1150 + Math.random() * 500, 0.12, 0.03 * v, 'square', 900); this.tone(2900 + Math.random() * 600, 0.08, 0.015 * v, 'triangle'); this.burst(0.06, 0.04 * v, 'bandpass', 3200, 6); }
+  /** A cage door slamming shut. */
+  slam() { this.burst(0.25, 0.09, 'lowpass', 500, 1); this.tone(420, 0.35, 0.04, 'square', 300); this.burst(0.12, 0.05, 'bandpass', 2400, 5, undefined, 0.05); }
   bell() { this.tone(2600, 0.25, 0.012, 'sine'); this.tone(3900, 0.2, 0.006, 'sine'); }
   toll() { this.tone(220, 2.5, 0.05, 'sine', 210); this.tone(330, 2.5, 0.03, 'sine', 320, undefined, 0.02); }
 }

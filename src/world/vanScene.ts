@@ -109,21 +109,32 @@ function rustyCage(w: number, h: number, d: number, num: number, mats: { rust: T
   const latch = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.035, 0.03), mats.rust);
   latch.position.set(w - 0.03, h / 2, 0.025);
   door.add(latch);
-  const lockBody = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.02), mats.brass);
-  lockBody.position.set(w - 0.03, h / 2 - 0.05, 0.045);
-  door.add(lockBody);
+  // the padlock hangs from the latch on its shackle and swings freely (pivot at the top of the shackle)
+  const lock = new THREE.Group();
+  lock.position.set(w - 0.03, h / 2 - 0.012, 0.045);
   const shackle = new THREE.Mesh(new THREE.TorusGeometry(0.016, 0.004, 6, 12, Math.PI), lam('#9a9a98'));
-  shackle.position.set(w - 0.03, h / 2 - 0.025, 0.045);
-  door.add(shackle);
+  shackle.position.set(0, -0.013, 0);
+  lock.add(shackle);
+  const lockBody = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.05, 0.02), mats.brass);
+  lockBody.position.set(0, -0.038, 0);
+  lock.add(lockBody);
   const keyhole = new THREE.Mesh(new THREE.PlaneGeometry(0.008, 0.016), lam('#1a1a1a'));
-  keyhole.position.set(w - 0.03, h / 2 - 0.055, 0.0561);
-  door.add(keyhole);
-  // a short chain dangling from the lock
+  keyhole.position.set(0, -0.043, 0.0101);
+  lock.add(keyhole);
+  door.add(lock);
+  // a short chain dangling under the lock, each link hanging from the one above
+  const links: THREE.Object3D[] = [];
+  let parent: THREE.Object3D = lock;
   for (let i = 0; i < 5; i++) {
+    const piv = new THREE.Group();
+    piv.position.set(0, i === 0 ? -0.064 : -0.014, 0.004);
     const link = new THREE.Mesh(new THREE.TorusGeometry(0.009, 0.0025, 5, 10), mats.rust);
-    link.position.set(w - 0.03 + (i % 2 ? 0.002 : 0), h / 2 - 0.085 - i * 0.014, 0.05);
+    link.position.y = -0.007;
     link.rotation.y = i % 2 ? Math.PI / 2 : 0;
-    door.add(link);
+    piv.add(link);
+    parent.add(piv);
+    links.push(piv);
+    parent = piv;
   }
   // a paper tag with a number on it
   const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.045), new THREE.MeshLambertMaterial({ map: canvasTex(64, 40, (c) => { c.fillStyle = '#e8dcae'; c.fillRect(0, 0, 64, 40); c.fillStyle = '#7a2a1a'; c.font = 'bold 22px sans-serif'; c.textAlign = 'center'; c.fillText(`#${100 + num * 7}`, 32, 28); }) }));
@@ -132,14 +143,15 @@ function rustyCage(w: number, h: number, d: number, num: number, mats: { rust: T
   door.add(tag);
   g.add(door);
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-  return { g, door };
+  return { g, door, lock, shackle, links };
 }
 
 export class VanCutscene {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(52, 1, 0.02, 40);
   private van = new THREE.Group();
-  private cages: { g: THREE.Group; base: THREE.Vector3; model: CatModel | null; seed: number; name: string; facing: number }[] = [];
+  private cages: { g: THREE.Group; base: THREE.Vector3; model: CatModel | null; seed: number; name: string; facing: number;
+    door?: THREE.Group; lock?: THREE.Group; shackle?: THREE.Mesh; links?: THREE.Object3D[]; swing: number; swingV: number; side: number; sideV: number; clankT: number; hop: number }[] = [];
   private bulb = new THREE.Group();
   private bulbLight: THREE.PointLight;
   private passLight: THREE.PointLight;
@@ -149,8 +161,13 @@ export class VanCutscene {
   private t = 0;
   private labels: HTMLElement[] = [];
   private playerCage = 0;
+  private stowaway = false;
+  private slammed = false;
+  private locked = false;
+  /** Seconds of the close-up on your cage door before the ride. */
+  private intro = 2.6;
 
-  constructor(riders: VanRider[], private labelLayer: HTMLElement, stowaway: VanRider | null) {
+  constructor(riders: VanRider[], private labelLayer: HTMLElement, stowaway: VanRider | null, private sfx?: { clank: (v: number) => void; click: () => void; slam: () => void }) {
     const sc = this.scene;
     sc.background = new THREE.Color('#06070a');
     sc.fog = new THREE.Fog('#06070a', 6, 14);
@@ -262,7 +279,7 @@ export class VanCutscene {
     const n = Math.max(riders.length, 4);
     for (let i = 0; i < Math.min(slots.length, n + 2); i++) {
       const [x, y, z, f] = slots[i];
-      const { g } = rustyCage(cw, ch, cd, i, mats);
+      const { g, door, lock, shackle, links } = rustyCage(cw, ch, cd, i, mats);
       g.position.set(x, y + 0.002, z);
       g.rotation.y = f > 0 ? 0 : Math.PI;
       this.van.add(g);
@@ -280,7 +297,7 @@ export class VanCutscene {
         g.add(model.root);
         if (r.isPlayer) this.playerCage = i;
       }
-      this.cages.push({ g, base: g.position.clone(), model, seed: i * 1.7 + 0.3, name: r ? (r.isPlayer ? 'You' : displayName(r.cat)) : '', facing: f });
+      this.cages.push({ g, base: g.position.clone(), model, seed: i * 1.7 + 0.3, name: r ? (r.isPlayer ? 'You' : displayName(r.cat)) : '', facing: f, door, lock, shackle, links, swing: Math.random() * 0.3, swingV: 0, side: 0, sideV: 0, clankT: 0, hop: 0 });
     }
     // a stowaway crouches between the cages near the back doors, free
     if (stowaway) {
@@ -290,9 +307,13 @@ export class VanCutscene {
       m.root.position.set(1.95, 0, 0.1);
       m.root.rotation.y = Math.PI;
       this.van.add(m.root);
-      this.cages.push({ g: new THREE.Group(), base: new THREE.Vector3(), model: m, seed: 9, name: 'You', facing: 0 });
+      this.cages.push({ g: new THREE.Group(), base: new THREE.Vector3(), model: m, seed: 9, name: 'You', facing: 0, swing: 0, swingV: 0, side: 0, sideV: 0, clankT: 0, hop: 0 });
       this.playerCage = this.cages.length - 1;
     }
+    // your cage starts open: the door slams, then the padlock snaps shut
+    this.stowaway = !!stowaway;
+    const mine = this.cages[this.playerCage];
+    if (mine && mine.door && !stowaway) { mine.door.rotation.y = -1.7; if (mine.shackle) mine.shackle.position.y = 0.012; }
     // floating dust in the light
     const pts = new Float32Array(240 * 3);
     for (let i = 0; i < 240; i++) { pts[i * 3] = (Math.random() - 0.5) * L; pts[i * 3 + 1] = Math.random() * H; pts[i * 3 + 2] = (Math.random() - 0.5) * W; }
@@ -320,16 +341,47 @@ export class VanCutscene {
     this.van.position.y = bump;
     this.van.rotation.x = Math.sin(t * 1.3) * 0.012 + Math.sin(t * 9) * 0.003;
     this.van.rotation.z = Math.sin(t * 0.9) * 0.008;
-    // cages rattle and hop a little on their own
+    // cages rattle and hop; padlocks and chains swing and clank against the bars
+    const mine = this.cages[this.playerCage];
     for (const c of this.cages) {
       if (!c.facing) { c.model?.update(dt); continue; }
-      const k = Math.max(0, Math.sin(t * 2.1 + c.seed) - 0.82);
-      c.g.position.set(c.base.x + Math.sin(t * 31 + c.seed) * 0.003, c.base.y + k * 0.18 * Math.abs(Math.sin(t * 38)), c.base.z + Math.sin(t * 27 + c.seed) * 0.003);
-      c.g.rotation.z = Math.sin(t * 23 + c.seed) * 0.01 + k * 0.08 * Math.sin(t * 30);
+      const kNow = Math.max(0, Math.sin(t * 2.1 + c.seed) - 0.82);
+      const hopKick = kNow > 0.05 && c.hop <= 0.05;
+      c.hop = kNow;
+      c.g.position.set(c.base.x + Math.sin(t * 31 + c.seed) * 0.003, c.base.y + kNow * 0.18 * Math.abs(Math.sin(t * 38)), c.base.z + Math.sin(t * 27 + c.seed) * 0.003);
+      c.g.rotation.z = Math.sin(t * 23 + c.seed) * 0.01 + kNow * 0.08 * Math.sin(t * 30);
+      // pendulum: the lock swings out from the door and falls back with a clank
+      const rumble = Math.sin(t * 13 + c.seed * 3) * 1.4 + (hopKick ? (5 + Math.random() * 4) * (Math.random() < 0.5 ? -1 : 1) : 0);
+      c.swingV += (-40 * c.swing - 2.2 * c.swingV) * dt + rumble * dt * 4 + (hopKick ? rumble * 0.12 : 0);
+      c.swing += c.swingV * dt;
+      // the lock can't swing through the door: it bangs against the bars
+      if (c.swing < -0.05) {
+        if (c.swingV < -0.9 && c.clankT <= 0) { this.sfx?.clank(Math.min(1, -c.swingV / 4) * (c === mine ? 1 : 0.5)); c.clankT = 0.12; }
+        c.swing = -0.05; c.swingV = -c.swingV * 0.45;
+      }
+      c.sideV += (-30 * c.side - 2 * c.sideV) * dt + Math.sin(t * 17 + c.seed) * dt * 3 + (hopKick ? (Math.random() - 0.5) * 2 : 0);
+      c.side += c.sideV * dt;
+      c.clankT -= dt;
+      if (c.lock) { c.lock.rotation.x = -c.swing; c.lock.rotation.z = c.side * 0.6; }
+      if (c.links) c.links.forEach((l, i) => { l.rotation.x = -c.swing * (0.4 + i * 0.25) + Math.sin(t * 9 + i + c.seed) * 0.15; l.rotation.z = c.side * (0.5 + i * 0.3); });
+      // doors rattle in their frames (except one that's still swinging shut)
+      if (c.door && !(c === mine && !this.slammed && !this.stowaway)) c.door.rotation.y = Math.sin(t * 29 + c.seed) * 0.01 + kNow * 0.05 * Math.sin(t * 47);
       if (c.model) {
         // the cats shift and tremble
         c.model.root.position.x = Math.sin(t * 0.7 + c.seed) * 0.04;
         c.model.update(dt);
+      }
+    }
+    // the intro: your door slams shut, the padlock snaps closed
+    if (mine && mine.door && !this.stowaway) {
+      if (!this.slammed) {
+        const k = Math.min(1, Math.max(0, (t - 0.5) / 0.35));
+        mine.door.rotation.y = -1.7 * (1 - k * k);
+        if (k >= 1) { this.slammed = true; mine.door.rotation.y = 0.06; this.sfx?.slam(); mine.swingV = 7; mine.sideV = 2; }
+      }
+      if (this.slammed && !this.locked && t > 1.45 && mine.shackle) {
+        mine.shackle.position.y = Math.max(-0.013, mine.shackle.position.y - dt * 0.2);
+        if (mine.shackle.position.y <= -0.013) { this.locked = true; this.sfx?.click(); mine.swingV = 4; }
       }
     }
     // the bulb swings on its cord
@@ -348,7 +400,7 @@ export class VanCutscene {
     // the camera drifts from your cage along the rows of cages
     const pc = this.cages[this.playerCage];
     const target = pc ? pc.g.position.clone().add(new THREE.Vector3(0, 0.22, 0)) : new THREE.Vector3(1.1, 0.25, -0.68);
-    const s = Math.min(1, t / 9);
+    const s = Math.min(1, Math.max(0, (t - (this.stowaway ? 0 : this.intro)) / 9));
     const ease = s * s * (3 - 2 * s);
     const camA = new THREE.Vector3(target.x + 0.55, 0.42, target.z > 0 ? target.z - 0.85 : target.z + 0.85);
     const camB = new THREE.Vector3(2.6, 1.25, 0.05);
@@ -356,6 +408,15 @@ export class VanCutscene {
     this.camera.position.x += Math.sin(t * 11) * 0.004;
     this.camera.position.y += bump * 0.6;
     const look = target.clone().lerp(new THREE.Vector3(-0.4, 0.3, 0), ease * 0.85);
+    if (!this.stowaway && pc && pc.lock && t < this.intro + 1.5) {
+      // close-up on your cage door and its clanking padlock, then ease back out into the ride
+      const close = pc.g.localToWorld(new THREE.Vector3(0.12, 0.36, 0.95));
+      const lp = pc.g.localToWorld(new THREE.Vector3(0.18, 0.24, 0.3));
+      const m = Math.min(1, Math.max(0, (t - this.intro) / 1.5));
+      const mm = m * m * (3 - 2 * m);
+      this.camera.position.lerpVectors(close, this.camera.position, mm);
+      look.lerpVectors(lp, look, mm);
+    }
     this.camera.lookAt(look);
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
