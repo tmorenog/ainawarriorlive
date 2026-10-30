@@ -62,7 +62,7 @@ export class Terrain {
   private riverShift = 0;
   private streamShift = 0;
   campHeight = 0;
-  private mods: { x: number; z: number; r: number; kind: 'pond' | 'flat'; h0: number }[] = [];
+  private mods: { x: number; z: number; r: number; kind: 'pond' | 'flat' | 'strip'; h0: number; x2?: number; z2?: number; h1?: number }[] = [];
 
   constructor(seed: number) {
     this.seed = seed;
@@ -178,6 +178,17 @@ export class Terrain {
 
     // Landmark modifiers (ponds, flattened clearings)
     for (const m of this.mods) {
+      if (m.kind === 'strip') {
+        // a flat ribbon (a Thunderpath) between two points, sloping gently from h0 to h1
+        const sx = m.x2! - m.x, sz = m.z2! - m.z;
+        const len2 = sx * sx + sz * sz;
+        const t = clamp(((x - m.x) * sx + (z - m.z) * sz) / len2, 0, 1);
+        const px = m.x + sx * t, pz = m.z + sz * t;
+        const d = Math.hypot(x - px, z - pz);
+        if (d > m.r * 1.8) continue;
+        h = lerp(h, lerp(m.h0, m.h1!, t), 1 - smoothstep(m.r, m.r * 1.8, d));
+        continue;
+      }
       const dx = x - m.x, dz = z - m.z;
       const d = Math.sqrt(dx * dx + dz * dz);
       if (d > m.r * 1.8) continue;
@@ -207,9 +218,15 @@ export class Terrain {
   }
 
   /** Add a landmark terrain modifier (pond depression or flattened area). */
-  addMod(x: number, z: number, r: number, kind: 'pond' | 'flat') {
-    const h0 = this.rawHeight(x, z).h;
+  addMod(x: number, z: number, r: number, kind: 'pond' | 'flat', h0 = this.rawHeight(x, z).h) {
     this.mods.push({ x, z, r, kind, h0 });
+  }
+
+  /** Flatten a straight strip of ground (roads), keeping the ends at their natural height. */
+  addStrip(x: number, z: number, x2: number, z2: number, r: number, h0?: number, h1?: number) {
+    const a = h0 ?? this.rawHeight(x, z).h, b = h1 ?? this.rawHeight(x2, z2).h;
+    this.mods.push({ x, z, r, kind: 'strip', h0: a, x2, z2, h1: b });
+    return b;
   }
 
   /** Local pond surfaces (independent of the global water level). */

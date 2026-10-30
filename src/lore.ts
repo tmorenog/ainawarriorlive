@@ -1,6 +1,6 @@
 // Lore mode: "classic" uses the four forest clans and book-style naming
 // (fan tribute to the Warriors novels); "original" uses Mistwood's own lore.
-import type { Appearance, Cat, Sex, Trait } from './cats/types';
+import type { Appearance, Cat, Lifestyle, Sex, Trait } from './cats/types';
 
 export type LoreMode = 'classic' | 'original';
 export const lore = { mode: 'classic' as LoreMode };
@@ -31,6 +31,8 @@ export const CLASSIC_SUFFIXES = [
 export function loreName(c: Cat): string {
   // Warriors-style names in every mode: Mudkit → Mudpaw → Mudfur → Mudstar
   if (c.clan === 'loner' && !c.epithet) return c.given;
+  // kittypets, loners and rogues have one plain name: Cream, never Creamkit or Creamheart
+  if (c.lifestyle && c.lifestyle !== 'clan') return c.given;
   if (c.stage === 'kit') return `${c.given}kit`;
   if (c.stage === 'apprentice') return `${c.given}paw`;
   if (c.role === 'leader' && c.alive) return `${c.given}star`;
@@ -38,6 +40,17 @@ export function loreName(c: Cat): string {
   // older saves had two-part epithets ("Frosteye"); keep those readable
   if (/^[A-Z]/.test(e) && !CLASSIC_SUFFIXES.includes(e.toLowerCase())) return `${c.given} ${e}`;
   return `${c.given}${e.toLowerCase()}`;
+}
+
+/** Kittypet / loner / rogue, or their Mistwood names. */
+export function lifestyleLabel(l: Lifestyle): string {
+  const classic = isClassic();
+  switch (l) {
+    case 'kittypet': return classic ? 'Kittypet' : 'Tinkercat';
+    case 'loner': return classic ? 'Loner' : 'Moonless';
+    case 'rogue': return classic ? 'Rogue' : 'Dashclaw';
+    default: return 'Clan cat';
+  }
 }
 
 /** Text substitutions that turn Mistwood terms into the classic ones. */

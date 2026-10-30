@@ -1,4 +1,4 @@
-import { loreName } from '../lore';
+import { loreName, lifestyleLabel } from '../lore';
 
 // Core data model for every cat in the simulation (player included).
 
@@ -93,6 +93,9 @@ export interface Memory {
   weight: number; // positive = fond, negative = bitter
 }
 
+/** How a cat lives: in a clan, or as a kittypet, loner or rogue. */
+export type Lifestyle = 'clan' | 'kittypet' | 'loner' | 'rogue';
+
 export type ClanId = 'home' | number | 'loner';
 
 export interface Cat {
@@ -154,6 +157,13 @@ export interface Cat {
   outsideBy?: string;
   /** Flowers carried to smell or give away. */
   flowers?: string[];
+  /** Kittypet, loner or rogue instead of a clan cat (one-word names). */
+  lifestyle?: Lifestyle;
+  /** Locked in the Twoleg pound (animal control). */
+  caged?: boolean;
+  cagedDay?: number;
+  /** Last game hour a kittypet was at home. */
+  homeSeen?: number;
   /** Clan coins earned by helping the clan (spent on special accessories). */
   coins?: number;
   /** Special accessories bought with clan coins. */
@@ -172,6 +182,7 @@ export function displayName(c: Cat): string {
 
 export function roleLabel(c: Cat): string {
   if (!c.alive) return 'Walks the Long Meadow';
+  if (c.lifestyle && c.lifestyle !== 'clan') return lifestyleLabel(c.lifestyle);
   if (c.exiled) return 'Exile';
   switch (c.role) {
     case 'leader': return 'Clan Warden (leader)';

@@ -435,5 +435,11 @@ export class AudioEngine {
   chime() { this.tone(880, 0.35, 0.03, 'sine'); this.tone(1320, 0.4, 0.02, 'sine', undefined, undefined, 0.08); }
   success() { this.tone(660, 0.25, 0.03, 'triangle'); this.tone(990, 0.35, 0.03, 'triangle', undefined, undefined, 0.12); }
   click() { this.tone(1200, 0.05, 0.015, 'sine'); }
+  /** A Twoleg monster rumbling past (louder when close). */
+  engine(vol = 0.05) { this.tone(70, 1.2, vol, 'sawtooth', 55); this.burst(1.2, vol * 0.8, 'lowpass', 220, 1); }
+  honk() { this.tone(420, 0.35, 0.05, 'square'); this.tone(530, 0.35, 0.04, 'square'); }
+  camera() { this.burst(0.06, 0.05, 'highpass', 4000, 1); this.tone(2200, 0.04, 0.015, 'square', undefined, undefined, 0.05); }
+  rattle() { for (let i = 0; i < 3; i++) this.burst(0.06, 0.05, 'bandpass', 2400 + Math.random() * 800, 4, undefined, i * 0.08); }
+  bell() { this.tone(2600, 0.25, 0.012, 'sine'); this.tone(3900, 0.2, 0.006, 'sine'); }
   toll() { this.tone(220, 2.5, 0.05, 'sine', 210); this.tone(330, 2.5, 0.03, 'sine', 320, undefined, 0.02); }
 }

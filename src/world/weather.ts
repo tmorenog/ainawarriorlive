@@ -50,6 +50,8 @@ export class Weather {
   wetness = 0;
   private hoursLeft = 6;
   private rain: THREE.LineSegments;
+  /** Under a roof: no rain or snow falls on you. */
+  indoors = false;
   private snow: THREE.Points;
   private rainU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uAmt: { value: 0 }, uWind: { value: 0 } };
   private snowU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uAmt: { value: 0 }, uWind: { value: 0 } };
@@ -172,8 +174,8 @@ export class Weather {
     this.snowU.uCam.value.copy(cam);
     this.snowU.uAmt.value = this.p.snow;
     this.snowU.uWind.value = this.p.wind;
-    this.rain.visible = this.p.rain > 0.02;
-    this.snow.visible = this.p.snow > 0.02;
+    this.rain.visible = this.p.rain > 0.02 && !this.indoors;
+    this.snow.visible = this.p.snow > 0.02 && !this.indoors;
 
     if (this.p.storm > 0.6) {
       this.lightningTimer -= dt;

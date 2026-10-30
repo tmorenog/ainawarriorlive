@@ -248,3 +248,36 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 .drink-overlay .drops { position: absolute; bottom: 15vh; width: 30vh; height: 8vh; background: radial-gradient(circle at 20% 60%, rgba(160,210,255,0.8) 4%, transparent 6%), radial-gradient(circle at 70% 40%, rgba(160,210,255,0.8) 3%, transparent 5%), radial-gradient(circle at 45% 80%, rgba(160,210,255,0.8) 3%, transparent 5%); animation: drops 0.64s linear infinite; }
 @keyframes lap { from { transform: translateY(6vh) scaleY(0.7); } to { transform: translateY(-1vh) scaleY(1.05); } }
 @keyframes drops { from { transform: translateY(0); opacity: 1; } to { transform: translateY(6vh); opacity: 0; } }
+
+/* ---------- Twolegs: photo flash, the animal-control van ride ---------- */
+.photo-flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 60; }
+.photo-flash.on { animation: photoFlash 0.5s ease-out; }
+@keyframes photoFlash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+.name-hint { font-size: 12px; color: var(--ink-dim); margin-top: 4px; }
+.name-hint.bad { color: #ff8a7a; font-weight: 600; }
+.van-scene { position: fixed; inset: 0; z-index: 70; background: #050506; display: flex; align-items: center; justify-content: center; animation: vanIn 0.8s ease-out; }
+.van-scene.out { animation: vanOut 0.8s ease-in forwards; }
+@keyframes vanIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vanOut { to { opacity: 0; } }
+.van-inside { position: relative; width: min(860px, 94vw); height: min(480px, 70vh); border-radius: 14px; overflow: hidden;
+  background: linear-gradient(180deg, #2a2c30 0%, #1c1d20 55%, #121214 56%, #18191c 100%);
+  box-shadow: inset 0 0 120px #000; animation: vanShake 0.35s infinite; }
+.van-inside::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 2px, transparent 2px 60px); }
+.van-window { position: absolute; right: 8%; top: 34%; width: 120px; height: 46px; border-radius: 6px; background: linear-gradient(90deg, #3a4a5a, #8aa0b8, #3a4a5a); background-size: 300% 100%; animation: roadBlur 0.6s linear infinite; opacity: 0.55; border: 3px solid #0a0a0c; }
+@keyframes roadBlur { from { background-position: 0 0; } to { background-position: 300% 0; } }
+@keyframes vanShake { 0%,100% { transform: translate(0,0); } 25% { transform: translate(1px,-2px); } 50% { transform: translate(-1px,1px); } 75% { transform: translate(2px,0); } }
+.van-inside .carriers { position: absolute; left: 0; right: 0; bottom: 22%; display: flex; justify-content: center; gap: 22px; flex-wrap: wrap; padding: 0 20px; }
+.carrier { position: relative; width: 150px; height: 112px; border-radius: 16px 16px 8px 8px; background: linear-gradient(180deg, #b8bec4, #8a9096); box-shadow: 0 8px 0 #5a6066, 0 14px 22px rgba(0,0,0,0.6);
+  animation: bump var(--d) ease-in-out var(--o) infinite; }
+.carrier::before { content: ''; position: absolute; left: 40px; top: -14px; width: 70px; height: 18px; border: 6px solid #3a3a40; border-bottom: none; border-radius: 40px 40px 0 0; }
+.carrier .cat-face { position: absolute; left: 30px; top: 18px; width: 90px; height: 75px; animation: peek calc(var(--d) * 2.3) ease-in-out infinite; }
+.carrier .grate { position: absolute; left: 18px; top: 12px; width: 114px; height: 84px; border-radius: 8px;
+  background: repeating-linear-gradient(90deg, rgba(40,40,46,0.95) 0 4px, transparent 4px 17px), repeating-linear-gradient(0deg, rgba(40,40,46,0.95) 0 4px, transparent 4px 21px); }
+.carrier span { position: absolute; left: 0; right: 0; bottom: -40px; text-align: center; color: #e8d9a8; font-weight: 700; font-size: 14px; text-shadow: 0 2px 4px #000; }
+.carrier.empty { opacity: 0.55; }
+@keyframes bump { 0%,100% { transform: translateY(0) rotate(0); } 18% { transform: translateY(-16px) rotate(-3deg); } 36% { transform: translateY(0) rotate(2deg); } 52% { transform: translateY(-6px) rotate(-1deg); } 70% { transform: translateY(0) rotate(1.5deg); } }
+@keyframes peek { 0%,100% { transform: translate(0,0); } 50% { transform: translate(3px,4px) rotate(4deg); } }
+.van-inside .stow { position: absolute; left: 6%; bottom: 8%; width: 90px; animation: bump 0.7s ease-in-out infinite; }
+.van-inside .caption { position: absolute; left: 6%; right: 6%; top: 8%; color: #f4ecd8; font-size: 19px; line-height: 1.4; text-align: center; text-shadow: 0 2px 8px #000; opacity: 0; }
+.van-inside .caption.in { animation: capIn 0.6s ease-out forwards; }
+@keyframes capIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

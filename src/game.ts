@@ -2,6 +2,8 @@
 // loading, sleeping, time skips, death and succession.
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
+import { TwolegSystem } from './sim/twolegs';
+import { lifestyleLabel } from './lore';
 import { tickWaterfalls } from './world/chunks';
 import { BOOK_CATS } from './lore';
 import { CLOVER_APP } from './sim/clan';
@@ -87,6 +89,7 @@ export class Game {
   codeBreakers: CodeBreakers;
   bees: Bees;
   discoveries: Discoveries;
+  twolegs: TwolegSystem;
   scent: ScentSystem;
   ui: UI;
   menus: Menus;
@@ -134,6 +137,7 @@ export class Game {
     this.codeBreakers = new CodeBreakers(this);
     this.bees = new Bees(this);
     this.discoveries = new Discoveries(this);
+    this.twolegs = new TwolegSystem(this);
     this.fire = new FireSystem(this);
     this.scent = new ScentSystem(this);
     this.ui = new UI(this);
@@ -192,9 +196,11 @@ export class Game {
       else if (l.kind === 'trainingHollow') this.terrain.addMod(l.x, l.z, 9, 'flat');
       else if (l.kind === 'councilRocks') this.terrain.addMod(l.x, l.z, 16, 'flat');
     }
+    const clear = this.twolegs.plan(seed, this.terrain, this.territories);
     this.mods = emptyMods();
-    this.chunks = new ChunkManager({ terrain: this.terrain, territories: this.territories, mods: this.mods, season: this.time.season, day: this.time.day, seed }, this.scene);
+    this.chunks = new ChunkManager({ terrain: this.terrain, territories: this.territories, mods: this.mods, season: this.time.season, day: this.time.day, seed, clear }, this.scene);
     this.camp = new Camp(this.terrain, this.scene);
+    this.twolegs.build();
     this.campColliders = this.camp.colliders;
     if (!this.mossBalls) this.mossBalls = new MossBalls(this);
     this.mossBalls.reset();
@@ -206,6 +212,7 @@ export class Game {
   collidersNear(x: number, z: number, out: Collider[] = []): Collider[] {
     this.chunks.collidersNear(x, z, out);
     if (x * x + z * z < 30 * 30) for (const c of this.campColliders) if (Math.abs(c.x - x) < c.r + 3 && Math.abs(c.z - z) < c.r + 3) out.push(c);
+    this.twolegs.collidersNear(x, z, out);
     return out;
   }
   weatherLabel() { return WEATHER_LABEL[this.weather.kind]; }
@@ -334,6 +341,7 @@ export class Game {
       this.clan.fillDens(rng);
       this.clan.ensureClover(rng);
       this.weather.kind = 'sunny';
+      if (spec.lifestyle && spec.lifestyle !== 'clan') { this.startOutsider(me, spec.lifestyle); return; }
       const nursery = this.camp.dens.nursery;
       this.chunks.primeAround(0, 0);
       this.npcs.syncRoster();
@@ -346,6 +354,47 @@ export class Game {
       this.ui.showBanner(`You are ${displayName(me)}, a kit of ${clanTitle(this.territories.homeName)}. ${mother ? `Your mother ${displayName(mother)} watches over you in the nursery.` : ''} Stay inside the camp until you are old enough to train.`, 12);
       this.save();
     }, 60);
+  }
+
+  /** Start life outside the clan: a kittypet in a Twoleg home, a loner or a rogue. */
+  private startOutsider(me: Cat, l: 'kittypet' | 'loner' | 'rogue') {
+    const c = this.clan;
+    for (const pid of me.parents) { const p = c.get(pid); if (p) p.kits = p.kits.filter((k) => k !== me.id); }
+    me.parents = [];
+    me.lifestyle = l;
+    me.exiled = true;
+    me.age = 10;
+    me.bornDay = this.time.day - 10;
+    me.stage = 'warrior';
+    me.strength = l === 'rogue' ? 62 : l === 'loner' ? 50 : 38;
+    me.skills.fighting = l === 'rogue' ? 45 : l === 'loner' ? 30 : 8;
+    me.skills.hunting = l === 'kittypet' ? 6 : 35;
+    me.reputation = l === 'rogue' ? -25 : l === 'kittypet' ? -5 : 0;
+    me.confinedUntil = null;
+    me.homeSeen = this.time.totalHours;
+    if (l === 'kittypet') {
+      me.app = { ...me.app, accessories: [...(me.app.accessories ?? []).filter((a) => a !== 'collar' && a !== 'bellCollar'), 'bellCollar'], accessoryColor: me.app.accessoryColor ?? '#c8302a' };
+      this.twolegs.home.setName(me.given);
+    }
+    const sp = this.twolegs.startPoint(l);
+    this.chunks.primeAround(sp.x, sp.z);
+    this.npcs.syncRoster();
+    this.player.attach();
+    this.player.placeAt(sp.x, sp.z, sp.yaw);
+    const label = lifestyleLabel(l);
+    const clanT = clanTitle(this.territories.homeName);
+    const desc = l === 'kittypet'
+      ? `Your Tallfolk feed you, pet you and sometimes walk you on a leash. Your food and water bowls are in the kitchen and the cat flap is in the back door. Beyond the fence lies the forest of ${clanT}… a clan cat might even let you join them.`
+      : l === 'loner'
+        ? `You live alone near the Tallfolk dens, in a mossy nest under a fallen log. Hunt for yourself, find water, and stay out of the clans' way — or ask to join ${clanT}.`
+        : `You live by your claws in a bramble den at the edge of the Tallfolk dens. Clan cats will attack you on sight in their territory. Take what you need… or prove you can change and ask to join ${clanT}.`;
+    this.objectives.add({ id: 'exile', kind: 'free', title: `Life as a ${label.toLowerCase()}`, desc, need: 1 });
+    this.startPlaying();
+    this.ui.showBanner(l === 'kittypet'
+      ? `You are ${me.given}, a ${label.toLowerCase()}. You live in a cosy Tallfolk den with a jingly collar. The wild forest of ${clanT} is just past the Thunderpath…`
+      : l === 'loner' ? `You are ${me.given}, a ${label.toLowerCase()}. No clan, no rules — just you, the woods and the Tallfolk dens.`
+      : `You are ${me.given}, a ${label.toLowerCase()}. Clan cats call your kind trouble. Survive by your own claws.`, 12);
+    this.save();
   }
 
   continueGame() {
@@ -412,6 +461,8 @@ export class Game {
         for (const list of Object.values(BOOK_CATS)) for (const b of list) if (b.prefix + b.suffix === cat.bookId) cat.app = { ...cat.app, ...b.app };
       }
       if (bornInto) { this.bornIntoClan(bornInto); return; }
+      if (c.player.lifestyle === 'kittypet') this.twolegs.home.setName(c.player.given);
+      if (this.twolegs.inFacility(this.player.pos.x, this.player.pos.z)) setTimeout(() => this.twolegs.resumePound(), 400);
       // saves from before the age reset existed get it once
       if (!d.agesReset) this.youngAgain();
       this.startPlaying();
@@ -475,6 +526,7 @@ export class Game {
   }
 
   private resetSystems() {
+    this.twolegs.reset();
     this.vigils?.clear();
     this.clan.herbStore = { silverleaf: 2, sunpetal: 2, bitterroot: 1 };
     this.pendingProphecy = null;
@@ -859,6 +911,7 @@ export class Game {
     this.weather.tickHour(t.season, this.events.isActive('drought'), this.events.isActive('coldSnap'));
     this.fire.tickHour();
     this.events.tickHour();
+    this.twolegs.hourTick(hour);
     const c = this.clan.player;
     if (c && c.alive) {
       if (c.exiled) {
@@ -901,7 +954,7 @@ export class Game {
       this.npcs.refreshModels();
       if (this.clan.player?.alive) this.player.refreshStage();
       this.chunks.setContext(t.season, t.day);
-      if (this.clan.player?.exiled) this.objectives.list = this.objectives.list.filter((o) => o.id === 'exile');
+      if (this.clan.player?.exiled) this.objectives.list = this.objectives.list.filter((o) => o.id === 'exile' || o.id.startsWith('tw-'));
     }
     if (t.season !== this.seasonKey) {
       this.seasonKey = t.season;
@@ -996,6 +1049,7 @@ export class Game {
     this.ambient.update(this.clock, this.camera.position, this.player.pos.y, { night: this.time.darkness, season: this.time.season, rain: w.p.rain, wind: w.p.wind, day: this.time.day, inForest: biome === 'forest' || biome === 'pine' });
     this.chunks.setNightLights(this.time.darkness * 1.5);
     this.chunks.update(this.player.pos.x, this.player.pos.z, 1);
+    this.twolegs.update(dt);
     // simulation
     this.npcs.update(dt);
     this.prey.update(dt);
@@ -1036,9 +1090,13 @@ export class Game {
     if (!a) return;
     if (!a.warned) {
       a.warned = 1;
-      a.say(`${p.given}! You were exiled. Leave our land!`, 4);
+      const l = p.lifestyle ?? 'clan';
+      a.say(l === 'kittypet' ? simRng.pick([`Kittypet! What are you doing on ${this.territories.homeName} land? Go back to your Twolegs!`, 'Ha! A kittypet with a bell on! Get off our land before I shred your ears!'])
+        : l === 'loner' ? 'Loner! This is clan territory. Leave, or we\'ll make you leave.'
+        : l === 'rogue' ? 'ROGUE! Intruder! Drive it out!'
+        : `${p.given}! You were exiled. Leave our land!`, 4);
       this.audio.hiss();
-      setTimeout(() => { a.warned = 2; }, 9000);
+      setTimeout(() => { a.warned = 2; }, l === 'rogue' ? 2500 : 9000);
     } else if (a.warned === 2 && this.territories.ownerAt(this.player.pos.x, this.player.pos.z) === 'home') {
       this.combat.engage(a, this.player);
       a.warned = 3;

@@ -64,6 +64,8 @@ export interface WorldContext {
   season: Season;
   day: number;
   seed: number;
+  /** Extra places where nothing grows (Twoleg town, roads, buildings). */
+  clear?: { x: number; z: number; r: number }[];
 }
 
 const TREASURE_GEO = new THREE.IcosahedronGeometry(0.045, 0);
@@ -582,6 +584,10 @@ export class ChunkManager {
     const season = ctx.season;
     const W = SEG + 1;
     const sampleAt = (x: number, z: number) => samples[chunk.nearestIndex(x, z)];
+    for (const c of ctx.clear ?? []) {
+      if (c.x + c.r < chunk.x0 - 2 || c.x - c.r > chunk.x0 + CHUNK_SIZE + 2 || c.z + c.r < chunk.z0 - 2 || c.z - c.r > chunk.z0 + CHUNK_SIZE + 2) continue;
+      chunk.clearZones.push(c);
+    }
 
     const trunks = new InstBuilder();
     const canopies = new InstBuilder();
@@ -1092,6 +1098,7 @@ export class ChunkManager {
         if (y < this.waterLevel + 0.05) continue;
         const campD = Math.hypot(x, z);
         if (campD < 12) continue;
+        if (this.blocked(chunk, x, z, 0)) continue;
         if (f & 8) {
           if (r0 < 0.015) grass.add(x, y, z, r0 * 100, 0.2, 0.2, 0.2, [0.3, 0.45, 0.2]);
           else if (r0 < 0.22) twigs.add(x, y + 0.01, z, r0 * 37, rng.range(0.6, 1.6), 1, 1, rng.pick([[0.13, 0.1, 0.08], [0.2, 0.15, 0.11], [0.08, 0.07, 0.06]] as [number, number, number][]), 0, rng.range(-0.2, 0.2));

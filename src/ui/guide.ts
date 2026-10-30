@@ -44,6 +44,30 @@ and clanmates who see you being good start to trust you.</p>
 <li><b>Mouse-brain</b>: what cats call someone silly!</li>
 </ul>
 
+<h3>Kittypets, loners and rogues</h3>
+<p>When you make a new cat you can choose to be born into a clan, or to live outside it. Cats outside the clans have
+<b>one plain name</b> (like <i>Cream</i>), never a kit/paw/warrior name.</p>
+<ul>
+<li><b>Kittypet</b> (Mistwood: <b>Tinkercat</b>): you live in a Twoleg den with food and water bowls, a cosy bed, a cat tree,
+a yarn ball and a cat flap. Your Twolegs feed you at breakfast and dinner, pet you, and sometimes take you for a walk on a
+<b>leash</b>. You wear a jingly bell collar (prey can hear you coming!). Stay away too long and they put up LOST CAT posters.</li>
+<li><b>Loner</b> (Mistwood: <b>Moonless</b>): you live alone in a mossy nest near the Twoleg dens. Clan cats warn you off their land.</li>
+<li><b>Rogue</b> (Mistwood: <b>Dashclaw</b>): fierce and strong, sleeping in a bramble den. Clan cats attack rogues quickly.</li>
+</ul>
+<p>Any of them can <b>ask a clan cat to join the clan</b>. If they say yes, you become an apprentice (Cream → <i>Creampaw</i>) and leave your collar behind.</p>
+
+<h3>Twolegs and the Thunderpath</h3>
+<ul>
+<li>Twolegs walk the Thunderpath glued to their phones and tablets. Some stop to take your picture (📸 flash!) and kits come running.</li>
+<li>Monsters (cars) roar along the Thunderpath. They honk and brake for cats, but one can hit you if you dart in front of it.</li>
+<li>Sometimes a <b>white animal-control monster</b> with flashing lights stops and a Twoleg climbs out with a <b>cat carrier</b>.
+Run (canter or sprint) or crouch perfectly still far away to escape. If you're caught, you and nearby friends are taken to the rusty
+<b>Twoleg pound</b>.</li>
+<li>In the pound: wiggle your cage latch (E) when the worker isn't looking (they get distracted by their phone at the desk,
+and go home at night). Open the other cages, pry the loose vent cover, and squeeze out. Cats you free may ask to join your clan.</li>
+<li>If a clanmate is taken, wait by the Thunderpath for the white monster and <b>sneak into the back</b> to follow them.</li>
+</ul>
+
 <h3>Seasons</h3>
 <p>The seasons turn every 5 minutes:</p>
 <ul>

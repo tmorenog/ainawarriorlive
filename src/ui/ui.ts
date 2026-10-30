@@ -8,7 +8,7 @@ import { SEASON_NAMES } from '../world/worldState';
 import { relLabel, REL_COLOR, isFamily } from '../sim/social';
 import { Panels } from './panels';
 import { clamp } from '../core/math';
-import { loreText } from '../lore';
+import { loreText, lifestyleLabel } from '../lore';
 
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: string, parent?: HTMLElement): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
@@ -390,6 +390,10 @@ export class UI {
   private freeHint(): string {
     const g = this.game;
     const c = g.clan.player;
+    if (g.twolegs.ac) return 'Escape the Twoleg pound!';
+    if (c.lifestyle === 'kittypet') return `${lifestyleLabel('kittypet')} — your Twolegs care for you; the forest calls`;
+    if (c.lifestyle === 'loner') return `${lifestyleLabel('loner')} — hunt, drink, survive on your own`;
+    if (c.lifestyle === 'rogue') return `${lifestyleLabel('rogue')} — live by your claws`;
     if (c.exiled) return 'Exiled — survive, and seek a way home';
     if (c.stage === 'kit') return 'Explore the camp, play, visit the elders';
     if (c.hunger < 30) return 'You are hungry — hunt or eat';
@@ -450,7 +454,7 @@ export class UI {
     const pp = g.player.pos;
     const W = window.innerWidth, H = window.innerHeight;
     let i = 0;
-    if (Math.hypot(pp.x, pp.z) < 45) {
+    if (Math.hypot(pp.x, pp.z) < 45 || g.twolegs.places().length) {
       const places: { label: string; icon: string; x: number; z: number; y: number }[] = [];
       const icons: Record<string, string> = { leader: '👑', warriors: '⚔️', apprentices: '🐾', nursery: '🍼', elders: '🌙', medicine: '🌿' };
       for (const d of Object.values(camp.dens)) places.push({ label: d.label, icon: icons[d.name] ?? '🏠', x: d.x, z: d.z, y: g.groundAt(d.x, d.z) + d.radius * 0.85 + 0.55 });
@@ -458,7 +462,7 @@ export class UI {
       places.push({ label: 'Drinking pool', icon: '💧', x: camp.pool.x, z: camp.pool.z, y: g.groundAt(camp.pool.x, camp.pool.z) + 0.6 });
       places.push({ label: `Fresh-kill pile (${Math.floor(g.clan.food)})`, icon: '🍖', x: camp.pile.x, z: camp.pile.z, y: g.groundAt(camp.pile.x, camp.pile.z) + 0.6 });
       places.push({ label: 'Camp entrance', icon: '🌲', x: camp.entrance.x, z: camp.entrance.z - 2, y: g.groundAt(camp.entrance.x, camp.entrance.z - 2) + 1.2 });
-      for (const p of places) {
+      for (const p of [...places, ...g.twolegs.places()]) {
         const d = Math.hypot(p.x - pp.x, p.z - pp.z);
         if (d > 32) continue;
         this.v.set(p.x, p.y, p.z).project(g.camera);
@@ -510,6 +514,21 @@ export class UI {
         el.style.top = `${sy}px`;
         pi++;
       }
+    }
+    // Twolegs talk too
+    for (const b of g.twolegs.speech()) {
+      const d = Math.hypot(b.x - pp.x, b.z - pp.z);
+      if (d > 26) continue;
+      this.v.set(b.x, b.y, b.z).project(cam);
+      if (this.v.z > 1 || Math.abs(this.v.x) > 1.1 || Math.abs(this.v.y) > 1.1) continue;
+      const el = this.bubblePool[bi] ?? (this.bubblePool[bi] = h('div', 'bubble', '', this.bubbles));
+      el.style.display = '';
+      const html = `<b>${esc(b.name)}</b>${esc(b.text)}`;
+      if (el.innerHTML !== html) el.innerHTML = html;
+      el.style.left = `${(this.v.x * 0.5 + 0.5) * W}px`;
+      el.style.top = `${(-this.v.y * 0.5 + 0.5) * H - 6}px`;
+      el.style.opacity = String(clamp(1.3 - d / 26, 0.3, 1));
+      bi++;
     }
     for (let i = bi; i < this.bubblePool.length; i++) this.bubblePool[i].style.display = 'none';
     for (let i = pi; i < this.platePool.length; i++) this.platePool[i].style.display = 'none';

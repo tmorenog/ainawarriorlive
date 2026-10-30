@@ -3,12 +3,12 @@
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import { h, esc } from './ui';
-import { ACCESSORY_LABEL, ACCESSORY_PRICE, Accessory, Appearance, Trait, BodyType, Cat, EarShape, FurLength, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
+import { ACCESSORY_LABEL, ACCESSORY_PRICE, Accessory, Appearance, Trait, BodyType, Cat, EarShape, FurLength, Lifestyle, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
 import { BREEDS, TRAITS, EYE_COLORS, FUR_COLORS, GIVEN_NAMES, PATTERNS, PATTERN_LABEL, randomAppearance, secondFor } from '../cats/generate';
 import { RNG } from '../core/rng';
-import { CONTROLS_HTML } from './panels';
+import { CONTROLS_HTML, loadLooks } from './panels';
 import { HOME_CLAN_NAMES } from '../world/territory';
-import { CLASSIC_CLANS, CLASSIC_PREFIXES, LoreMode, lore } from '../lore';
+import { CLASSIC_CLANS, CLASSIC_PREFIXES, CLASSIC_SUFFIXES, LoreMode, lore, lifestyleLabel } from '../lore';
 import { isFamily } from '../sim/social';
 import { SaveSummary, listSaves, newSlot, setSlot } from '../save/save';
 
@@ -35,7 +35,7 @@ export function saveSettings(s: Settings) {
   try { localStorage.setItem('mistwood-settings', JSON.stringify(s)); } catch { /* ignore */ }
 }
 
-export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string; lore: LoreMode; joinSlot?: number; traits?: Trait[] }
+export interface NewGameSpec { name: string; sex: Sex; app: Appearance; seed: number; clanName: string; lore: LoreMode; joinSlot?: number; traits?: Trait[]; lifestyle?: Lifestyle }
 
 export class Menus {
   private screen: HTMLElement | null = null;
@@ -135,7 +135,8 @@ export class Menus {
     const label = h('div', 'preview-label', '', s);
     const refresh = () => {
       g.showPreview(spec.app, asKit ? 'kit' : 'warrior');
-      label.innerHTML = `${esc(spec.name + (asKit ? 'kit' : 'heart'))}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${spec.app.breed ? esc(spec.app.breed) + ' · ' : ''}${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
+      const outsider = spec.lifestyle && spec.lifestyle !== 'clan';
+      label.innerHTML = `${esc(outsider ? spec.name : spec.name + (asKit ? 'kit' : 'heart'))}<br><small style="font-size:14px">${spec.sex === 'tom' ? 'tom' : 'she-cat'} · ${spec.app.breed ? esc(spec.app.breed) + ' · ' : ''}${PATTERN_LABEL[spec.app.pattern].toLowerCase()}</small>`;
     };
     h('h2', '', 'Your cat', form);
     h('div', '', '<span style="color:var(--ink-dim);font-size:13px">You will be born as a kit in the nursery. This is how you will look when grown.</span>', form);
@@ -161,6 +162,19 @@ export class Menus {
       }
     };
     chips<Sex>('Gender', [['tom', 'Tom'], ['she', 'She-cat']], () => spec.sex, (v) => (spec.sex = v));
+    // how you live: born in a clan, or a kittypet / loner / rogue outside it
+    spec.lifestyle = spec.lifestyle ?? 'clan';
+    chips<Lifestyle>('Your life', [['clan', 'Clan cat (born in the nursery)'], ['kittypet', `${lifestyleLabel('kittypet')} (Twoleg home, collar)`], ['loner', `${lifestyleLabel('loner')} (alone, free)`], ['rogue', `${lifestyleLabel('rogue')} (fierce, no rules)`]], () => spec.lifestyle!, (v) => { spec.lifestyle = v; nameHint.textContent = v === 'clan' ? '' : `${lifestyleLabel(v)}s have ONE plain name — like "Cream", never Creamkit, Creampaw or Creamheart.`; });
+    const nameHint = h('div', 'name-hint', spec.lifestyle === 'clan' ? '' : `${lifestyleLabel(spec.lifestyle)}s have ONE plain name — like "Cream", never Creamkit, Creampaw or Creamheart.`, nr.parentElement!);
+    // saved looks (your own or copied from clanmates)
+    const looks = loadLooks();
+    if (looks.length) {
+      const lr = field('Saved looks');
+      const ls = h('select', '', '', lr) as HTMLSelectElement;
+      h('option', '', 'Use a saved look…', ls);
+      looks.forEach((l, i) => { const o = h('option', '', esc(l.name), ls) as HTMLOptionElement; o.value = String(i); });
+      ls.onchange = () => { const l = looks[parseInt(ls.value, 10)]; if (l) { spec.app = { ...spec.app, ...l.app }; this.create(spec); } };
+    }
     // breed preset
     const br = field('Breed');
     const bs = h('select', '', '', br) as HTMLSelectElement;
@@ -302,10 +316,22 @@ export class Menus {
     si.onkeydown = (e) => e.stopPropagation();
     const sd = h('button', 'chip', '🎲', sr);
     sd.onclick = () => { spec.seed = (Math.random() * 1e6) | 0; si.value = String(spec.seed); };
-    const go = h('button', 'go', 'Be born into the clan ➜', form);
+    const go = h('button', 'go', 'Begin your life ➜', form);
     go.onclick = () => {
       if (!spec.name.trim()) { ni.focus(); return; }
       spec.name = spec.name.trim().charAt(0).toUpperCase() + spec.name.trim().slice(1);
+      if (spec.lifestyle && spec.lifestyle !== 'clan') {
+        // one word, and not a warrior name
+        const one = spec.name.replace(/[^A-Za-z']/g, '');
+        const low = one.toLowerCase();
+        const bad = ['kit', 'paw', 'star', ...CLASSIC_SUFFIXES].find((suf) => low.length > suf.length + 1 && low.endsWith(suf));
+        if (bad || one !== spec.name) {
+          nameHint.textContent = `⚠ ${lifestyleLabel(spec.lifestyle)}s have one plain word as a name. "${spec.name}" sounds like a clan name${bad ? ` (it ends in "-${bad}")` : ''} — try something like "${one.slice(0, Math.max(3, one.length - (bad?.length ?? 0)))}".`;
+          nameHint.classList.add('bad');
+          ni.focus();
+          return;
+        }
+      }
       this.clear();
       spec.joinSlot = this.joinSlot;
       g.newGame(spec);

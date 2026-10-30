@@ -61,19 +61,11 @@ export class Interactions {
     g.ui.toast('You aren\'t carrying anything.', 'info');
   }
 
-  /** First-person view of your tongue lapping water between your paws. */
-  showLapping(seconds = 1.8) {
+  /** Your own cat crouches at the water and laps it up with a real tongue (close-up camera). */
+  showLapping(seconds = 2.2) {
     const g = this.game;
-    const pc = g.clan.player;
-    const paw = pc.app.paws ?? (pc.app.white > 0.05 || pc.app.pattern === 'tuxedo' ? '#f4f1ea' : pc.app.base);
-    document.querySelector('.drink-overlay')?.remove();
-    const ov = document.createElement('div');
-    ov.className = 'drink-overlay';
-    ov.style.setProperty('--paw', paw);
-    ov.innerHTML = '<div class="paw l"></div><div class="drops"></div><div class="tongue"></div><div class="paw r"></div>';
-    if (!g.player.thirdPerson) document.body.appendChild(ov);
-    for (let i = 0; i < 4; i++) setTimeout(() => g.audio.lap(), i * 320);
-    setTimeout(() => ov.remove(), seconds * 1000);
+    g.player.startDrink(seconds);
+    for (let i = 0; i < Math.round(seconds * 2.2); i++) setTimeout(() => g.audio.lap(), i * 450);
   }
 
   drink(amount = 100) {
@@ -184,7 +176,7 @@ export class Interactions {
   update() {
     const g = this.game;
     const pl = g.player;
-    if (pl.busy || pl.sleeping || !pl.alive) { this.current = null; return; }
+    if (pl.busy || pl.sleeping || !pl.alive || pl.drinkT > 0) { this.current = null; return; }
     const p = pl.pos;
     const f = pl.forward();
     const pc = g.clan.player;
@@ -194,6 +186,9 @@ export class Interactions {
     // vigil for a clanmate who died
     const vg = g.vigils?.nearest(p.x, p.z);
     if (vg) { const dc = g.clan.get(vg.catId); this.current = { text: `Sit vigil for ${dc ? displayName(dc) : 'them'}`, action: () => g.vigils.sitVigil(vg) }; return; }
+    // Twoleg things: bowls, beds, owners, cages, vans…
+    const tp = g.twolegs.prompt();
+    if (tp) { this.current = tp; return; }
     // NPC in front
     let best: NpcAgent | null = null, bs = 2.6 * Math.max(0.6, pl.scale);
     for (const a of g.npcs.agents.values()) {
@@ -365,7 +360,8 @@ export class Interactions {
       return;
     }
     let text = greetPlayer(c, pc, op, { night: g.time.isNight, food: clan.food, clanSize: clan.home().length, weather: g.weatherLabel(), recent: clan.lastRecent });
-    if (pc.exiled && g.npcs.isPlayerFriend(a)) text = simRng.pick([
+    if (pc.lifestyle && pc.lifestyle !== 'clan') text = this.outsiderChat(c);
+    else if (pc.exiled && g.npcs.isPlayerFriend(a)) text = simRng.pick([
       `${pc.given}! *presses close* It hasn't been the same without you. I hate this.`,
       `Oh, ${pc.given}... are you eating? Are you safe? I think about you every night.`,
       `I told them it was wrong to drive you out. I'll keep telling them.`,
@@ -427,6 +423,16 @@ export class Interactions {
     const key = c.id + ':' + g.time.day;
     const talkedToday = (this.lastSpoke.get(key) ?? 0) >= 3;
 
+    if (pc.lifestyle && pc.lifestyle !== 'clan') {
+      opts.push({ label: 'Chat', action: () => {
+        clan.adjust(c, pc, talkedToday ? 0.3 : 2, undefined, 3);
+        this.lastSpoke.set(key, (this.lastSpoke.get(key) ?? 0) + 1);
+        g.ui.dialog({ speaker: c, text: this.outsiderChat(c), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+      } });
+      if (c.stage !== 'kit') opts.push({ label: 'Ask to join the clan', hint: 'become an apprentice', action: () => this.askJoin(a, done) });
+      opts.push({ label: 'Leave', action: done });
+      return opts;
+    }
     if (pc.exiled) {
       opts.push({ label: 'Ask to return to the clan', action: () => this.askReturn(a, done) });
       if (g.npcs.isPlayerFriend(a) && c.stage !== 'kit') opts.push({ label: 'Ask for shelter', hint: 'in secret', action: () => this.secretShelter(a, done) });
@@ -964,6 +970,61 @@ export class Interactions {
     } });
     opts.push({ label: 'Leave', action: done });
     g.ui.dialog({ speaker: c, text, sub: isRival ? `${clanTitle(clanName)}` : 'Loner', options: opts, onClose: done, input: (t) => this.freeTalk(a, t, done) });
+  }
+
+  private outsiderChat(c: Cat): string {
+    const pc = this.game.clan.player;
+    const op = this.game.clan.opinion(c, pc);
+    if (pc.lifestyle === 'kittypet') return simRng.pick(op > 20
+      ? ['You\'re not like other kittypets. You\'ve got the heart of a warrior, I think.', 'Do your Twolegs really give you food in a bowl? Every day?', 'Your collar jingles every time you move! Every mouse in the forest can hear you.']
+      : ['Kittypets don\'t belong in the forest. You\'re soft and you smell like Twolegs.', 'Go home to your Twolegs, kittypet.', 'Hmph. A kittypet who wants to play warrior.']);
+    if (pc.lifestyle === 'rogue') return simRng.pick(op > 20 ? ['Not all rogues are bad, I suppose.', 'I\'ll pretend I didn\'t see you. This time.'] : ['I don\'t talk to rogues. Get out of here before the patrol comes.', 'Rogues steal our prey and attack our kits. Why should I trust you?']);
+    return simRng.pick(op > 20 ? ['Living alone must be hard. Do you ever get lonely?', 'You\'re a good hunter, for a loner.'] : ['Loners don\'t follow the warrior code. Keep to your own patch.', 'What do you want, loner?']);
+  }
+
+  /** A kittypet, loner or rogue asks a clan cat to be taken into the clan. */
+  private askJoin(a: NpcAgent, done: () => void) {
+    const g = this.game;
+    const clan = g.clan;
+    const pc = clan.player;
+    const c = a.cat;
+    const dayKey = `join:${c.id}:${g.time.day}`;
+    if (this.boredAsked.has(dayKey)) { g.ui.dialog({ speaker: c, text: 'You already asked me today. Come back another time.', options: [{ label: 'Alright', action: done }], onClose: done }); return; }
+    this.boredAsked.add(dayKey);
+    const op = clan.opinion(c, pc);
+    const leaderOp = clan.leader ? clan.opinion(clan.leader, pc) : 0;
+    const isLeader = c.role === 'leader';
+    let chance = 0.18 + op / 120 + leaderOp / 200 + (isLeader ? 0.2 : 0) + (pc.lifestyle === 'loner' ? 0.08 : pc.lifestyle === 'rogue' ? -0.12 : 0) + pc.skills.hunting / 400;
+    chance = clamp(chance, 0.05, 0.9);
+    if (!simRng.chance(chance)) {
+      clan.adjust(c, pc, 1);
+      g.ui.dialog({ speaker: c, text: pc.lifestyle === 'kittypet' ? 'A kittypet in the clan? You wouldn\'t last a moon. Prove you can hunt and fight, and maybe I\'ll speak to the leader.' : 'Not yet. Clan cats need to trust you first. Help us, hunt for us, and ask again.', options: [{ label: 'I\'ll prove myself', action: done }], onClose: done });
+      return;
+    }
+    const leader = clan.leader;
+    const leaderName = leader ? displayName(leader) : 'The leader';
+    const wasKp = pc.lifestyle === 'kittypet';
+    pc.exiled = false;
+    pc.clan = 'home';
+    pc.lifestyle = 'clan';
+    pc.infractions = 0;
+    pc.reputation = Math.max(pc.reputation, -5);
+    pc.app = { ...pc.app, accessories: (pc.app.accessories ?? []).filter((x) => x !== 'collar' && x !== 'bellCollar') };
+    pc.stage = 'apprentice';
+    pc.age = Math.max(pc.age, 6);
+    g.objectives.list = g.objectives.list.filter((o) => o.id !== 'exile');
+    const mentor = clan.pickMentor(pc);
+    if (mentor) { pc.mentor = mentor.id; mentor.apprentice = pc.id; clan.adjust(pc, mentor, 10); }
+    g.player.attach();
+    clan.log(`${pc.given} the ${wasKp ? 'kittypet' : 'outsider'} joined the clan as ${displayName(pc)}.`, 'ceremony');
+    clan.remember(pc, `I joined the clan. I am ${displayName(pc)} now${wasKp ? ', and I left my collar behind' : ''}.`, 10);
+    g.npcs.syncRoster();
+    g.ui.dialog({ speaker: c, text: isLeader ? `Very well. From this day on, you will be known as ${displayName(pc)}.` : `I spoke to ${leaderName}. You can join us! Come to camp — you'll be an apprentice.`, options: [{ label: 'Thank you!', action: () => {
+      done();
+      g.ceremony(`${leaderName}: "This ${wasKp ? 'kittypet' : 'cat'} has asked to join us. From this day on, you will be known as ${displayName(pc)}.${mentor ? ` ${displayName(mentor)} will be your mentor.` : ''}"`, [pc.id, mentor?.id ?? '']);
+      if (wasKp) g.ui.toast('You wriggle out of your jingly collar and leave it in the grass. You are a clan cat now!', 'good');
+      g.onPlayerStageChange();
+    } }], onClose: done });
   }
 
   /** A friend secretly feeds and hides the exiled player for the night. */

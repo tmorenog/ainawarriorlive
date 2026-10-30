@@ -7,7 +7,7 @@ import { Accessory, Appearance, LifeStage } from './types';
 import { RNG, hashString } from '../core/rng';
 import { clamp } from '../core/math';
 
-export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim';
+export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink';
 export type Mood = 'neutral' | 'happy' | 'angry' | 'afraid' | 'alert' | 'sad';
 
 const STAGE_SCALE: Record<LifeStage, number> = { kit: 0.42, apprentice: 0.7, warrior: 1, elder: 0.97 };
@@ -290,6 +290,7 @@ export class CatModel {
   root = new THREE.Group();
   body = new THREE.Group();
   headPivot = new THREE.Group();
+  tongue: THREE.Mesh | null = null;
   head = new THREE.Group();
   tailPivot = new THREE.Group();
   legs: THREE.Group[] = [];
@@ -592,6 +593,15 @@ export class CatModel {
     const eyeMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 120, specular: 0xffffff, emissive: eyeC.clone().multiplyScalar(0.18) });
     this.eyes = this.addMesh(this.head, mergeGeometries(eyeParts)!, eyeMat);
     this.eyes.position.set(0, 0.018, 0);
+    // a pink tongue that flicks out to lap water (only shown while drinking)
+    const tg = new THREE.CapsuleGeometry(0.009, 0.03, 4, 8);
+    tg.rotateZ(Math.PI / 2);
+    tg.scale(1, 0.32, 1);
+    tg.translate(0.022, 0, 0);
+    this.tongue = new THREE.Mesh(tg, new THREE.MeshLambertMaterial({ color: '#e0788a' }));
+    this.tongue.position.set(0.075, -0.042, 0);
+    this.tongue.visible = false;
+    this.head.add(this.tongue);
 
     // whiskers
     const wp: number[] = [];
@@ -777,6 +787,10 @@ export class CatModel {
         // curled up: body rolled onto its side a little, head tucked, tail over the nose
         bodyY = -this.legLen * 0.98; legF = 1.45; legB = -1.45; headP = 0.55; tailUp = 0.25; lie = 1; curl = 0.55; roll = 0.28;
         break;
+      case 'drink':
+        // crouched at the water's edge: elbows up, front paws planted wide, nose down to the surface
+        bodyY = -this.legLen * 0.5; pitch = -0.2; legF = 0.42; legB = -0.75; headP = 1.05; tailUp = 0.3; curl = 0.15;
+        break;
       case 'eat':
         bodyY = -this.legLen * 0.3; legF = 0.5; legB = -0.5; headP = 0.8; pitch = -0.1;
         break;
@@ -866,6 +880,18 @@ export class CatModel {
       let tw = 0;
       if (this.earT < 0) { tw = Math.sin(-this.earT * 30) * 0.15; if (this.earT < -0.2) this.earT = 2 + Math.random() * 6; }
       this.ears.rotation.z = back + tw;
+    }
+    // lapping: the tongue curls out and flicks back about four times a second
+    if (this.tongue) {
+      const drinking = pose === 'drink';
+      this.tongue.visible = drinking;
+      if (drinking) {
+        const lap = (this.t * 4.2) % 1;
+        const out = Math.sin(Math.min(1, lap * 1.6) * Math.PI);
+        this.tongue.scale.set(0.25 + out * 1.0, 1, 1);
+        this.tongue.rotation.z = -0.35 - out * 0.5;
+        this.tongue.position.y = -0.042 - out * 0.006;
+      }
     }
     // blink
     this.blinkT -= dt;

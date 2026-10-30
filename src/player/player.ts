@@ -100,7 +100,16 @@ export class Player implements Fighter {
   private checkT = 0;
   sniffCd = 0;
   sleeping = false;
-  poison = 0; // deathberry poisoning, 0..1
+  poison = 0;
+  /** Seconds left lapping water (the camera swings round to watch your cat drink). */
+  drinkT = 0;
+  private ripples: { m: THREE.Mesh; t: number }[] = [];
+  private rippleT = 0;
+  startDrink(seconds: number) {
+    this.drinkT = seconds;
+    this.vel.set(0, 0, 0);
+    this.model.setVisibleHead(true);
+  } // deathberry poisoning, 0..1
 
   constructor(private game: Game) {
     window.addEventListener('wheel', (e) => { if (game.state === 'playing' && !game.ui.isBusy()) this.wheel = Math.sign(e.deltaY); }, { passive: true });
@@ -157,6 +166,14 @@ export class Player implements Fighter {
     this.inCombatT -= dt;
     this.sniffCd -= dt;
     this.shake = Math.max(0, this.shake - dt * 3);
+    if (this.drinkT > 0) {
+      this.drinkT -= dt;
+      this.updateDrink(dt);
+      if (this.drinkT <= 0) this.model.setVisibleHead(this.thirdPerson);
+      this.syncModel(dt);
+      this.updateCamera(dt);
+      return;
+    }
     const controllable = !this.busy && !this.frozen && !this.sleeping;
 
     // look
@@ -564,9 +581,10 @@ export class Player implements Fighter {
       } else if (near === null) this.warned.border = false;
     }
     // danger zones
-    const nearHouse = game.chunks.structuresNear(x, z, 12).some((s) => s.type === 'house');
+    const town = game.twolegs.dangerAt(x, z);
+    const nearHouse = game.chunks.structuresNear(x, z, 12).some((s) => s.type === 'house') || town === 'den';
     const chunk = game.chunks.getChunkAt(x, z);
-    const onRoad = chunk ? (chunk.flagAt(x, z) & 2) !== 0 : false;
+    const onRoad = (chunk ? (chunk.flagAt(x, z) & 2) !== 0 : false) || town === 'road';
     const nearHouseWide = !nearHouse && game.chunks.structuresNear(x, z, 26).some((s) => s.type === 'house');
     if (nearHouseWide && !this.warned.danger) { this.warned.danger = true; game.ui.toast('⚠ A Tallfolk den is close. The code says to stay away from it.', 'info'); }
     else if (!nearHouseWide && !nearHouse) this.warned.danger = false;
@@ -584,6 +602,31 @@ export class Player implements Fighter {
     game.discoveries.check(x, z);
   }
 
+  /** Little rings spread on the water each time the tongue touches it. */
+  private updateDrink(dt: number) {
+    const game = this.game;
+    this.speed = 0;
+    this.rippleT -= dt;
+    const f = this.forward();
+    const s = this.model.scale;
+    const hx = this.pos.x + f.x * 0.2 * s, hz = this.pos.z + f.z * 0.2 * s;
+    const wy = Math.max(game.chunks.waterSurfaceAt(hx, hz), game.groundAt(hx, hz)) + 0.01;
+    if (this.rippleT <= 0) {
+      this.rippleT = 0.24;
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.02, 0.028, 20), new THREE.MeshBasicMaterial({ color: '#e8f4ff', transparent: true, opacity: 0.7, depthWrite: false }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(hx, wy, hz);
+      game.scene.add(m);
+      this.ripples.push({ m, t: 0 });
+    }
+    for (const r of [...this.ripples]) {
+      r.t += dt;
+      r.m.scale.setScalar(1 + r.t * 9);
+      (r.m.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.7 - r.t * 0.9);
+      if (r.t > 0.8) { game.scene.remove(r.m); r.m.geometry.dispose(); (r.m.material as THREE.Material).dispose(); this.ripples.splice(this.ripples.indexOf(r), 1); }
+    }
+  }
+
   syncModel(dt: number) {
     const m = this.model;
     m.root.position.copy(this.pos);
@@ -591,7 +634,8 @@ export class Player implements Fighter {
     m.root.rotation.y = -this.heading;
     m.speed = this.speed;
     if (!this.pounce) {
-      if (this.sleeping) m.pose = 'sleep';
+      if (this.drinkT > 0) m.pose = 'drink';
+      else if (this.sleeping) m.pose = 'sleep';
       else if (this.swimming) m.pose = 'swim';
       else if (this.tripT > 0) m.pose = 'lie';
       else if (this.crouching || this.charging) m.pose = 'crouch';
@@ -612,6 +656,16 @@ export class Player implements Fighter {
     const bobY = Math.sin(this.bob * 2) * 0.012 * scale * Math.min(1, this.speed / 3);
     const crouchDrop = this.crouching || this.charging ? m.legLen * 0.35 * scale : 0;
     const eye = m.eyeHeight + 0.025 * scale;
+    if (this.drinkT > 0) {
+      // close-up from the side so you can see your paws planted and your tongue lapping
+      const sx = -f.z, sz = f.x;
+      const cx = this.pos.x + f.x * 0.55 * scale + sx * 0.34 * scale;
+      const cz = this.pos.z + f.z * 0.55 * scale + sz * 0.34 * scale;
+      const cy = Math.max(this.pos.y + 0.16 * scale, this.game.groundAt(cx, cz) + 0.06);
+      cam.position.set(cx, cy, cz);
+      cam.lookAt(this.pos.x + f.x * 0.2 * scale, this.pos.y + 0.07 * scale, this.pos.z + f.z * 0.2 * scale);
+      return;
+    }
     if (this.thirdPerson) {
       const dist = 0.9 + 1.6 * scale;
       const cx = this.pos.x - f.x * dist * Math.cos(this.pitch * 0.6);

@@ -84,7 +84,7 @@ export class ClanSim {
   get medicine() { return this.get(this.medicineId); }
 
   home(includePlayer = true): Cat[] {
-    return Object.values(this.cats).filter((c) => c.alive && c.clan === 'home' && !c.exiled && (includePlayer || !c.isPlayer));
+    return Object.values(this.cats).filter((c) => c.alive && c.clan === 'home' && !c.exiled && !c.caged && (includePlayer || !c.isPlayer));
   }
   rivalCats(index: number): Cat[] {
     return Object.values(this.cats).filter((c) => c.alive && c.clan === index);

@@ -10,7 +10,20 @@ import { TrainingSystem } from '../sim/training';
 import { TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { REL_COLOR, isFamily, relLabel } from '../sim/social';
 import { RULES } from '../sim/clan';
-import { PATTERN_LABEL } from '../cats/generate';
+import { PATTERN_LABEL, PATTERNS, FUR_COLORS, EYE_COLORS } from '../cats/generate';
+import type { Appearance, Pattern } from '../cats/types';
+
+/** Saved coats (yours, or copied from clanmates) kept between games. */
+const LOOKS_KEY = 'mistwood-looks';
+export interface SavedLook { name: string; app: Appearance }
+export function loadLooks(): SavedLook[] { try { return JSON.parse(localStorage.getItem(LOOKS_KEY) ?? '[]'); } catch { return []; } }
+export function saveLooks(l: SavedLook[]) { try { localStorage.setItem(LOOKS_KEY, JSON.stringify(l.slice(0, 24))); } catch { /* storage full or blocked */ } }
+export function saveLookOf(name: string, app: Appearance) {
+  const looks = loadLooks();
+  const copy: Appearance = { ...app, accessories: undefined, accessory: undefined, accessoryColor: undefined };
+  looks.unshift({ name, app: copy });
+  saveLooks(looks);
+}
 
 type PanelKind = 'journal' | 'map' | 'leader';
 
@@ -211,11 +224,93 @@ export class Panels {
             this.render();
           };
         }
+        this.renderLookEditor(body);
         break;
       }
       case 'guide': h('div', 'guide', GUIDE_HTML, body); break;
       case 'help': h('div', '', CONTROLS_HTML, body); break;
     }
+  }
+
+  /** Re-customize your coat any time, and keep a collection of saved looks. */
+  private renderLookEditor(body: HTMLElement) {
+    const g = this.game;
+    const pc = g.clan.player;
+    const apply = () => { g.player.model.setAppearance({ ...pc.app }); g.save(); };
+    h('h3', '', '🎨 Change your look', body);
+    h('p', '', 'Re-customize your cat whenever you like. Changes show right away.', body);
+    const row = (label: string) => { const r = h('div', 'row look-row', `<label>${label}</label>`, body); r.style.flexWrap = 'wrap'; r.style.alignItems = 'center'; r.style.gap = '6px'; return r; };
+    const swatches = (r: HTMLElement, list: { name: string; hex: string }[], get: () => string | undefined, set: (v: string) => void) => {
+      for (const c of list) {
+        const b = h('div', `sw ${get() === c.hex ? 'on' : ''}`, '', r);
+        b.style.background = c.hex;
+        b.title = c.name;
+        b.onclick = () => { set(c.hex); apply(); this.render(); };
+      }
+      const inp = h('input', '', undefined, r) as HTMLInputElement;
+      inp.type = 'color';
+      inp.value = get() ?? '#ffffff';
+      inp.oninput = () => { set(inp.value); apply(); };
+    };
+    swatches(row('Fur colour'), FUR_COLORS, () => pc.app.base, (v) => (pc.app.base = v));
+    swatches(row('Second colour (stripes, patches)'), FUR_COLORS, () => pc.app.second, (v) => (pc.app.second = v));
+    const pr = row('Pattern');
+    for (const p of PATTERNS) {
+      const b = h('button', `chip ${pc.app.pattern === p ? 'on' : ''}`, PATTERN_LABEL[p], pr);
+      b.onclick = () => { pc.app.pattern = p as Pattern; if ((p === 'calico' || p === 'bicolor') && pc.app.white < 0.3) pc.app.white = 0.4; apply(); this.render(); };
+    }
+    const wr = row('White patches');
+    const wi = h('input', '', undefined, wr) as HTMLInputElement;
+    wi.type = 'range'; wi.min = '0'; wi.max = '0.8'; wi.step = '0.02'; wi.value = String(pc.app.white);
+    wi.oninput = () => { pc.app.white = parseFloat(wi.value); apply(); };
+    swatches(row('Eye colour'), EYE_COLORS, () => pc.app.eye, (v) => (pc.app.eye = v));
+    const oe = row('Odd eyes (second eye)');
+    const oeb = h('button', `chip ${pc.app.eye2 ? 'on' : ''}`, pc.app.eye2 ? 'On' : 'Off', oe);
+    oeb.onclick = () => { pc.app.eye2 = pc.app.eye2 ? undefined : '#5aa2e6'; apply(); this.render(); };
+    if (pc.app.eye2) swatches(oe, EYE_COLORS, () => pc.app.eye2, (v) => (pc.app.eye2 = v));
+    const mk = row('Markings');
+    const marks: [string, () => boolean, (on: boolean) => void][] = [
+      ['White tail tip', () => !!pc.app.tailTip, (on) => (pc.app.tailTip = on ? '#f4f1ea' : undefined)],
+      ['White paws', () => pc.app.paws === '#f4f1ea', (on) => (pc.app.paws = on ? '#f4f1ea' : undefined)],
+      ['White belly', () => !!pc.app.belly, (on) => (pc.app.belly = on ? '#f4f1ea' : undefined)],
+    ];
+    for (const [label, get, set] of marks) { const b = h('button', `chip ${get() ? 'on' : ''}`, label, mk); b.onclick = () => { set(!get()); apply(); this.render(); }; }
+    const chipsRow = <T extends string>(label: string, opts: [T, string][], get: () => T, set: (v: T) => void) => {
+      const r = row(label);
+      for (const [v, l] of opts) { const b = h('button', `chip ${get() === v ? 'on' : ''}`, l, r); b.onclick = () => { set(v); apply(); this.render(); }; }
+    };
+    chipsRow('Fur length', [['short', 'Short'], ['medium', 'Medium'], ['long', 'Long']], () => pc.app.fur, (v) => (pc.app.fur = v));
+    chipsRow('Body', [['slender', 'Slender'], ['average', 'Average'], ['stocky', 'Stocky'], ['large', 'Large']], () => pc.app.body, (v) => (pc.app.body = v));
+    chipsRow('Ears', [['pointed', 'Pointed'], ['rounded', 'Rounded'], ['tufted', 'Tufted'], ['folded', 'Folded']], () => pc.app.ears, (v) => (pc.app.ears = v));
+    chipsRow('Tail', [['long', 'Long'], ['bushy', 'Bushy'], ['short', 'Short'], ['kinked', 'Kinked']], () => pc.app.tail, (v) => (pc.app.tail = v));
+    // saved looks
+    h('h3', '', '💾 Saved looks', body);
+    h('p', '', 'Save your coat, or copy a clanmate\'s coat you love (open them in Relationships or Clan and press "Save their look"). Saved looks stay even when you start a new cat.', body);
+    const sr = h('div', 'row', '', body);
+    const saveBtn = h('button', 'btn', '💾 Save my current look', sr);
+    saveBtn.onclick = () => { saveLookOf(`${pc.given} (${PATTERN_LABEL[pc.app.pattern].toLowerCase()})`, pc.app); g.ui.toast('Look saved!', 'good'); this.render(); };
+    const sel = h('select', '', '', sr) as HTMLSelectElement;
+    h('option', '', 'Copy a clanmate\'s look…', sel);
+    const mates = g.clan.home(false).sort((a, b) => a.given.localeCompare(b.given));
+    for (const c of mates) { const o = h('option', '', `${displayName(c)} — ${PATTERN_LABEL[c.app.pattern].toLowerCase()}`, sel) as HTMLOptionElement; o.value = c.id; }
+    sel.onchange = () => { const c = g.clan.get(sel.value); if (c) { saveLookOf(`${displayName(c)}'s look`, c.app); g.ui.toast(`Saved ${displayName(c)}'s look!`, 'good'); this.render(); } };
+    const looks = loadLooks();
+    if (!looks.length) h('p', 'dim', 'No saved looks yet.', body);
+    looks.forEach((l, i) => {
+      const r = h('div', 'row look-slot', '', body);
+      r.style.alignItems = 'center'; r.style.gap = '8px';
+      const sw = h('div', 'sw', '', r);
+      sw.style.background = `radial-gradient(circle at 35% 35%, ${l.app.base}, ${l.app.second})`;
+      h('span', '', `<b>${esc(l.name)}</b> <small>${esc(PATTERN_LABEL[l.app.pattern] ?? '')}</small>`, r);
+      const wear = h('button', 'chip', 'Wear', r);
+      wear.onclick = () => { pc.app = { ...pc.app, ...l.app, accessories: pc.app.accessories, accessoryColor: pc.app.accessoryColor }; apply(); g.ui.toast(`You now look like ${l.name}. Edit it above if you like!`, 'good'); this.render(); };
+      const upd = h('button', 'chip', 'Update with my look', r);
+      upd.onclick = () => { const all = loadLooks(); all[i] = { name: all[i].name, app: { ...pc.app, accessories: undefined, accessory: undefined, accessoryColor: undefined } }; saveLooks(all); g.ui.toast('Saved look updated.', 'good'); this.render(); };
+      const ren = h('button', 'chip', 'Rename', r);
+      ren.onclick = () => { const n = prompt('Name this look', l.name); if (n) { const all = loadLooks(); all[i].name = n.slice(0, 30); saveLooks(all); this.render(); } };
+      const del = h('button', 'chip', '✕', r);
+      del.onclick = () => { const all = loadLooks(); all.splice(i, 1); saveLooks(all); this.render(); };
+    });
   }
 
   private catCard(c: Cat, parent: HTMLElement) {
@@ -256,6 +351,10 @@ export class Panels {
       ${c.apprentice ? `<b>Apprentice</b><span>${esc(displayName(clan.get(c.apprentice)!))}</span>` : ''}
       <b>Family</b><span>${fam.length ? esc(fam.join('; ')) : '—'}</span>
       ${!c.alive ? `<b>Died</b><span>Moon ${(c.deathDay ?? 0) + 1}, of ${esc(c.deathCause ?? '?')}</span>` : ''}`, d);
+    if (c !== pc) {
+      const sl = h('button', 'btn', `💾 Save ${esc(c.given)}'s look`, d);
+      sl.onclick = () => { saveLookOf(`${displayName(c)}'s look`, c.app); g.ui.toast(`Saved ${displayName(c)}'s look! Wear or edit it in Journal → Wardrobe.`, 'good'); };
+    }
     const mem = c.memories.filter((m) => m.about === pc.id).slice(-4);
     if (mem.length && c !== pc) {
       h('h3', '', 'What they remember about you', d);
