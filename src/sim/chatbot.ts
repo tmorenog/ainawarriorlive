@@ -5,6 +5,7 @@ import type { Game } from '../game';
 import { Cat, displayName } from '../cats/types';
 import { simRng } from '../core/rng';
 import { isFamily } from './social';
+import { smartReply, enrich } from './chatbrain';
 
 export interface ChatResult { reply: string; opinion: number; romance?: number; mood?: 'happy' | 'angry' | 'sad' | 'neutral' }
 
@@ -144,7 +145,10 @@ const RULES: Rule[] = [
 export function localReply(g: Game, cat: Cat, text: string): ChatResult {
   const me = g.clan.player;
   const c: ChatCtx = { g, cat, me, text, op: g.clan.opinion(cat, me), pick: (a) => simRng.pick(a) };
-  for (const r of RULES) if (r.re.test(text)) return r.fn(c);
+  // first try to really understand the words (questions, names, how-to, follow-ups)
+  const smart = smartReply(g, cat, text);
+  if (smart) return smart;
+  for (const r of RULES) if (r.re.test(text)) { const res = r.fn(c); res.reply = enrich(cat, me, res.reply, c.op); return res; }
   // fallback: personality-flavoured musing that echoes the player — plenty of variety
   const short = text.length > 40 ? text.slice(0, 40) + '…' : text;
   const emote = c.pick(['*nods slowly*', '*tilts head*', '*flicks an ear*', '*blinks*', '*twitches whiskers*', '*thinks for a moment*', '*tail curls thoughtfully*', '*hmms*']);

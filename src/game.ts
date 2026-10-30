@@ -3,6 +3,7 @@
 import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
 import { TwolegSystem } from './sim/twolegs';
+import { Story } from './sim/story';
 import { lifestyleLabel } from './lore';
 import { tickWaterfalls } from './world/chunks';
 import { BOOK_CATS } from './lore';
@@ -90,6 +91,7 @@ export class Game {
   bees: Bees;
   discoveries: Discoveries;
   twolegs: TwolegSystem;
+  story!: Story;
   overlay: { scene: THREE.Scene; camera: THREE.Camera; update(dt: number): void } | null = null;
   scent: ScentSystem;
   ui: UI;
@@ -139,6 +141,7 @@ export class Game {
     this.bees = new Bees(this);
     this.discoveries = new Discoveries(this);
     this.twolegs = new TwolegSystem(this);
+    this.story = new Story(this);
     this.fire = new FireSystem(this);
     this.scent = new ScentSystem(this);
     this.ui = new UI(this);
@@ -1081,6 +1084,7 @@ export class Game {
     this.chunks.setNightLights(this.time.darkness * 1.5);
     this.chunks.update(this.player.pos.x, this.player.pos.z, 1);
     this.twolegs.update(dt);
+    this.story.update(dt);
     // simulation
     this.npcs.update(dt);
     this.prey.update(dt);

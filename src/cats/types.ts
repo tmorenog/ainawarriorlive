@@ -161,6 +161,10 @@ export interface Cat {
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;
+  /** Real seconds played with this cat (for story moments). */
+  playSeconds?: number;
+  storyAt?: number;
+  storyTiger?: boolean;
   /** How much each kind of wild animal trusts you (50+ = friends). */
   animalFriends?: Record<string, number>;
   /** Herb poultices chewed and ready to press onto a wound. */

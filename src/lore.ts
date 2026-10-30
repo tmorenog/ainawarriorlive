@@ -115,6 +115,7 @@ export const BOOK_CATS: Record<string, BookCat[]> = {
     { prefix: 'Spotted', suffix: 'leaf', sex: 'she', age: 30, role: 'medicine', traits: ['kind', 'calm'], app: { base: '#c9783a', second: '#2b2725', pattern: 'calico', white: 0.38, eye: '#e2a02c', fur: 'medium', body: 'slender' } },
     { prefix: 'White', suffix: 'storm', sex: 'tom', age: 56, traits: ['loyal', 'calm'], app: { base: '#f1eee7', second: '#d8d4cc', pattern: 'solid', eye: '#e9d23c', fur: 'medium', body: 'large' } },
     { prefix: 'Lion', suffix: 'heart', sex: 'tom', age: 52, traits: ['brave', 'kind'], app: { ...tabby('#d4a24a', '#9a6a28'), eye: '#78c24c', fur: 'long', body: 'large', size: 1.06 } },
+    { prefix: 'Fire', suffix: 'heart', sex: 'tom', age: 16, traits: ['brave', 'loyal'], app: { base: '#e07a2a', second: '#b85a1a', pattern: 'solid', white: 0, eye: '#78c24c', fur: 'short', body: 'average' } },
     { prefix: 'Gray', suffix: 'stripe', sex: 'tom', age: 14, traits: ['friendly', 'playful'], app: { base: '#7c7f86', second: '#4a4c52', pattern: 'solid', white: 0, eye: '#e9d23c', fur: 'long', body: 'stocky' } },
     { prefix: 'Sand', suffix: 'storm', sex: 'she', age: 14, traits: ['brave', 'serious'], app: { base: '#e3a86c', second: '#c98a50', pattern: 'solid', white: 0, eye: '#78c24c', fur: 'short', body: 'slender' } },
     { prefix: 'Dust', suffix: 'pelt', sex: 'tom', age: 15, traits: ['ambitious', 'serious'], app: { ...tabby('#7a5436', '#4a3020'), eye: '#e2a02c', fur: 'short', body: 'average' } },

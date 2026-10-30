@@ -90,6 +90,16 @@ and go home at night). Open the other cages, pry the loose vent cover, and squee
 <li>Earn 🪙 clan coins by helping your clan and spend them on 🎃 Halloween accessories in the Wardrobe.</li>
 </ul>
 
+<h3>New tricks</h3>
+<ul>
+<li><b>Y</b> — poses: sit, loaf, lie on your side, play dead (it can fool a Twoleg!), unleash your claws, lash your tail, stretch, groom.</li>
+<li><b>H</b> — herbs: chew herbs into a poultice, then press it on your own wounds. Talk to a hurt clanmate to treat them with one.</li>
+<li>Smell and pick daisies and dandelions — and blow the fluffy dandelion seeds!</li>
+<li>Talk to badgers, foxes, raccoons and dogs. Offer them prey. Once they trust you, they won't attack you.</li>
+<li>Journal → Wardrobe → <b>Open the full cat creator</b> changes your whole look without starting a new life.</li>
+<li>Ask cats real questions: "Do you like rain?", "Who is Bluestar?", "How do I hunt?", "Where is Graystripe?"</li>
+</ul>
+
 <h3>Moving like a cat</h3>
 <p>Crouch (C) → Crawl → Walk → Trot → Canter → Sprint (hold Shift). Use Z / T or the mouse wheel to change speed.
 On a phone, the 💨 button cycles walk, trot, canter and sprint.</p>
