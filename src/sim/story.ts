@@ -133,7 +133,7 @@ export class Story {
         if (playerHeals) g.ui.toast(`🌿 Bluestar is hurt! She's coming to you, ${displayName(pc)}. Have a poultice ready (H).`, 'objective');
       }],
       [19500, () => {
-        if (B) { B.forcedPose = null; B.mood = 'angry'; B.moveSpeed = 4; B.setTarget(hr.x, hr.z + 0.2); }
+        if (B) { B.forcedPose = null; B.mood = 'angry'; B.jumpTo(hr.x, hr.z + 0.9, hr.top - 0.32, true); B.heading = Math.PI / 2; }
         g.audio.jump();
       }],
       [21000, () => { line(blue, '*leaps onto the Highrock* TIGERCLAW, YOU ARE EXILED FROM OUR CLAN! FIREHEART — EXPLAIN.', 6); g.audio.chime(); }],
@@ -149,7 +149,8 @@ export class Story {
       }],
       [46500, () => { line(blue, 'I will name my new deputy tomorrow. Until then — clan dismissed.', 6); }],
       [50500, () => {
-        if (B) { B.forcedPose = null; B.setTarget(hr.x + 2, hr.z + 2.5); }
+        if (B) { B.forcedPose = null; B.jumpTo(hr.x + 1.8, hr.z + 2.6, null, false); }
+        g.audio.jump();
         g.ui.toast('*Bluestar leaps down from the Highrock*', 'info');
         this.exileTiger(tiger, blue);
       }],

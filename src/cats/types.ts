@@ -161,6 +161,8 @@ export interface Cat {
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;
+  /** Day this she-cat moves into the nursery after becoming a mate. */
+  nurseryDay?: number;
   /** Real seconds played with this cat (for story moments). */
   playSeconds?: number;
   storyAt?: number;

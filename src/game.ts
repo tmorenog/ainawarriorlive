@@ -1090,6 +1090,7 @@ export class Game {
     this.prey.update(dt);
     this.creatures.update(dt);
     this.combat.update(dt);
+    this.bestFriendHelp(dt);
     this.fire.update(dt);
     this.mossBalls.update(dt);
     tickWaterfalls(dt);
@@ -1111,6 +1112,28 @@ export class Game {
     this.autosaveT -= dt;
     if (this.autosaveT <= 0) { this.autosaveT = 15; this.save(); }
     void busy;
+  }
+
+  private bfT = 0;
+  /** A best friend nearby jumps into your fights. */
+  private bestFriendHelp(dt: number) {
+    this.bfT -= dt;
+    if (this.bfT > 0) return;
+    this.bfT = 1;
+    if (!this.combat.playerInCombat) return;
+    const pc = this.clan.player;
+    const foe = this.combat.hostilesNearPlayer(8)[0];
+    if (!foe || (foe as { faction?: string }).faction === 'home') return;
+    for (const a of this.npcs.agents.values()) {
+      if (a.cat.clan !== 'home' || a.cat.stage === 'kit' || a.activity === 'fight' || a.activity === 'sleep' || a.id === foe.id) continue;
+      const r = a.cat.relations[pc.id];
+      if (!r || r.opinion < 85 || r.familiarity < 45) continue;
+      if (Math.hypot(a.pos.x - this.player.pos.x, a.pos.z - this.player.pos.z) > 25) continue;
+      a.say(`Get away from my best friend!`, 3);
+      this.combat.engage(a, foe);
+      this.ui.toast(`💛 ${displayName(a.cat)} leaps in to fight beside you!`, 'good');
+      break;
+    }
   }
 
   private exileT = 0;

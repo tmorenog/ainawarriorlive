@@ -3,7 +3,7 @@ import { Cat, Relation, Trait, displayName } from '../cats/types';
 import { simRng } from '../core/rng';
 import { clamp } from '../core/math';
 
-export type RelLabel = 'Stranger' | 'Acquaintance' | 'Friend' | 'Close friend' | 'Rival' | 'Enemy' | 'Mate' | 'Family';
+export type RelLabel = 'Stranger' | 'Acquaintance' | 'Friend' | 'Close friend' | 'Best friend' | 'Rival' | 'Enemy' | 'Mate' | 'Family';
 
 export function relLabel(r: Relation | undefined, family = false, mate = false): RelLabel {
   if (mate) return 'Mate';
@@ -12,13 +12,14 @@ export function relLabel(r: Relation | undefined, family = false, mate = false):
   if (r.opinion <= -22) return 'Rival';
   if (family) return 'Family';
   if (r.familiarity < 12) return 'Stranger';
+  if (r.opinion >= 85 && r.familiarity >= 45) return 'Best friend';
   if (r.opinion >= 62) return 'Close friend';
   if (r.opinion >= 28) return 'Friend';
   return 'Acquaintance';
 }
 
 export const REL_COLOR: Record<RelLabel, string> = {
-  Stranger: '#b9b3a6', Acquaintance: '#d8cfb8', Friend: '#9fd67a', 'Close friend': '#5fd36b',
+  Stranger: '#b9b3a6', Acquaintance: '#d8cfb8', Friend: '#9fd67a', 'Close friend': '#5fd36b', 'Best friend': '#ffd23a',
   Rival: '#e8a54a', Enemy: '#e25b4a', Mate: '#f08ab8', Family: '#8fc4ef',
 };
 
@@ -219,6 +220,7 @@ export function greetPlayer(npc: Cat, player: Cat, opinion: number, ctx: { night
   if (opinion < -45) return pick([`What do you want, ${P}?`, 'Keep your distance.', `I've got nothing to say to you.`]);
   if (opinion < -15) return pick([`Oh. It's you.`, 'Make it quick.', `Hmph. ${P}.`]);
   if (npc.stage === 'elder') return pick([`Ah, young ${P}. Sit with an old cat a while.`, 'My bones ache, but my ears still work. What is it?', `${P}! Did you bring any fresh moss?`]);
+  if (opinion >= 85) return pick([`${P}!! *bounds over and bumps your head* My best friend!`, `There's my best friend! Where have you been all day?`, `*purrs loudly* ${P}! I saved you the best spot in the sun.`, `Best friends forever, right, ${P}?`]);
   if (opinion > 55) return pick([`${P}! I was hoping to see you.`, `There you are! Share tongues with me?`, `Good to see you, friend.`]);
   if (ctx.food < ctx.clanSize * 0.4) return pick(['The pile is low. Have you hunted today?', 'I can hear my belly rumbling from here.']);
   if (npc.traits.includes('shy')) return pick(['Oh! H-hello.', '...Hi.', 'Did you need something?']);

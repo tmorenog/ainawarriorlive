@@ -109,9 +109,19 @@ export class ClanSim {
   adjust(a: Cat, b: Cat, dOpinion: number, memory?: { text: string; weight: number }, dFam = 2) {
     if (a.id === b.id) return;
     const r = this.rel(a, b);
+    const wasBest = r.opinion >= 85 && r.familiarity >= 45;
     r.opinion = clamp(r.opinion + dOpinion, -100, 100);
     r.familiarity = clamp(r.familiarity + dFam, 0, 100);
     if (memory) this.remember(a, memory.text, memory.weight, b.id);
+    // becoming best friends with the player is a big moment
+    const isBest = r.opinion >= 85 && r.familiarity >= 45;
+    if (b.isPlayer && !wasBest && isBest && a.mate !== b.id && a.clan === 'home') {
+      this.game.ui.toast(`💛 ${displayName(a)} is now your BEST FRIEND!`, 'good');
+      this.game.audio.purr();
+      this.remember(a, `${b.given} is my best friend.`, 8, b.id);
+      this.remember(b, `${displayName(a)} and I are best friends now.`, 8, a.id);
+      this.game.npcs.agents.get(a.id)?.say(`${b.given}… you're my best friend, you know that?`, 4);
+    }
   }
 
   remember(c: Cat, text: string, weight: number, about?: string) {
@@ -487,6 +497,7 @@ export class ClanSim {
       // expecting queens give birth
       if (c.expectingUntil !== null && day >= c.expectingUntil) this.birth(c);
     }
+    this.nurseryTick();
     // stage transitions (sorted so ceremonies read nicely)
     for (const c of this.home()) this.checkStage(c);
     // deaths from age / sickness / injury
@@ -549,6 +560,35 @@ export class ClanSim {
         { label: 'Not yet', action: () => this.adjust(ap, med, -2) },
       ]);
     } else take();
+  }
+
+  /** New mates: the next day the she-cat moves into the nursery, expecting kits. */
+  matesFormed(a: Cat, b: Cat) {
+    if (a.sex === b.sex) return;
+    const she = a.sex === 'she' ? a : b;
+    she.nurseryDay = this.game.time.day + 1;
+  }
+
+  private nurseryTick() {
+    const day = this.game.time.day;
+    for (const c of this.home()) {
+      if (c.nurseryDay === undefined || c.nurseryDay > day) continue;
+      c.nurseryDay = undefined;
+      const m = this.get(c.mate);
+      if (!m || !m.alive || c.expectingUntil !== null || c.stage !== 'warrior' || c.kits.some((k) => (this.get(k)?.age ?? 99) < 6)) continue;
+      c.expectingUntil = day + 2;
+      this.log(`${displayName(c)} moved into the nursery — she is expecting ${displayName(m)}'s kits.`, 'clan');
+      this.setRecent(`${c.given} is expecting kits!`);
+      if (c.isPlayer) {
+        this.game.ui.toast('🍼 You\'re expecting kits! Move into the nursery — they\'ll arrive in two moons.', 'good');
+        const n = this.game.camp.dens.nursery;
+        this.game.objectives.add({ id: 'to-nursery', kind: 'visit', title: '🍼 Move into the nursery', desc: 'You are expecting kits. Make your nest in the nursery, where it is warm and safe.', target: { x: n.x, z: n.z }, radius: 3, need: 1 });
+      } else {
+        if (m.isPlayer) this.game.ui.toast(`🍼 ${displayName(c)} has moved into the nursery — she\'s expecting your kits!`, 'good');
+        const ag = this.game.npcs.agents.get(c.id);
+        if (ag) { const n = this.game.camp.dens.nursery; ag.say(simRng.pick(['Time to move into the nursery!', 'I\'m expecting kits!', '*purrs* The nursery will be my den for a while.']), 4); ag.activity = 'idle'; ag.setTarget(n.x, n.z); }
+      }
+    }
   }
 
   checkStage(c: Cat) {
@@ -848,6 +888,7 @@ export class ClanSim {
         if (ra.romance > 45 && rb.romance > 38 && ra.opinion > 35 && rb.opinion > 30) {
           a.mate = b.id;
           b.mate = a.id;
+          this.matesFormed(a, b);
           this.log(`${displayName(a)} and ${displayName(b)} became mates.`, 'clan');
           this.setRecent(`${displayName(a)} and ${displayName(b)} are mates now!`);
           break;

@@ -997,6 +997,7 @@ export class Interactions {
     if (simRng.chance(chance)) {
       pc.mate = c.id;
       c.mate = pc.id;
+      clan.matesFormed(pc, c);
       r.romance = 90;
       clan.rel(pc, c).romance = 90;
       clan.log(`${displayName(pc)} and ${displayName(c)} became mates.`, 'clan');

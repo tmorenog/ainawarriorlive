@@ -106,6 +106,14 @@ export class NpcAgent implements Fighter {
     if (!text.startsWith('*')) this.model.talkT = Math.min(3.5, 0.4 + text.length * 0.045);
   }
 
+  /** A leap onto (or off) something high, like the Highrock. */
+  perch: { x: number; z: number; y: number | null; stay: boolean; t: number; from: THREE.Vector3 } | null = null;
+  jumpTo(x: number, z: number, y: number | null, stay: boolean) {
+    this.perch = { x, z, y, stay, t: 0, from: this.pos.clone() };
+    this.target = null;
+    this.route = [];
+  }
+
   setTarget(x: number, z: number) {
     const inA = Math.hypot(this.pos.x, this.pos.z) < 16.5;
     const inB = Math.hypot(x, z) < 16.5;
@@ -240,7 +248,7 @@ export class NpcManager {
       this.endConvo(a);
       a.activity = 'ceremony';
       a.actTimer = 22;
-      if (a.cat.role === 'leader') a.setTarget(this.game.camp.highRock.x, this.game.camp.highRock.z + 0.2);
+      if (a.cat.role === 'leader') { const hr = this.game.camp.highRock; a.jumpTo(hr.x, hr.z + 0.9, hr.top - 0.32, true); a.heading = Math.PI / 2; }
       else {
         const ang = simRng.range(-Math.PI * 0.8, -Math.PI * 0.2) + Math.PI;
         const r = ids.includes(a.id) ? 3.5 : simRng.range(5, 9);
@@ -315,6 +323,7 @@ export class NpcManager {
 
   private poseFor(a: NpcAgent): Pose {
     if (a.forcedPose) return a.forcedPose;
+    if (a.perch && a.perch.t < 0.7) return 'pounce';
     const swim = this.game.chunks.waterDepthAt(a.pos.x, a.pos.z) > 0.18 * a.model.scale + 0.1;
     if (swim) return 'swim';
     if (a.speed > 0.1) return a.activity === 'hunt' && a.stalkT > 0 ? 'crouch' : a.activity === 'fight' ? 'fight' : 'walk';
@@ -374,6 +383,7 @@ export class NpcManager {
       return;
     }
     if (a.activity === 'ceremony') a.activity = 'idle';
+    if (a.perch?.stay) { const hr = game.camp.highRock; a.jumpTo(hr.x + 1.8, hr.z + 2.6, null, false); }
     if (a.activity === 'approach') { this.approachThink(a); return; }
     if (a.activity === 'talk') { this.convoThink(a, dt); return; }
     if (a.activity === 'patrol' && a.patrol) { this.patrolThink(a, dt); return; }
@@ -1240,6 +1250,19 @@ export class NpcManager {
   // ------------------------------------------------------------------ movement
   private move(a: NpcAgent, dt: number, precise: boolean) {
     const game = this.game;
+    if (a.perch) {
+      // leap in an arc, then stay up there (or land and carry on)
+      const p = a.perch;
+      p.t += dt;
+      const k = Math.min(1, p.t / 0.7);
+      const ty = p.y ?? game.groundAt(p.x, p.z);
+      a.pos.x = p.from.x + (p.x - p.from.x) * k;
+      a.pos.z = p.from.z + (p.z - p.from.z) * k;
+      a.pos.y = p.from.y + (ty - p.from.y) * k + Math.sin(k * Math.PI) * 0.9;
+      if (k < 1) { a.heading = Math.atan2(p.z - p.from.z, p.x - p.from.x); a.speed = 3; }
+      else { a.pos.y = ty; a.speed = 0; if (!p.stay) a.perch = null; }
+      return;
+    }
     if (!a.target) {
       a.speed = Math.max(0, a.speed - dt * 6);
       a.pos.y = this.surfaceY(a);
