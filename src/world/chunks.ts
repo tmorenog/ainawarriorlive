@@ -1155,6 +1155,7 @@ export class ChunkManager {
       }
     }
     const regrow = 3;
+    { const keep = herbData.filter((d) => !this.blocked(chunk, d.x, d.z, 0)); herbData.length = 0; herbData.push(...keep as typeof herbData); }
     herbData.forEach((h, i) => {
       const key = `${chunk.cx},${chunk.cz},h${i}`;
       const taken = ctx.mods.taken[key];
@@ -1162,6 +1163,7 @@ export class ChunkManager {
       const hidden = ctx.mods.taken[key] !== undefined;
       herbs.add(h.x, h.y, h.z, i, hidden ? 0 : 1.6, hidden ? 0 : 1.6, hidden ? 0 : 1.6, HERB_INFO[h.kind].color);
     });
+    { const keep = mossData.filter((d) => !this.blocked(chunk, d.x, d.z, 0)); mossData.length = 0; mossData.push(...keep as typeof mossData); }
     mossData.forEach((m, i) => {
       const key = `${chunk.cx},${chunk.cz},m${i}`;
       const taken = ctx.mods.taken[key];
@@ -1183,6 +1185,7 @@ export class ChunkManager {
       if (y < this.waterLevel + 0.05) continue;
       berryData.push({ x, y, z });
     }
+    { const keep = berryData.filter((d) => !this.blocked(chunk, d.x, d.z, 0)); berryData.length = 0; berryData.push(...keep as typeof berryData); }
     berryData.forEach((b, i) => {
       const key = `${chunk.cx},${chunk.cz},b${i}`;
       const taken = ctx.mods.taken[key];
@@ -1204,6 +1207,7 @@ export class ChunkManager {
       if (chunk.flags[idx] & 2 || y < this.waterLevel + 0.02 || Math.hypot(x, z) < 15) { trng.next(); continue; }
       treasureData.push({ kind, x, y, z });
     }
+    { const keep = treasureData.filter((d) => !this.blocked(chunk, d.x, d.z, 0)); treasureData.length = 0; treasureData.push(...keep as typeof treasureData); }
     treasureData.forEach((t, i) => {
       const key = `${chunk.cx},${chunk.cz},t${i}`;
       const taken = ctx.mods.taken[key];
@@ -1229,6 +1233,7 @@ export class ChunkManager {
         if (chunk.flags[idx] & 2 || y < this.waterLevel + 0.02 || Math.hypot(x, z) < 15) continue;
         flowerData.push({ kind, x, y, z, bees });
       }
+      { const keep = flowerData.filter((d) => !this.blocked(chunk, d.x, d.z, 0)); flowerData.length = 0; flowerData.push(...keep); }
       flowerData.forEach((f, i) => {
         const key = `${chunk.cx},${chunk.cz},f${i}`;
         const taken = ctx.mods.taken[key];

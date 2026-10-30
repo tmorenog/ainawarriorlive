@@ -73,6 +73,9 @@ export class TwolegSystem {
   private lastPetDay = -1;
   private reunionPending = false;
   private leashAsked = -1;
+  /** A power cut in the Twolegplace or the pound: everything goes black but cats' eyes. */
+  outage: { until: number; start: number; where: 'town' | 'pound' } | null = null;
+  private outageApplied = false;
 
   constructor(private game: Game) {}
 
@@ -251,6 +254,7 @@ export class TwolegSystem {
     glassMat.color.set(dark > 0.35 ? '#ffd890' : '#a8c8e0');
     glassMat.opacity = dark > 0.35 ? 0.7 : 0.32;
     this.updateLight(inFac);
+    this.updateOutage(inFac, nearTown);
     if (nearTown) {
       this.updateHomeProps(dt);
       this.updateOwners(dt);
@@ -283,6 +287,48 @@ export class TwolegSystem {
       this.light.color.set(fire ? '#ffb070' : '#ffe0b0');
       this.light.intensity = (g.time.darkness > 0.3 ? (awake ? 5 : fire ? 2 : 0.6) : 1.5) * (fire ? 0.9 + Math.random() * 0.2 : 1);
     } else this.light.intensity = 0;
+  }
+
+  /** Start a power cut (lights flicker, then die). */
+  powerCut(seconds = 90) {
+    const g = this.game;
+    const pp = g.player.pos;
+    const where = this.inFacility(pp.x, pp.z) ? 'pound' : 'town';
+    this.outage = { until: g.clock + seconds, start: g.clock, where };
+    g.audio.crash();
+    g.ui.toast(where === 'pound'
+      ? '⚡ POWER CUT! The pound goes pitch black — only cats\' eyes glow in the dark. The worker can\'t see a thing. Now\'s your chance!'
+      : this.twoleg('⚡ Power cut! Every Tallfolk light goes out. In the darkness, only cats\' eyes shine.'), where === 'pound' ? 'good' : 'event');
+    for (const o of this.owners) if (!o.away && simRng.chance(0.6)) this.say(o, simRng.pick(['Ugh, a power cut!', 'Where are the candles?', 'Who turned the lights off?!']), 3);
+    if (this.worker && where === 'pound') this.say(this.worker, 'Hey! Who turned the lights out?! I can\'t see a thing!', 4);
+  }
+
+  private updateOutage(inFac: boolean, nearTown: boolean) {
+    const g = this.game;
+    const o = this.outage;
+    if (o && g.clock > o.until) {
+      this.outage = null;
+      if (inFac || nearTown) { g.ui.toast('💡 The lights flicker back on.', 'info'); g.audio.click(); }
+    }
+    const here = !!this.outage && ((this.outage.where === 'pound' && inFac) || (this.outage.where === 'town' && nearTown && !inFac));
+    if (here) {
+      const t = g.clock - this.outage!.start, left = this.outage!.until - g.clock;
+      // flicker at the start and the end
+      const flick = (t < 1.6 && Math.sin(t * 40) > 0.2) || (left < 1.2 && Math.sin(left * 35) > 0.4);
+      g.renderer.toneMappingExposure = flick ? 0.7 : 0.045;
+      CatModel.setEyeGlow(flick ? 1 : 55);
+      this.light.intensity = flick ? this.light.intensity : 0;
+      this.street.lampMats.color.set('#2a2a26');
+      this.home.lampMat.color.set('#2a2622');
+      this.home.tvMat.color.set('#05080a');
+      glassMat.color.set('#202830');
+      this.fac.tubeMats.forEach((m) => m.color.set('#1a1a18'));
+      this.outageApplied = true;
+    } else if (this.outageApplied) {
+      this.outageApplied = false;
+      g.renderer.toneMappingExposure = 1.05;
+      CatModel.setEyeGlow(1);
+    }
   }
 
   private fireOn() {
@@ -981,6 +1027,13 @@ export class TwolegSystem {
       const p = rescue ? 0.4 : night ? 0.1 : this.isKittypet ? 0.2 : 0.27;
       if (simRng.chance(p)) this.callVan();
     }
+    // power cuts: at night or in storms in the Twolegplace, and now and then in the pound
+    if (!this.outage) {
+      const storm = g.weather.kind === 'thunderstorm';
+      const nightT = hour >= 19 || hour < 6;
+      if (this.ac && this.inFacility(pp.x, pp.z) && simRng.chance(storm ? 0.25 : 0.07)) this.powerCut(simRng.range(60, 120));
+      else if (this.nearTown(pp.x, pp.z, 90) && (nightT || storm) && simRng.chance(storm ? 0.3 : 0.06)) this.powerCut(simRng.range(60, 150));
+    }
     // now and then a clanmate who hunts too close to the Thunderpath is taken
     if (!this.ac && simRng.chance(0.004)) {
       const cands = g.clan.home().filter((c) => (c.stage === 'warrior' || c.stage === 'apprentice') && c.role === 'none' && !c.bookId);
@@ -1085,6 +1138,17 @@ export class TwolegSystem {
         'The monster roars. The cages rattle and bump as it races along the Thunderpath…',
         friends.length ? `${displayName(friends[0])} yowls from the carrier beside you: "${simRng.pick(['We\'ll get out of this, I promise!', 'I\'m scared! Where are they taking us?', 'Stay brave! We\'re together!'])}"` : 'Strange cats cry out from the other cages. You press your nose to the cold, rusty bars.',
         'The monster stops. The doors swing open. Cold light… and the smell of rust and fear.'];
+    // a medicine cat caught with you uses whatever they have to help
+    const med = friends.find((f) => f.role === 'medicine' || f.role === 'medicineApprentice');
+    if (med && !stowaway) {
+      const store = g.clan.herbStore;
+      const herb = (['sunpetal', 'silverleaf', 'bitterroot'] as const).find((k) => store[k] > 0) ?? null;
+      const herbName = herb ? ({ sunpetal: 'a sunpetal leaf', silverleaf: 'some silverleaf', bitterroot: 'a sprig of bitterroot' } as const)[herb] : null;
+      lines.splice(lines.length - 1, 0, herbName
+        ? `${displayName(med)} squeezes a paw through the bars: "Hold still." They press ${herbName} they had tucked in their fur onto your scratches.`
+        : `${displayName(med)} has no herbs with them, but they reach through the bars and lick your wounds clean. "We'll be alright."`);
+      (this as any).medHelp = { herb, id: med.id };
+    }
     lines.forEach((l, i) => setTimeout(() => { cap.textContent = this.twoleg(l); cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in'); }, i * 2600));
     for (let i = 0; i < 5; i++) setTimeout(() => { g.audio.engine(0.05); if (i % 2) g.audio.meow(0.9 + Math.random() * 0.4, 0.5, 0.04); }, i * 2000);
     setTimeout(() => {
@@ -1155,6 +1219,23 @@ export class TwolegSystem {
     g.ui.showBanner(this.twoleg(stowaway
       ? `You're inside the rusty Tallfolk pound. ${n} cats are locked in cages along the wall. Open their latches, then find a way out — the old vent in the wall looks loose…`
       : `You've been locked in a cage at the rusty Tallfolk pound! ${n} other cats are caged here too. Wiggle the latch (E) when the Tallfolk isn't looking, free the others, and find a way out.`), 12);
+    // the medicine cat's help takes effect
+    const mh = (this as any).medHelp as { herb: 'sunpetal' | 'silverleaf' | 'bitterroot' | null; id: string } | undefined;
+    if (mh) {
+      (this as any).medHelp = undefined;
+      const medCat = g.clan.get(mh.id);
+      if (mh.herb) {
+        g.clan.herbStore[mh.herb] = Math.max(0, g.clan.herbStore[mh.herb] - 1);
+        pc.health = Math.min(pc.maxHealth, pc.health + 40);
+        pc.injury = Math.max(0, pc.injury - 45);
+        pc.sick = Math.max(0, pc.sick - 30);
+      } else {
+        pc.health = Math.min(pc.maxHealth, pc.health + 15);
+        pc.injury = Math.max(0, pc.injury - 15);
+      }
+      if (medCat) g.clan.adjust(pc, medCat, 8, { text: `${medCat.given} tended my wounds in the Twoleg monster.`, weight: 4 });
+      setTimeout(() => g.ui.toast(mh.herb ? `🌿 ${medCat ? displayName(medCat) : 'The medicine cat'}'s herbs ease your pain. (health +40)` : `💛 ${medCat ? displayName(medCat) : 'The medicine cat'} licked your wounds clean. (health +15)`, 'good'), 1500);
+    }
     g.objectives.add({ id: 'tw-escape', kind: 'free', title: '🔓 Escape the Twoleg pound', desc: this.twoleg('Wiggle your cage latch while the Tallfolk isn\'t watching (they get distracted by their phone at the desk). Open the other cages, then squeeze out through the loose vent in the wall.'), need: 1 });
     g.objectives.focus('tw-escape');
     g.clan.remember(pc, stowaway ? 'I sneaked into a Twoleg monster to rescue my friends.' : 'I was caught by Twolegs and locked in a cage.', -3);
@@ -1164,6 +1245,7 @@ export class TwolegSystem {
   private workerWatching(): boolean {
     const w = this.worker;
     if (!w || w.state === 'away') return false;
+    if (this.outage?.where === 'pound') return false;
     const pp = this.game.player.pos;
     const d = Math.hypot(pp.x - w.pos.x, pp.z - w.pos.z);
     if (w.state === 'desk') return d < 2.5;
@@ -1260,6 +1342,18 @@ export class TwolegSystem {
       o.model.root.rotation.y = -o.heading;
       o.model.update(dt);
     }
+    // a freed medicine cat following you patches you up when you're hurt
+    const medOcc = this.occupants.find((o) => o.freed && (o.cat.role === 'medicine' || o.cat.role === 'medicineApprentice'));
+    if (medOcc && this.pc.health < this.pc.maxHealth * 0.6 && g.clock - ((this as any).medT ?? -99) > 45) {
+      (this as any).medT = g.clock;
+      const store = g.clan.herbStore;
+      const herb = (['sunpetal', 'silverleaf', 'bitterroot'] as const).find((k) => store[k] > 0);
+      if (herb) store[herb]--;
+      this.pc.health = Math.min(this.pc.maxHealth, this.pc.health + (herb ? 30 : 12));
+      this.pc.injury = Math.max(0, this.pc.injury - (herb ? 30 : 10));
+      g.audio.purr();
+      g.ui.toast(herb ? `🌿 ${medOcc.cat.given} pulls a herb from their fur and chews it onto your wounds.` : `💛 ${medOcc.cat.given} has nothing left, but licks your wounds until they sting less.`, 'good');
+    }
     // a kittypet's family comes looking for them
     if (this.isKittypet && !ac.ownerCame && g.time.totalHours - ac.since > 20 && !night) {
       ac.ownerCame = true;
@@ -1335,6 +1429,25 @@ export class TwolegSystem {
     const dx = h.pos.x - pp.x, dz = h.pos.z - pp.z, d = Math.max(0.1, Math.hypot(dx, dz));
     h.pos.x += (dx / d) * 0.5; h.pos.z += (dz / d) * 0.5;
     const ouch = simRng.pick(['OW!', 'Ouch! It bit me!', 'Argh, my ankle!', 'Yow! Bad kitty!']);
+    // Twolegs fight back: a kick, a swat, a shove
+    const fightBack = (chance: number, dmg: number, what: string) => {
+      if (!simRng.chance(chance)) return;
+      setTimeout(() => {
+        if (g.state !== 'playing') return;
+        const p2 = g.player.pos;
+        if (Math.hypot(p2.x - h.pos.x, p2.z - h.pos.z) > 2.2) { g.ui.floatText('*dodged!*', '#cfe'); return; }
+        const pc = g.clan.player;
+        pc.health -= dmg;
+        pc.injury = clamp(pc.injury + dmg * 0.8, 0, 100);
+        const ex = p2.x - h.pos.x, ez = p2.z - h.pos.z, ed = Math.max(0.1, Math.hypot(ex, ez));
+        g.player.vel.set((ex / ed) * 5, 2.4, (ez / ed) * 5);
+        g.player.shake = 0.8;
+        g.audio.hurt();
+        h.model.pose = 'crouch';
+        g.ui.toast(what, 'danger');
+        if (pc.health <= 0) g.clan.kill(pc, 'a Twoleg\'s kick');
+      }, 450);
+    };
     if (h.kind === 'catcher') {
       const k = h.ref as Catcher;
       k.hurt = (k.hurt ?? 0) + (heavy ? 2 : 1);
@@ -1344,7 +1457,11 @@ export class TwolegSystem {
         this.say(k, simRng.pick(['Forget it! That one\'s feral!', 'I\'m not paid enough for this!', 'Ow ow ow — I\'m done!']), 4);
         g.ui.toast('🐾 You bit and scratched the Twoleg until they gave up! They limp back to their monster.', 'good');
         g.clan.player.reputation = clamp(g.clan.player.reputation + 1, -100, 100);
-      } else this.say(k, ouch, 2);
+      } else {
+        this.say(k, simRng.pick([ouch, 'You little — get OFF!', 'Right, that\'s it!']), 2);
+        k.stun = Math.min(k.stun!, 0.6);
+        fightBack(heavy ? 0.65 : 0.45, heavy ? 14 : 9, simRng.pick(['💢 The Twoleg kicks out and sends you tumbling!', '💢 A big Twoleg paw swats you across the road!', '💢 The Twoleg shoves you away with their boot!']));
+      }
       return true;
     }
     if (h.kind === 'worker') {
@@ -1352,11 +1469,13 @@ export class TwolegSystem {
       w.stun = heavy ? 3.5 : 2;
       w.state = 'chase'; w.timer = 9;
       this.say(w, simRng.pick(['ARGH! My hand!', 'You little monster!', 'OW! That\'s it, you\'re going back in!']), 3);
-      g.ui.toast('The worker clutches their hand — run while you can!', 'good');
+      if (simRng.chance(0.45)) { w.stun = 0.4; fightBack(1, heavy ? 12 : 8, '💢 The worker swings the broom and knocks you sideways!'); }
+      else g.ui.toast('The worker clutches their hand — run while you can!', 'good');
       return true;
     }
     if (h.kind === 'walker') {
       const w = h.ref as Walker;
+      if (!w.kid && simRng.chance(0.35)) { this.say(w, simRng.pick(['Hey! Bad cat!', 'Get away! *kicks*', 'Shoo! SHOO!']), 3); fightBack(1, heavy ? 9 : 6, '💢 The Twoleg kicks at you and catches your side!'); return true; }
       w.mode = 'run'; w.timer = 2.5; w.target = undefined;
       this.say(w, simRng.pick([ouch, 'Get away from me!', 'That cat is wild! Someone call animal control!']), 3);
       // the walker runs off, and might report a wild cat
@@ -1369,6 +1488,8 @@ export class TwolegSystem {
     o.petT = 0;
     this.say(o, this.isKittypet ? simRng.pick([`Ow! ${this.pc.given}, what's gotten into you?`, 'Hey! No biting!', '*sniffles* That hurt…']) : ouch, 3);
     if (this.isKittypet && o.kid) g.ui.toast('The little Twoleg starts to cry. You feel a bit bad.', 'info');
+    else if (!this.isKittypet) fightBack(0.6, heavy ? 8 : 5, '💢 The Twoleg shoves you away with their foot!');
+    else g.ui.toast('Your Twoleg pushes you away. "No biting!"', 'info');
     return true;
   }
 

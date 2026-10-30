@@ -363,7 +363,33 @@ export class CatModel {
     this.mats = [];
   }
 
+  /** Every cat's eye material, so they can all shine at once in the dark. */
+  static eyeMats = new Set<THREE.MeshPhongMaterial>();
+  static eyeGlow = 1;
+  static shines = new Set<THREE.Group>();
+  static setEyeGlow(k: number) {
+    if (k === CatModel.eyeGlow) return;
+    CatModel.eyeGlow = k;
+    for (const m of CatModel.eyeMats) m.emissiveIntensity = k;
+    for (const s of CatModel.shines) s.visible = k > 1;
+  }
+  private static _glow: THREE.CanvasTexture | null = null;
+  static glowTex() {
+    if (CatModel._glow) return CatModel._glow;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 32;
+    const c = cv.getContext('2d')!;
+    const g = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.25, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 32, 32);
+    return (CatModel._glow = new THREE.CanvasTexture(cv));
+  }
+  private eyeMat: THREE.MeshPhongMaterial | null = null;
+  private shine: THREE.Group | null = null;
+
   dispose() {
+    if (this.eyeMat) CatModel.eyeMats.delete(this.eyeMat);
+    if (this.shine) CatModel.shines.delete(this.shine);
     this.disposeParts();
     this.root.parent?.remove(this.root);
   }
@@ -591,6 +617,25 @@ export class CatModel {
       }));
     }
     const eyeMat = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 120, specular: 0xffffff, emissive: eyeC.clone().multiplyScalar(0.18) });
+    // eyeshine: in the dark (power cuts) cats' eyes glow
+    if (this.eyeMat) CatModel.eyeMats.delete(this.eyeMat);
+    this.eyeMat = eyeMat;
+    eyeMat.emissiveIntensity = CatModel.eyeGlow;
+    CatModel.eyeMats.add(eyeMat);
+    // eyeshine halos (shown only in the dark)
+    if (this.shine) CatModel.shines.delete(this.shine);
+    const shine = new THREE.Group();
+    const smat = new THREE.SpriteMaterial({ map: CatModel.glowTex(), color: eyeC.clone().lerp(new THREE.Color('#d8ff9a'), 0.35), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
+    for (const sz of [-1, 1]) {
+      const sp = new THREE.Sprite(smat);
+      sp.position.set(0.066, 0.018, sz * 0.03);
+      sp.scale.setScalar(0.065);
+      shine.add(sp);
+    }
+    shine.visible = CatModel.eyeGlow > 1;
+    this.head.add(shine);
+    this.shine = shine;
+    CatModel.shines.add(shine);
     this.eyes = this.addMesh(this.head, mergeGeometries(eyeParts)!, eyeMat);
     this.eyes.position.set(0, 0.018, 0);
     // a pink tongue that flicks out to lap water (only shown while drinking)
