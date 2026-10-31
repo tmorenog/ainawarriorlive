@@ -910,7 +910,7 @@ export class Interactions {
         'I hope they\'re healthy… StarClan, watch over them.',
         'Will you play with my kits when they\'re born? They\'ll need clanmates like you.',
       ];
-      return simRng.chance(0.6) ? queenComplaint(c, (l) => simRng.pick(l)) : simRng.pick(kitLines);
+      return simRng.chance(0.6) ? queenComplaint(c, (l) => simRng.pick(l), clan.get(c.mate)) : simRng.pick(kitLines);
     }
     if (c.mate) { const m = clan.get(c.mate); if (m) lines.push(`${displayName(m)} and I watched the stars last night.`); }
     if (c.apprentice) { const ap = clan.get(c.apprentice); if (ap) lines.push(`${ap.given} is learning quickly. ${pronoun(ap, 'subj').replace(/^./, (s) => s.toUpperCase())} might make a fine warrior.`); }

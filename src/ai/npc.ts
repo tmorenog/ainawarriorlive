@@ -404,7 +404,7 @@ export class NpcManager {
       a.forcedPose = game.time.isNight ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
       // expecting queens chat about their coming kits when you're nearby
       if (isExpecting(c) && !game.time.isNight && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 9 && simRng.chance(dt * (0.12 + 0.12 * expectingProgress(c))))
-        a.say(queenComplaint(c, (l) => simRng.pick(l)), 4.5);
+        a.say(queenComplaint(c, (l) => simRng.pick(l), game.clan.get(c.mate)), 4.5);
       return;
     } else if (a.queenRest) { a.queenRest = false; a.forcedPose = null; }
     // a tom whose mate is resting in the nursery joins her at night: he grooms her while she sleeps, then curls up beside her
