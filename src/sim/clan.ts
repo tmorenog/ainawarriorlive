@@ -645,7 +645,7 @@ export class ClanSim {
   mateMother(pc: Cat, mate: Cat): Cat | null {
     if (pc.sex !== mate.sex) return pc.sex === 'she' ? pc : mate;
     if (pc.sex !== 'she') return null;
-    return mate.expectingUntil !== null || mate.labour ? mate : pc;
+    return mate.labour ? mate : pc;
   }
 
   playerMateNursery(announce = false) {
@@ -655,6 +655,15 @@ export class ClanSim {
     if (!mate || !mate.alive || mate.exiled) return;
     if (pc.mate !== mate.id) pc.mate = mate.id;
     if (mate.mate !== pc.id) mate.mate = pc.id;
+    // two she-cats: you carry the kits — if your mate was expecting from before, the kits are yours now
+    if (pc.sex === 'she' && mate.sex === 'she' && mate.expectingUntil !== null && !mate.labour && pc.expectingUntil === null) {
+      pc.expectingUntil = mate.expectingUntil;
+      mate.expectingUntil = null;
+      mate.nurseryDay = undefined;
+      this.game.ui.toast(`🍼 You are the one expecting your and ${displayName(mate)}'s kits! Rest in the nursery.`, 'good');
+      this.game.ui.showBanner(`🍼 You are expecting kits with ${displayName(mate)}!`, 7);
+    }
+    if (pc.sex === 'she' && mate.sex === 'she') mate.nurseryDay = undefined;
     const she = this.mateMother(pc, mate);
     if (!she) { if (announce) this.game.ui.toast('💕 Two toms can\'t have kits of their own — but the nursery kits would love you both!', 'info'); return; }
     if (!this.grownUp(pc) || !this.grownUp(mate) || she.expectingUntil !== null || she.labour) return;
@@ -694,6 +703,7 @@ export class ClanSim {
       c.nurseryDay = undefined;
       const m = this.get(c.mate);
       if (!m || !m.alive || c.expectingUntil !== null || c.stage !== 'warrior' || c.kits.some((k) => (this.get(k)?.age ?? 99) < 6)) continue;
+      if (m.isPlayer && m.sex === c.sex) continue; // two she-cats: you carry the kits, not her
       c.expectingUntil = day + 2;
       this.log(`${displayName(c)} moved into the nursery — she is expecting ${displayName(m)}'s kits.`, 'clan');
       this.setRecent(`${c.given} is expecting kits!`);
