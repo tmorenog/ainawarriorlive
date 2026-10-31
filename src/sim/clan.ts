@@ -843,6 +843,8 @@ export class ClanSim {
     const med = this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : this.home().find((x) => x.role === 'medicineApprentice' && x.id !== mother.id) ?? null;
     if (mother.labour) { this.birth(mother, med); return; } // already waited a whole day
     mother.labour = true;
+    this.game.npcs.agents.get(mother.id)?.say('Oh… I think the kits are coming!', 6);
+    if (mother.isPlayer) this.game.ui.showBanner(`${displayName(mother)}: Oh… I think the kits are coming!`, 5);
     if (med?.isPlayer) {
       // you are the medicine cat: go and help
       const n = g.camp.dens.nursery;
@@ -858,7 +860,7 @@ export class ClanSim {
     const n = g.camp.dens.nursery;
     if (ag) { ag.activity = 'idle'; ag.moveSpeed = 3; ag.setTarget(n.x + 0.6, n.z + 0.6); ag.say(`${mother.given}'s kits are coming! Out of my way!`, 4); }
     if (mother.isPlayer) g.ui.toast(`🍼 Your kits are coming! ${med ? `${displayName(med)} rushes into the nursery to help you.` : 'You curl up in the nursery…'}`, 'objective');
-    else if (mAg) mAg.say('*pants* They\'re coming…', 4);
+    else if (mAg) setTimeout(() => mAg.say('*pants* They\'re coming…', 4), 6000);
     setTimeout(() => {
       if (!mother.alive || !mother.labour) return;
       if (ag) ag.say(simRng.pick(['Breathe… that\'s it… here comes the first one!', 'Bite down on this stick. You\'re doing so well.', 'One more push… there!']), 5);

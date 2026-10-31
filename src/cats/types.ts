@@ -273,6 +273,7 @@ export function queenComplaint(c: Cat, pick: <T>(a: T[]) => T, mate?: Cat | null
     '*groans* Any day now… StarClan, please make it soon.',
     'I hope I have my kits soon!',
   );
+  if (p > 0.8 || c.labour) lines.push('Oh… I think the kits are coming!', 'Oh… I think the kits are coming!', '*gasps* Oh — I think the kits are coming!');
   return pick(lines);
 }
 
