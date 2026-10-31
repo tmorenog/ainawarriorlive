@@ -245,6 +245,6 @@ export function expectingProgress(c: Cat): number {
 }
 
 /** How strong an expecting queen still is: a little weaker at first, much weaker near the birth. */
-export function queenPowerK(c: Cat): number { return isExpecting(c) ? 0.85 - 0.45 * expectingProgress(c) : 1; }
+export function queenPowerK(c: Cat): number { return isExpecting(c) ? 0.85 - 0.35 * expectingProgress(c) : 1; }
 /** How fast an expecting queen still moves. */
-export function queenSpeedK(c: Cat): number { return isExpecting(c) ? 0.9 - 0.4 * expectingProgress(c) : 1; }
+export function queenSpeedK(c: Cat): number { return isExpecting(c) ? 0.9 - 0.6 * expectingProgress(c) : 1; }
