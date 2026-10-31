@@ -36,6 +36,7 @@ export class Player implements Fighter {
   /** You (a new mother) are licking your newborn kits warm. */
   lickKitsUntil = 0;
   private heavyWarned = false;
+  private heavySprintT = -99;
   holdSpot: { x: number; z: number; until: number; heading?: number } | null = null;
   radius = 0.2;
   speed = 0;
@@ -251,7 +252,11 @@ export class Player implements Fighter {
     else if (this.crouching && this.gait > 1) target = GAITS[0].speed;
     else target = GAITS[this.gait].speed;
     target *= stageSpeed;
-    // expecting queens are heavy and slow
+    // expecting queens are heavy and slow: no running at all (a trot at most), then slower still
+    if (isExpecting(cat)) {
+      target = Math.min(target, GAITS[3].speed);
+      if (this.sprinting && game.clock - this.heavySprintT > 12) { this.heavySprintT = game.clock; game.ui.floatText('Too heavy to run!', '#f0b0c8'); }
+    }
     target *= queenSpeedK(cat);
     if (isExpecting(cat) !== this.heavyWarned) {
       this.heavyWarned = isExpecting(cat);
@@ -291,7 +296,7 @@ export class Player implements Fighter {
     if (cat.traits.includes('clumsy') && this.onGround && moving && this.tripT <= 0 && game.clock > this.tripCd
         && Math.random() < dt * (this.sprinting ? 0.06 : this.gait >= 4 ? 0.025 : 0.006)) this.trip();
     // stamina
-    if (this.sprinting) this.stamina -= dt * 17;
+    if (this.sprinting) this.stamina -= dt * 17 * (isExpecting(this.cat) ? 2 : 1);
     else if (this.swimming) this.stamina -= dt * (moving ? 5 : 2.5);
     else this.stamina += dt * (cat.hunger < 15 ? 5 : 12);
     this.stamina = clamp(this.stamina, 0, 100);
