@@ -383,6 +383,7 @@ export class Menus {
       g.passTime(24);
     });
     add('Save game', () => { g.save(); g.ui.toast('Game saved.', 'good'); });
+    add('⏪ Go back 1 moon', () => this.confirm('Go back in time?', 'Go back to the dawn of the previous moon? Everything that happened since then will be undone.', () => g.backOneMoon()));
     // testing helpers for the Twoleg capture
     add('🧪 Test: get caught by Twolegs now', () => { g.resume(); g.twolegs.testCapture(); });
     add(g.twolegs.testVans ? '🧪 Test: vans every time — ON (tap to turn off)' : '🧪 Test: vans every time — OFF', () => {

@@ -582,6 +582,9 @@ export class ClanSim {
     const young = she.kits.some((k) => { const kc = this.get(k); return !!kc && kc.alive && kc.age < 6; });
     if (young) return;
     const day = this.game.time.day;
+    // a rest between litters: the next litter only comes 12 moons after the last one was born
+    const last = she.lastLitterDay ?? Math.max(-999, ...she.kits.map((k) => this.get(k)?.bornDay ?? -999));
+    if (day - last < 12) return;
     she.nurseryDay = undefined;
     she.expectingUntil = day + 2;
     this.log(`${displayName(she)} moved into the nursery — she is expecting kits.`, 'clan');
@@ -874,6 +877,7 @@ export class ClanSim {
       if (father) { this.rel(father, k).opinion = 80; this.rel(k, father).opinion = 70; }
     }
     mother.expectingUntil = null;
+    mother.lastLitterDay = this.game.time.day;
     const names = kits.map((k) => k.given).join(', ');
     this.log(`${displayName(mother)} welcomed ${n} new kit${n > 1 ? "s" : ""} to the nursery${helper ? ` with ${displayName(helper)}'s help` : ''}: ${names}.`, 'birth');
     this.game.notify(`🍼 New kits in the nursery! ${displayName(mother)}'s litter: ${names}.${helper && !playerHelped ? ` ${displayName(helper)} helped them into the world.` : ''}`);

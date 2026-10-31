@@ -44,7 +44,7 @@ import { AudioEngine, SoundEnv } from './audio/audio';
 import { UI } from './ui/ui';
 import { Menus, NewGameSpec, Settings, loadSettings } from './ui/menus';
 import { TouchControls, isTouchDevice } from './ui/touch';
-import { SaveData, hasSave, readSave, readSaveSlot, writeSave } from './save/save';
+import { SaveData, hasSave, readSave, readSaveSlot, writeSave, pushMoonSnapshot, moonSnapshots, keepMoonSnapshots } from './save/save';
 import { Appearance, Cat, LifeStage, displayName, pronoun, LESSONS } from './cats/types';
 import { personalityFrom, createCat } from './cats/generate';
 import { CatModel } from './cats/model';
@@ -427,6 +427,26 @@ export class Game {
     };
     this.menus.create({ name: pc.given, sex: pc.sex, app: JSON.parse(JSON.stringify(pc.app)), seed: this.seed, clanName: this.territories.homeName, lore: lore.mode, traits: pc.traits, lifestyle: pc.lifestyle },
       { onSave: (app) => finish(app), onCancel: () => finish() });
+  }
+
+  /** Go back one moon: reload the snapshot taken at the start of the previous moon. */
+  backOneMoon() {
+    const snaps = moonSnapshots();
+    if (!snaps.length) { this.ui.toast('⏪ There is no earlier moon to go back to yet. A snapshot is taken at every dawn.', 'info'); return; }
+    const day = Math.floor(this.time.totalHours / 24);
+    // the newest snapshot from an earlier moon; otherwise the start of this moon
+    let idx = -1;
+    for (let i = snaps.length - 1; i >= 0; i--) if (Math.floor(snaps[i].totalHours / 24) < day) { idx = i; break; }
+    if (idx < 0) idx = 0;
+    const target = snaps[idx];
+    keepMoonSnapshots(idx + 1);
+    this.state = 'loading';
+    this.menus.loading('⏪ Going back one moon…');
+    setTimeout(() => {
+      this.loadData(target);
+      writeSave(this);
+      this.ui.toast(`⏪ You went back in time to the dawn of moon ${Math.floor(target.totalHours / 24) + 1}.`, 'good');
+    }, 80);
   }
 
   continueGame() {
@@ -983,6 +1003,7 @@ export class Game {
         }
       }
       this.clan.tickDay();
+      try { pushMoonSnapshot(this); } catch { /* storage full */ }
       this.npcs.syncRoster();
       this.npcs.refreshModels();
       if (this.clan.player?.alive) this.player.refreshStage();

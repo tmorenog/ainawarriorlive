@@ -96,7 +96,41 @@ export function readSaveSlot(slot: number): SaveData | null {
   } catch { return null; }
 }
 
+/** Snapshots taken at the start of each moon, so you can go back in time. */
+const MOONS = () => `${KEY_NOW()}-moons`;
+export function pushMoonSnapshot(g: Game) {
+  const d = buildSave(g);
+  let list: string[] = [];
+  try { list = JSON.parse(localStorage.getItem(MOONS()) ?? '[]'); } catch { list = []; }
+  list.push(JSON.stringify(d));
+  while (list.length > 3) list.shift();
+  // storage is limited: drop the oldest snapshots until it fits
+  while (list.length) {
+    try { localStorage.setItem(MOONS(), JSON.stringify(list)); return; } catch { list.shift(); }
+  }
+}
+export function moonSnapshots(): SaveData[] {
+  try { return (JSON.parse(localStorage.getItem(MOONS()) ?? '[]') as string[]).map((x) => JSON.parse(x) as SaveData); } catch { return []; }
+}
+export function keepMoonSnapshots(n: number) {
+  try {
+    const list = JSON.parse(localStorage.getItem(MOONS()) ?? '[]') as string[];
+    localStorage.setItem(MOONS(), JSON.stringify(list.slice(0, n)));
+  } catch { /* ignore */ }
+}
+
 export function writeSave(g: Game): boolean {
+  const data = buildSave(g);
+  try {
+    localStorage.setItem(KEY_NOW(), JSON.stringify(data));
+    return true;
+  } catch (e) {
+    console.warn('save failed', e);
+    return false;
+  }
+}
+
+function buildSave(g: Game): SaveData {
   const c = g.clan;
   const p = g.player;
   // compact: drop dead rival cats and forget stale relations to dead cats
@@ -133,14 +167,8 @@ export function writeSave(g: Game): boolean {
     events: g.events.serialize(),
     objectives: g.objectives.serialize(),
   };
-  try {
-    (data as SaveData).agesReset = true;
-    localStorage.setItem(KEY_NOW(), JSON.stringify(data));
-    return true;
-  } catch (e) {
-    console.warn('save failed', e);
-    return false;
-  }
+  (data as SaveData).agesReset = true;
+  return JSON.parse(JSON.stringify(data)) as SaveData;
 }
 
 export function deleteSave() {

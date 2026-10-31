@@ -161,6 +161,8 @@ export interface Cat {
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;
+  /** Day her last litter was born (for the rest between litters). */
+  lastLitterDay?: number;
   /** In labour right now. */
   labour?: boolean;
   /** Day this she-cat moves into the nursery after becoming a mate. */
