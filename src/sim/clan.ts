@@ -575,12 +575,12 @@ export class ClanSim {
     if (a.sex === b.sex) return;
     const she = a.sex === 'she' ? a : b;
     // your own mate: expecting kits right away, straight to the nursery
-    if (a.isPlayer || b.isPlayer) { this.playerMateNursery(); if (she.expectingUntil !== null) return; }
+    if (a.isPlayer || b.isPlayer) { this.playerMateNursery(true); if (she.expectingUntil !== null) return; }
     she.nurseryDay = this.game.time.day + 1;
   }
 
   /** You and your mate: the she-cat goes to the nursery (expecting) whenever she has no young kits. */
-  playerMateNursery() {
+  playerMateNursery(announce = false) {
     const pc = this.player;
     if (!pc || !pc.alive || pc.exiled) return;
     const mate = this.get(pc.mate) ?? Object.values(this.cats).find((x) => x.mate === pc.id && x.alive);
@@ -589,12 +589,13 @@ export class ClanSim {
     if (mate.mate !== pc.id) mate.mate = pc.id;
     const she = pc.sex === 'she' ? pc : mate;
     if (she.stage === 'kit' || she.stage === 'apprentice' || she.expectingUntil !== null || she.labour) return;
+    const who = she.isPlayer ? 'You' : displayName(she);
     const young = she.kits.some((k) => { const kc = this.get(k); return !!kc && kc.alive && kc.age < 6; });
-    if (young) return;
+    if (young) { if (announce) this.game.ui.toast(`🍼 ${who} still ${she.isPlayer ? 'have' : 'has'} young kits to raise. New kits can come once they are 6 moons old.`, 'info'); return; }
     const day = this.game.time.day;
     // a rest between litters: the next litter only comes 12 moons after the last one was born
     const last = she.lastLitterDay ?? Math.max(-999, ...she.kits.map((k) => this.get(k)?.bornDay ?? -999));
-    if (day - last < 12) return;
+    if (day - last < 12) { if (announce) this.game.ui.toast(`🍼 ${who} had kits not long ago. New kits can come in ${12 - (day - last)} more moon${12 - (day - last) === 1 ? '' : 's'}.`, 'info'); return; }
     she.nurseryDay = undefined;
     she.expectingUntil = day + 2;
     this.log(`${displayName(she)} moved into the nursery — she is expecting kits.`, 'clan');

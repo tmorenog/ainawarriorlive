@@ -801,6 +801,14 @@ export class Interactions {
         g.ui.dialog({ speaker: c, text: she === pc ? '*purrs so loud the whole den can hear* Kits! Our kits! You should rest in the nursery, my love.' : '*eyes shining* Kits… our own kits. I\'ll move to the nursery. Will you bring me fresh-kill?', options: [{ label: '*presses close*', action: done }], onClose: done });
         g.notify(she === pc ? 'You are expecting kits! They will arrive in two moons. You will get to name them.' : `${displayName(c)} is expecting your kits! You will get to name them.`);
       } });
+      else opts.push({ label: 'When will we have kits?', action: () => {
+        const youngK = she.kits.some((k) => (clan.get(k)?.age ?? 99) < 6);
+        const wait = Math.max(0, 12 - (g.time.day - lastLitter));
+        const text = she.expectingUntil !== null ? `${she === pc ? 'You are' : 'I am'} already expecting! The kits will come in ${Math.max(0, she.expectingUntil - g.time.day)} moon${she.expectingUntil - g.time.day === 1 ? '' : 's'}.`
+          : youngK ? 'We still have young kits to raise. When they are 6 moons old, we can have more.'
+          : `We had kits not long ago. In ${wait} more moon${wait === 1 ? '' : 's'} we can have more.`;
+        g.ui.dialog({ speaker: c, text, options: [{ label: '*purr*', action: done }], onClose: done });
+      } });
     }
     // unmate — only the label changes, nobody gets upset
     if (pc.mate === c.id || c.mate === pc.id) opts.push({ label: '💔 Unmate', hint: 'just removes the mate label', action: () => {
