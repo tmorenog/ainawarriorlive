@@ -736,6 +736,8 @@ export class Interactions {
       a.mood = 'neutral';
       clan.adjust(c, pc, wasAngry ? 15 : 6, { text: `${pc.given} gave me a ${fl}.`, weight: 2 });
       g.audio.purr();
+      const isMate = pc.mate === c.id || c.mate === pc.id;
+      if (isMate) { clan.adjust(c, pc, 4, { text: `${pc.given} brought me a ${fl}. I'll tell our kits about it one day.`, weight: 3 }); g.ui.dialog({ speaker: c, text: '*purr* I\'m going to tell our kits about this when they grow up! *purr*', options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done }); return; }
       g.ui.dialog({ speaker: c, text: wasAngry ? `*sniffs the ${fl}… and their fur slowly flattens* …Alright. I'm not angry anymore. Thank you.` : simRng.pick([`A ${fl}! It smells wonderful. Thank you!`, `*tucks the ${fl} behind an ear* How do I look?`, `You picked this for me? *purrs*`]), options: [{ label: 'Continue', action: again }, { label: 'Goodbye', action: done }], onClose: done });
     } });
     // gifts
