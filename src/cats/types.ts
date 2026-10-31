@@ -163,6 +163,8 @@ export interface Cat {
   outsideBy?: string;
   /** Day her last litter was born (for the rest between litters). */
   lastLitterDay?: number;
+  /** How many kits are coming (decided when labour starts). */
+  litterSize?: number;
   /** In labour right now. */
   labour?: boolean;
   /** Day this she-cat moves into the nursery after becoming a mate. */

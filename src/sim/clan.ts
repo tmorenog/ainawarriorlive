@@ -843,6 +843,8 @@ export class ClanSim {
     const med = this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : this.home().find((x) => x.role === 'medicineApprentice' && x.id !== mother.id) ?? null;
     if (mother.labour) { this.birth(mother, med); return; } // already waited a whole day
     mother.labour = true;
+    mother.litterSize = this.rollLitter();
+    if (mother.litterSize >= 5) setTimeout(() => this.game.ui.toast(`🌿 ${displayName(mother)} is having a BIG litter — five kits! The birth will take ${this.herbsForLitter(5)} herbs. Medicine cats, bring plenty!`, 'objective'), 1500);
     this.game.npcs.agents.get(mother.id)?.say('Oh… I think the kits are coming!', 6);
     if (mother.isPlayer) this.game.ui.showBanner(`${displayName(mother)}: Oh… I think the kits are coming!`, 5);
     if (med?.isPlayer) {
@@ -869,13 +871,33 @@ export class ClanSim {
   }
 
   /** Called when the player medicine cat reaches the queen in labour. */
+  /** Litter size: 1–5 kits, and big litters of five are common. */
+  rollLitter(): number { return simRng.weighted<number>([[1, 10], [2, 25], [3, 25], [4, 10], [5, 30]]); }
+
+  /** Herbs a birth needs: a litter of five takes a lot more. */
+  herbsForLitter(n: number): number { return n >= 5 ? 4 : n >= 4 ? 2 : 1; }
+
+  /** Use herbs for a birth (your poultices and herbs first, then the medicine den store). Returns how many were missing. */
+  private useBirthHerbs(n: number, playerHelped: boolean): number {
+    let need = this.herbsForLitter(n);
+    if (playerHelped) {
+      const pc = this.player;
+      for (const k of Object.keys(pc.poultices ?? {})) while (need > 0 && pc.poultices![k] > 0) { pc.poultices![k]--; need -= 2; }
+      const h = this.game.player.herbs;
+      for (const k of ['silverleaf', 'sunpetal', 'bitterroot'] as const) while (need > 0 && h[k] > 0) { h[k]--; need--; }
+    }
+    for (const k of ['silverleaf', 'sunpetal', 'bitterroot'] as const) while (need > 0 && this.herbStore[k] > 0) { this.herbStore[k]--; need--; }
+    return Math.max(0, need);
+  }
+
   helpBirth(mother: Cat) {
     const g = this.game;
     const pc = this.player;
     g.objectives.list = g.objectives.list.filter((o) => o.id !== `birth-${mother.id}`);
     const poultice = Object.entries(pc.poultices ?? {}).find(([, v]) => v > 0);
-    if (poultice) pc.poultices![poultice[0]]--;
-    g.ui.dialog({ speaker: mother, text: `*panting* ${pc.given}, you came! ${poultice ? 'You press a soothing poultice into her fur and give her a stick to bite on.' : 'You give her a stick to bite on and count her breaths with her.'} "Breathe… breathe… here comes the first one!"`, options: [{ label: 'Help the kits into the world', action: () => {
+    const big = (mother.litterSize ?? 0) >= 5;
+    const have = Object.values(pc.poultices ?? {}).reduce((x, v) => x + v * 2, 0) + g.player.herbs.silverleaf + g.player.herbs.sunpetal + g.player.herbs.bitterroot + this.herbTotal();
+    g.ui.dialog({ speaker: mother, text: `*panting* ${pc.given}, you came! ${poultice ? 'You press a soothing poultice into her fur and give her a stick to bite on.' : 'You give her a stick to bite on and count her breaths with her.'} "Breathe… breathe… here comes the first one!"${big ? ` (A big litter — this will take ${this.herbsForLitter(5)} herbs. ${have >= this.herbsForLitter(5) ? 'You have enough.' : 'You don\'t have enough… you\'ll do your best.'})` : ''}`, options: [{ label: 'Help the kits into the world', action: () => {
       pc.skills.healing = Math.min(99, pc.skills.healing + 4);
       pc.reputation = clamp(pc.reputation + 4, -100, 100);
       this.adjust(mother, pc, 15, { text: `${pc.given} helped me give birth to my kits.`, weight: 8 });
@@ -887,7 +909,9 @@ export class ClanSim {
     if (!mother.labour && mother.expectingUntil === null) return;
     mother.labour = false;
     const father = this.get(mother.mate);
-    const n = simRng.weighted<number>([[1, 19], [2, 38], [3, 28], [4, 10], [5, 5]]);
+    const n = mother.litterSize ?? this.rollLitter();
+    mother.litterSize = undefined;
+    const herbShort = this.useBirthHerbs(n, playerHelped);
     const kits: Cat[] = [];
     for (let i = 0; i < n; i++) {
       const k = createCat({ age: 0, parents: father ? [mother, father] : [mother, mother], day: this.game.time.day, usedNames: this.usedNames });
@@ -904,6 +928,13 @@ export class ClanSim {
     }
     mother.expectingUntil = null;
     mother.lastLitterDay = this.game.time.day;
+    if (herbShort > 0) {
+      // not enough herbs for a big litter: the queen is worn out and the smallest kits are sickly
+      mother.health = Math.max(10, mother.health - 15 * herbShort);
+      mother.sick = Math.min(100, (mother.sick ?? 0) + 20 * herbShort);
+      for (const k of kits.slice(-Math.min(kits.length, herbShort))) k.sick = 45;
+      setTimeout(() => this.game.ui.toast(`🌿 There weren't enough herbs for such a big litter (${herbShort} short). ${displayName(mother)} is worn out and ${Math.min(kits.length, herbShort)} kit${herbShort > 1 ? 's are' : ' is'} sickly — the medicine cat should treat them!`, 'danger'), 2500);
+    }
     const names = kits.map((k) => k.given).join(', ');
     this.log(`${displayName(mother)} welcomed ${n} new kit${n > 1 ? "s" : ""} to the nursery${helper ? ` with ${displayName(helper)}'s help` : ''}: ${names}.`, 'birth');
     this.game.notify(`🍼 New kits in the nursery! ${displayName(mother)}'s litter: ${names}.${helper && !playerHelped ? ` ${displayName(helper)} helped them into the world.` : ''}`);
