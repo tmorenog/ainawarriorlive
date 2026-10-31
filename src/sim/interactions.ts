@@ -896,8 +896,18 @@ export class Interactions {
     } });
     // mates
     const pr = clan.rel(c, pc);
-    if (pc.stage === 'warrior' && c.stage === 'warrior' && !pc.mate && !c.mate && !isFamily(c, pc) && op > 45) {
-      opts.push({ label: 'Ask to become mates', hint: `they ${pr.romance > 40 ? 'seem fond of you' : 'may not feel the same'}`, action: () => this.proposeMate(a, done) });
+    if (pc.mate !== c.id && c.mate !== pc.id) {
+      opts.push({ label: 'Ask to become mates', hint: `they ${pr.romance > 40 ? 'seem fond of you' : 'may not feel the same'}`, action: () => {
+        // some cats can't say yes — they tell you why
+        const no = (text: string) => g.ui.dialog({ speaker: c, text, options: [{ label: 'Oh… okay', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+        if (!clan.grownUp(pc)) return no('*blinks* You\'re far too young for that! Come back when you\'re a warrior.');
+        if (!clan.grownUp(c)) return no(c.stage === 'kit' ? '*giggles* I\'m just a kit! Mates are for grown-up cats.' : 'I\'m only an apprentice! I need to finish my training first.');
+        if (isFamily(c, pc)) return no('*wrinkles nose* We\'re family! That would be so weird.');
+        if (pc.mate) { const m = clan.get(pc.mate); return no(`You already have a mate${m ? ` — ${displayName(m)}` : ''}! What would they say?`); }
+        if (c.mate) { const m = clan.get(c.mate); return no(`I'm sorry… I already have a mate${m ? `, ${displayName(m)}` : ''}.`); }
+        if (c.clan !== pc.clan && c.clan !== 'home') return no('Mates? With a cat from another clan? That\'s against the warrior code!');
+        this.proposeMate(a, done);
+      } });
     }
     // apprentice / mentor
     if (pc.stage === 'apprentice' && pc.mentor === c.id && g.training.canOfferLesson()) opts.push({ label: 'Ask for a training lesson', action: () => { done(); g.training.offerLesson(a); } });
