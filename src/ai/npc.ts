@@ -15,7 +15,7 @@ import type { Fighter } from '../player/combat';
 export type Activity =
   | 'idle' | 'wander' | 'sit' | 'sleep' | 'eat' | 'talk' | 'groom' | 'patrol' | 'hunt' | 'train' | 'play'
   | 'herbs' | 'ceremony' | 'flee' | 'fight' | 'follow' | 'shelter' | 'stranded' | 'gathering' | 'approach' | 'talkPlayer'
-  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'watch' | 'leaving' | 'shield' | 'lead';
+  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'suckle' | 'parentPlay' | 'watch' | 'leaving' | 'shield' | 'lead';
 
 export interface ApproachIntent {
   kind: 'training' | 'play' | 'order' | 'greet' | 'chat' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
@@ -112,6 +112,11 @@ export class NpcAgent implements Fighter {
   mateRest = false;
   /** Game clock time until which a resting queen naps (while her mate grooms her). */
   napUntil = 0;
+  /** A mother lies on her side while her kits nurse, or rolls about playing with them. */
+  nursingUntil = 0;
+  /** Kit: the mother it's nursing from ('player' = you). Parent/kit: who they're playing with. */
+  suckleWith: NpcAgent | 'player' | null = null;
+  playWith: NpcAgent | 'player' | null = null;
   queenStuckT?: number;
   hurryBed = false;
   queenBestD?: number;
@@ -416,6 +421,7 @@ export class NpcManager {
       a.target = null;
       a.activity = 'idle';
       a.queenRest = true;
+      if (a.nursingUntil > game.clock && !queenBed) { a.forcedPose = 'layDown'; return; }
       a.forcedPose = queenBed || a.napUntil > game.clock || game.player.sleeping && game.clan.player.mate === c.id && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 2 ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
       // expecting queens chat about their coming kits when you're nearby
       if (isExpecting(c) && !game.time.isNight && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 9 && simRng.chance(dt * (0.12 + 0.12 * expectingProgress(c))))
@@ -458,6 +464,8 @@ export class NpcManager {
       return;
     }
     a.forcedPose = null;
+    if (a.activity === 'suckle') { this.suckleThink(a); return; }
+    if (a.activity === 'parentPlay') { this.parentPlayThink(a); return; }
     if (this.ceremonyUntil > game.clock && a.activity === 'ceremony') {
       if (!a.target) {
         const hr = game.camp.highRock;
@@ -538,9 +546,17 @@ export class NpcManager {
       a.userEat = true;
       return;
     }
+    // parents (dads too) sometimes go and play with their kits
+    if (c.stage !== 'kit' && !t.isNight && c.kits.length && simRng.chance(0.12)) {
+      const kits = c.kits.map((k) => this.agents.get(k)).filter((k): k is NpcAgent => !!k && k.cat.stage === 'kit' && k.cat.alive && this.free(k));
+      if (kits.length) { const k = simRng.pick(kits); return this.startParentPlay(k, a); }
+    }
     // role specific
     const r = simRng.next();
     if (c.stage === 'kit') {
+      const mum = this.motherAgent(a);
+      if (mum && !t.isNight && (c.age < 4 || c.hunger < 60) && simRng.chance(c.hunger < 60 ? 0.8 : 0.35)) return this.startSuckle(a, mum);
+      if (!t.isNight && simRng.chance(0.25)) { const par = this.parentToPlay(a); if (par) return this.startParentPlay(a, par); }
       if (r < 0.4) return this.kitPlay(a);
       if (r < 0.55) { const e = camp.dens.elders; a.activity = 'sit'; a.actTimer = simRng.range(15, 30); a.setTarget(e.x + simRng.range(-1.5, 1.5), e.z + simRng.range(-1.5, 1.5)); return; }
       return this.wanderCamp(a, 6);
@@ -620,6 +636,95 @@ export class NpcManager {
     a.activity = 'wander';
     a.actTimer = simRng.range(4, 10);
     a.setTarget(Math.cos(ang) * rr, Math.sin(ang) * rr * 0.9 + 1);
+  }
+
+  /** The kit's mother, if she's resting in the nursery right now. */
+  private motherAgent(a: NpcAgent): NpcAgent | null {
+    const mumId = a.cat.parents?.[0];
+    if (!mumId) return null;
+    const m = this.agents.get(mumId);
+    return m && m.queenRest && m.cat.alive ? m : null;
+  }
+
+  /** A parent who's free to play: mum in the nursery, or dad (or your mate) in camp. */
+  private parentToPlay(a: NpcAgent): NpcAgent | null {
+    const opts: NpcAgent[] = [];
+    for (const id of a.cat.parents ?? []) {
+      const p = this.agents.get(id);
+      if (!p || !p.cat.alive || p.cat.clan !== 'home') continue;
+      if (p.queenRest || (['idle', 'wander', 'sit', 'groom'].includes(p.activity) && !p.patrol && !p.partner && Math.hypot(p.pos.x, p.pos.z) < 20)) opts.push(p);
+    }
+    return opts.length ? simRng.pick(opts) : null;
+  }
+
+  startSuckle(a: NpcAgent, mum: NpcAgent | 'player') {
+    this.endConvo(a);
+    a.activity = 'suckle';
+    a.suckleWith = mum;
+    a.actTimer = simRng.range(14, 24);
+    a.moveSpeed = 1.6;
+    a.target = null;
+  }
+
+  /** Where a nursing kit lies: along its mother's belly, side by side with its littermates. */
+  private suckleSpot(a: NpcAgent, mx: number, mz: number, mh: number) {
+    const sibs = [...this.agents.values()].filter((k) => k.activity === 'suckle' && k.suckleWith === a.suckleWith);
+    const i = Math.max(0, sibs.indexOf(a));
+    const along = (i - (sibs.length - 1) / 2) * 0.13;
+    const px = Math.cos(mh + Math.PI / 2), pz = Math.sin(mh + Math.PI / 2);
+    return { x: mx + px * 0.3 + Math.cos(mh) * along, z: mz + pz * 0.3 + Math.sin(mh) * along };
+  }
+
+  private suckleThink(a: NpcAgent) {
+    const game = this.game;
+    const m = a.suckleWith;
+    const mum = m === 'player' ? { x: game.player.pos.x, z: game.player.pos.z, h: game.player.heading, ok: true }
+      : m ? { x: m.pos.x, z: m.pos.z, h: m.heading, ok: m.queenRest && m.cat.alive } : null;
+    if (!mum || !mum.ok || a.actTimer <= 0 || game.time.isNight) {
+      if (a.actTimer <= 0) { a.cat.hunger = 100; if (simRng.chance(0.4)) a.say(simRng.pick(['*hiccup* So full!', '*yawns* Milk makes me sleepy…', 'Mmm, thanks Mama!']), 2.5); }
+      a.activity = 'idle'; a.suckleWith = null; a.actTimer = 0;
+      return;
+    }
+    if (m !== 'player' && m) m.nursingUntil = game.clock + 1.5;
+    const spot = this.suckleSpot(a, mum.x, mum.z, mum.h);
+    if (Math.hypot(a.pos.x - spot.x, a.pos.z - spot.z) > 0.3) {
+      if (!a.target || Math.hypot(a.target.x - spot.x, a.target.z - spot.z) > 0.1) a.setTarget(spot.x, spot.z);
+      return;
+    }
+    // snuggle right up against her (walking stops a little short)
+    a.pos.x += (spot.x - a.pos.x) * 0.2; a.pos.z += (spot.z - a.pos.z) * 0.2;
+    a.target = null;
+    a.heading = Math.atan2(mum.z - a.pos.z, mum.x - a.pos.x);
+    a.forcedPose = 'suckle';
+    a.cat.hunger = Math.min(100, a.cat.hunger + 0.05);
+  }
+
+  /** A kit and a parent play together: pouncing, batting, rolling about. */
+  startParentPlay(kit: NpcAgent, parent: NpcAgent | 'player') {
+    const dur = simRng.range(12, 20);
+    this.endConvo(kit);
+    kit.activity = 'parentPlay'; kit.playWith = parent; kit.actTimer = dur; kit.moveSpeed = 2.2; kit.target = null;
+    if (parent !== 'player') {
+      if (!parent.queenRest) { this.endConvo(parent); parent.activity = 'parentPlay'; parent.playWith = kit; parent.actTimer = dur; parent.target = null; }
+      else parent.nursingUntil = this.game.clock + dur;
+      if (simRng.chance(0.7)) parent.say(simRng.pick([`Come here, ${kit.cat.given}! Show me your best pounce!`, 'Oof! You got me, little warrior!', `Ha! ${kit.cat.given}, you're getting so strong!`, '*bats a paw gently* Catch my tail!']), 3);
+    }
+  }
+
+  private parentPlayThink(a: NpcAgent) {
+    const game = this.game;
+    const o = a.playWith;
+    const op = o === 'player' ? game.player.pos : o ? o.pos : null;
+    const alive = o === 'player' || (o && (o.activity === 'parentPlay' || o.queenRest || o.activity === 'suckle'));
+    if (!op || !alive || a.actTimer <= 0 || game.time.isNight) { a.activity = 'idle'; a.playWith = null; a.actTimer = 0; return; }
+    const kid = a.cat.stage === 'kit';
+    const d = Math.hypot(a.pos.x - op.x, a.pos.z - op.z);
+    if (kid && d > 0.55) { if (!a.target || simRng.chance(0.1)) a.setTarget(op.x + simRng.range(-0.25, 0.25), op.z + simRng.range(-0.25, 0.25)); return; }
+    a.target = null;
+    a.heading = Math.atan2(op.z - a.pos.z, op.x - a.pos.x);
+    const beat = Math.floor(game.clock * (kid ? 1.4 : 0.8) + (kid ? 0 : 0.5)) % 3;
+    a.forcedPose = kid ? (['pounce', 'crouch', 'fight'] as Pose[])[beat] : (['layDown', 'crouch', 'lie'] as Pose[])[beat];
+    if (kid && simRng.chance(0.004)) a.say(simRng.pick(['Rawr! Gotcha!', 'I\'m a fierce warrior!', 'Again! Again!', '*squeaks happily*']), 2);
   }
 
   private kitPlay(a: NpcAgent) {

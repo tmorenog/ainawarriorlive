@@ -790,6 +790,45 @@ export class Interactions {
         if (nm) { clan.usedNames.delete(c.given); c.given = nm; clan.usedNames.add(nm); g.ui.toast(`Your kit is now ${nm}kit!`, 'good'); }
       });
     } });
+    // family: nurse from your mother, let your kits nurse, play with your kits / your parents
+    const myMum = pc.stage === 'kit' && pc.parents?.[0] === c.id;
+    const myParent = pc.stage === 'kit' && pc.parents?.includes(c.id);
+    const myKit = c.stage === 'kit' && c.parents?.includes(pc.id);
+    if (myMum && a.queenRest) opts.unshift({ label: '🍼 Drink milk', hint: 'snuggle up to your mother', action: () => {
+      done();
+      const px = Math.cos(a.heading + Math.PI / 2), pz = Math.sin(a.heading + Math.PI / 2);
+      const x = a.pos.x + px * 0.3, z = a.pos.z + pz * 0.3;
+      const heading = Math.atan2(a.pos.z - z, a.pos.x - x);
+      g.player.placeAt(x, z, -heading - Math.PI / 2);
+      g.player.heading = heading;
+      g.player.holdSpot = { x, z, until: g.clock + 18, heading };
+      g.player.posePick = 'suckle';
+      a.nursingUntil = g.clock + 18;
+      pc.hunger = 100;
+      clan.adjust(c, pc, 3);
+      a.say(simRng.pick(['*purrs* There you go, little one.', 'Drink up — you\'ll grow big and strong.', '*licks your head* My sweet kit.']), 3);
+      g.ui.toast('🍼 You snuggle against your mother\'s warm belly and drink her milk. You\'re full!', 'good');
+    } });
+    if (myParent || myKit) opts.unshift({ label: myKit ? `🐾 Play with ${c.given}kit` : `🐾 Play with ${c.sex === 'she' ? 'Mama' : 'Papa'}`, hint: 'pounce and roll about', action: () => {
+      done();
+      if (myKit) g.npcs.startParentPlay(a, 'player');
+      else {
+        const dur = 16;
+        if (a.queenRest) a.nursingUntil = g.clock + dur;
+        else { g.npcs.endConvo(a); a.activity = 'parentPlay'; a.playWith = 'player'; a.actTimer = dur; a.target = null; }
+        a.say(simRng.pick([`Come here, ${pc.given}kit! Show me your best pounce!`, '*rolls over* Oof! You got me!', 'Catch my tail if you can!']), 3);
+      }
+      clan.adjust(c, pc, 4, { text: myKit ? `My ${pc.sex === 'she' ? 'mother' : 'father'} played with me!` : `I played with my kit ${pc.given}.`, weight: 3 });
+      g.audio.purr();
+    } });
+    if (myKit && c.parents?.[0] === pc.id && isQueen(pc, (id) => clan.get(id))) opts.unshift({ label: '🍼 Let your kits nurse', hint: 'they snuggle up for milk', action: () => {
+      done();
+      const kits = pc.kits.map((k) => g.npcs.agents.get(k)).filter((k): k is NpcAgent => !!k && k.cat.stage === 'kit' && k.cat.alive && Math.hypot(k.pos.x - g.player.pos.x, k.pos.z - g.player.pos.z) < 12);
+      for (const k of kits) g.npcs.startSuckle(k, 'player');
+      g.player.posePick = 'layDown';
+      g.player.holdSpot = { x: g.player.pos.x, z: g.player.pos.z, until: g.clock + 22, heading: g.player.heading };
+      g.ui.toast(`🍼 You lie down on your side and ${kits.length > 1 ? 'your kits snuggle' : 'your kit snuggles'} up to drink your milk.`, 'good');
+    } });
     // your mate resting in the nursery: groom her while she naps, or sleep beside her
     const queenMate = c.sex === 'she' && (c.mate === pc.id || pc.mate === c.id) && isQueen(c, (id) => clan.get(id));
     if (queenMate) {
