@@ -795,8 +795,11 @@ export class Interactions {
         const n = g.camp.dens.nursery;
         let dx = n.x - a.pos.x, dz = n.z - a.pos.z;
         const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
-        g.player.placeAt(a.pos.x + dx * 0.6, a.pos.z + dz * 0.6);
-        g.player.heading = Math.atan2(a.pos.z - g.player.pos.z, a.pos.x - g.player.pos.x);
+        const x = a.pos.x + dx * 0.5, z = a.pos.z + dz * 0.5;
+        const heading = Math.atan2(a.pos.z - z, a.pos.x - x);
+        g.player.placeAt(x, z, -heading - Math.PI / 2); // face her
+        g.player.heading = heading;
+        g.player.holdSpot = { x, z, until: g.clock + 60, heading };
       };
       opts.unshift({ label: '💤 Sleep beside her', hint: 'curl up together until you wake', action: () => {
         done();
@@ -812,8 +815,8 @@ export class Interactions {
       opts.unshift({ label: '🐾 Groom her', hint: 'she drifts off to sleep', action: () => {
         done();
         besideHer();
-        g.player.posePick = 'groom';
-        a.napUntil = g.clock + 25;
+        g.player.posePick = 'groomOther';
+        a.napUntil = g.clock + 60;
         a.forcedPose = 'sleep';
         a.say(simRng.pick(['*purrs* Mmm… that feels so nice…', '*yawns* Don\'t stop… zzz…', 'You always know what I need… *drifts off*']), 3.5);
         clan.adjust(c, pc, 5, { text: `${pc.given} groomed me until I fell asleep.`, weight: 3 });

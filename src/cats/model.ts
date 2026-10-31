@@ -7,7 +7,7 @@ import { Accessory, Appearance, LifeStage } from './types';
 import { RNG, hashString } from '../core/rng';
 import { clamp } from '../core/math';
 
-export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink' | 'loaf' | 'layDown' | 'playDead' | 'claws' | 'lashTail' | 'stretch';
+export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink' | 'loaf' | 'layDown' | 'playDead' | 'claws' | 'lashTail' | 'stretch' | 'groomOther';
 export type Mood = 'neutral' | 'happy' | 'angry' | 'afraid' | 'alert' | 'sad';
 
 const STAGE_SCALE: Record<LifeStage, number> = { kit: 0.42, apprentice: 0.7, warrior: 1, elder: 0.97 };
@@ -967,6 +967,10 @@ export class CatModel {
         // curled up: body rolled onto its side a little, head tucked, tail over the nose
         bodyY = -this.legLen * 0.98; legF = 1.45; legB = -1.45; headP = 0.55; tailUp = 0.25; lie = 1; curl = 0.55; roll = 0.28;
         break;
+      case 'groomOther':
+        // lying beside another cat, head bobbing down to lick their fur
+        bodyY = -this.legLen * 0.9; legF = 1.3; legB = -1.45; headP = 0.42 + Math.sin(this.t * 5) * 0.2; tailUp = 0.2; lie = 1; curl = 0.25;
+        break;
       case 'loaf':
         bodyY = -this.legLen * 0.95; legF = 1.45; legB = -1.45; headP = 0.05; tailUp = 0.2; lie = 1; curl = 0.3;
         break;
@@ -1103,7 +1107,8 @@ export class CatModel {
     // lapping: the tongue curls out and flicks back about four times a second
     if (this.tongue) {
       const drinking = pose === 'drink';
-      this.tongue.visible = drinking || pose === 'playDead';
+      this.tongue.visible = drinking || pose === 'playDead' || (pose === 'groomOther' && Math.sin(this.t * 5) > 0.1);
+      if (pose === 'groomOther') { const out = Math.max(0, Math.sin(this.t * 10)); this.tongue.scale.set(0.3 + out * 0.8, 1, 1); this.tongue.rotation.z = -0.5 - out * 0.4; this.tongue.position.y = -0.045; }
       if (pose === 'playDead') { this.tongue.scale.set(0.8, 1, 1); this.tongue.rotation.z = -1.1; this.tongue.position.y = -0.05; }
       if (drinking) {
         const lap = (this.t * 4.2) % 1;

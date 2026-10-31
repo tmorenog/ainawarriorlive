@@ -113,6 +113,7 @@ export class NpcAgent implements Fighter {
   /** Game clock time until which a resting queen naps (while her mate grooms her). */
   napUntil = 0;
   queenStuckT?: number;
+  hurryBed = false;
   queenBestD?: number;
   perch: { x: number; z: number; y: number | null; stay: boolean; t: number; from: THREE.Vector3 } | null = null;
   jumpTo(x: number, z: number, y: number | null, stay: boolean) {
@@ -314,7 +315,7 @@ export class NpcManager {
         a.model.pose = this.poseFor(a);
         a.model.setShadows(d < 28);
         // look at player when close
-        if (d < 4 && a.activity !== 'sleep') {
+        if (d < 4 && a.activity !== 'sleep' && a.forcedPose !== 'sleep') {
           const want = Math.atan2(player.pos.z - a.pos.z, player.pos.x - a.pos.x);
           a.model.lookYaw = clamp(-angleDiff(a.heading, want), -1, 1);
         } else if (a.partner) {
@@ -401,16 +402,19 @@ export class NpcManager {
       const n = game.camp.dens.nursery;
       const bed = n.beds[Math.abs(hashString(c.id)) % n.beds.length];
       const dn = Math.hypot(a.pos.x - bed.x, a.pos.z - bed.z);
+      // napping while her mate grooms her (or sleeps beside her): she stays right where she is
+      if (a.napUntil > game.clock) { a.target = null; a.activity = 'idle'; a.forcedPose = 'sleep'; a.hurryBed = false; return; }
       if (dn > 0.7) {
         if (!a.target || Math.hypot(a.target.x - bed.x, a.target.z - bed.z) > 0.5) { a.activity = 'idle'; a.forcedPose = null; a.setTarget(bed.x, bed.z); }
         a.moveSpeed = queenBed ? 3.2 : 1.6; // hurry back to bed at night
+        a.hurryBed = queenBed;
         // stuck on the way to bed (a wall or a rock)? hop straight into the nest
         if (dn < (a.queenBestD ?? 1e9) - 0.3) { a.queenBestD = dn; a.queenStuckT = 0; } else a.queenStuckT = (a.queenStuckT ?? 0) + dt;
         if ((a.queenStuckT ?? 0) > 5) { a.queenStuckT = 0; a.queenBestD = undefined; a.pos.set(bed.x, game.groundAt(bed.x, bed.z), bed.z); a.target = null; }
         return;
       }
       // settled in her nest: loafing, grooming, sleeping at night
-      a.queenBestD = undefined; a.queenStuckT = 0;
+      a.queenBestD = undefined; a.queenStuckT = 0; a.hurryBed = false;
       a.target = null;
       a.activity = 'idle';
       a.queenRest = true;
@@ -434,7 +438,7 @@ export class NpcManager {
       a.mateRest = true;
       a.heading = Math.atan2(spot.fz - a.pos.z, spot.fx - a.pos.x);
       const h = game.time.hour;
-      a.forcedPose = h > 20.5 && h < 23.5 ? 'groom' : 'sleep';
+      a.forcedPose = h > 20 && h < 23.5 ? 'groomOther' : 'sleep';
       return;
     } else if (a.mateRest) { a.mateRest = false; a.forcedPose = null; }
     if (a.activity === 'follow') { this.followThink(a); return; }
@@ -1360,7 +1364,7 @@ export class NpcManager {
     const want = Math.atan2(dz, dx);
     const turn = angleDiff(a.heading, want);
     a.heading += clamp(turn, -dt * 6, dt * 6);
-    let sp = a.moveSpeed * (a.cat.injury > 40 ? 0.6 : 1) * (a.cat.stage === 'elder' ? 0.8 : 1) * queenSpeedK(a.cat);
+    let sp = a.moveSpeed * (a.cat.injury > 40 ? 0.6 : 1) * (a.cat.stage === 'elder' ? 0.8 : 1) * (a.hurryBed ? 1 : queenSpeedK(a.cat));
     const depth = game.chunks.waterDepthAt(a.pos.x, a.pos.z);
     if (depth > 0.2) sp *= 0.45;
     if (Math.abs(turn) > 1.2) sp *= 0.3;

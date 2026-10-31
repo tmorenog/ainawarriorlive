@@ -32,6 +32,8 @@ export class Player implements Fighter {
   yaw = 0;
   pitch = 0;
   heading = 0;
+  /** Stay put here (grooming or sleeping beside someone) until you move. */
+  holdSpot: { x: number; z: number; until: number; heading?: number } | null = null;
   radius = 0.2;
   speed = 0;
   onGround = true;
@@ -319,6 +321,10 @@ export class Player implements Fighter {
     this.pos.z += this.vel.z * dt;
     this.pos.y += this.vel.y * dt;
     this.collide();
+    if (this.holdSpot) {
+      if (moving || game.clock > this.holdSpot.until) { this.holdSpot = null; if (this.posePick === 'groomOther') this.posePick = null; }
+      else { this.pos.x = this.holdSpot.x; this.pos.z = this.holdSpot.z; this.vel.x = 0; this.vel.z = 0; }
+    }
     const g2 = game.groundAt(this.pos.x, this.pos.z);
     const waterY = game.chunks.waterSurfaceAt(this.pos.x, this.pos.z) - this.model.shoulderY * scale * 0.85;
     const floor = this.swimming ? Math.max(g2, waterY) : g2;
@@ -332,7 +338,8 @@ export class Player implements Fighter {
     this.speed = Math.hypot(this.vel.x, this.vel.z);
     // heading follows camera yaw
     const camHeading = -this.yaw - Math.PI / 2;
-    this.heading += angleDiff(this.heading, camHeading) * Math.min(1, dt * 12);
+    if (this.holdSpot?.heading !== undefined) this.heading = this.holdSpot.heading;
+    else this.heading += angleDiff(this.heading, camHeading) * Math.min(1, dt * 12);
 
     // noise
     const sp = this.speed / Math.max(0.5, scale);
