@@ -358,9 +358,18 @@ export class UI {
     const hp = (c.health / 100) * 100;
     const coinStr = `🪙 ${c.coins ?? 0}`;
     const extra = [c.sick > 20 ? '🤒 sick' : '', c.injury > 25 ? '🩹 injured' : '', c.expectingUntil !== null ? '🍼 expecting' : '', c.confinedUntil !== null && c.confinedUntil > g.time.day ? '⛓ confined' : ''].filter(Boolean).join(' ');
+    // kits on the way: you or your mate
+    const mate = g.clan.get(c.mate);
+    const carrier = c.expectingUntil !== null || c.labour ? c : mate && mate.alive && (mate.expectingUntil !== null || mate.labour) ? mate : null;
+    let kitLine = '';
+    if (carrier) {
+      const left = carrier.expectingUntil !== null ? Math.max(0, Math.ceil(carrier.expectingUntil - g.time.totalHours / 24)) : 0;
+      const when = carrier.labour || left === 0 ? 'the kits are coming!' : `${left} moon${left === 1 ? '' : 's'} to go`;
+      kitLine = `<div class="hud-kits">🍼 ${carrier === c ? 'You are' : `Your mate ${esc(displayName(carrier))} is`} expecting kits — ${when}</div>`;
+    }
     this.status.innerHTML = `
       <div class="hud-name">${esc(displayName(c))}</div>
-      <div class="hud-sub">${esc(roleLabel(c))} · ${Math.floor(c.age)} moons · ${g.clan.playerReputationLabel()} · ${coinStr}${extra ? ' · ' + extra : ''}</div>
+      <div class="hud-sub">${esc(roleLabel(c))} · ${Math.floor(c.age)} moons · ${g.clan.playerReputationLabel()} · ${coinStr}${extra ? ' · ' + extra : ''}</div>${kitLine}
       <div class="bar-label"><span>Health</span><span>${Math.round(c.health)}</span></div><div class="bar health"><i style="width:${hp}%"></i></div>
       <div class="bar-label"><span>Hunger</span><span>${c.hunger < 20 ? 'starving' : c.hunger < 45 ? 'hungry' : 'fed'}</span></div><div class="bar hunger"><i style="width:${c.hunger}%"></i></div>
       <div class="bar-label"><span>Thirst</span><span>${(c.thirst ?? 100) < 15 ? 'parched' : (c.thirst ?? 100) < 40 ? 'thirsty' : 'fine'}</span></div><div class="bar thirst"><i style="width:${c.thirst ?? 100}%"></i></div>

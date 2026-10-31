@@ -669,8 +669,10 @@ export class ClanSim {
     this.log(`${displayName(she)} moved into the nursery — she is expecting kits.`, 'clan');
     if (she.isPlayer) {
       this.game.notify(`🍼 You are expecting ${displayName(mate)}'s kits! Go rest in the nursery — they'll arrive in two moons.`);
+      this.game.ui.showBanner(`🍼 You are expecting kits with ${displayName(mate)}!`, 7);
     } else {
       this.game.notify(`🍼 Your mate ${displayName(she)} is expecting kits! She is going to the nursery to rest.`);
+      this.game.ui.showBanner(`🍼 Your mate ${displayName(she)} is expecting your kits!`, 7);
       const ag = this.game.npcs.agents.get(she.id);
       if (ag) ag.say('I\'m going to rest in the nursery now. Come visit me!', 4);
     }

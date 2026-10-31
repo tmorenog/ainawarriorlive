@@ -295,3 +295,5 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 .vet-room .caption { position: absolute; left: 6%; right: 6%; top: 8%; color: #1a2a30; font-size: 19px; line-height: 1.4; text-align: center; opacity: 0; }
 .vet-room .caption.in { animation: capIn 0.6s ease-out forwards; }
 .hud-compass .mark small { font-size: 10px; color: #ffe9b0; text-shadow: 0 1px 2px #000; margin-left: 1px; vertical-align: middle; }
+
+.hud-kits { margin: 4px 0 2px; padding: 3px 8px; border-radius: 8px; background: rgba(240, 138, 180, 0.18); color: #f6b6d2; font-size: 13px; }

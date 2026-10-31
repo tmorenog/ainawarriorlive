@@ -890,6 +890,7 @@ export class Interactions {
         g.audio.purr();
         g.ui.dialog({ speaker: c, text: she === pc ? '*purrs so loud the whole den can hear* Kits! Our kits! You should rest in the nursery, my love.' : '*eyes shining* Kits… our own kits. I\'ll move to the nursery. Will you bring me fresh-kill?', options: [{ label: '*presses close*', action: done }], onClose: done });
         g.notify(she === pc ? 'You are expecting kits! They will arrive in two moons. You will get to name them.' : `${displayName(c)} is expecting your kits! You will get to name them.`);
+        g.ui.showBanner(she === pc ? `🍼 You are expecting kits with ${displayName(c)}!` : `🍼 Your mate ${displayName(c)} is expecting your kits!`, 7);
       } });
       else opts.push({ label: 'When will we have kits?', action: () => {
         const wait = Math.max(0, 3 - (g.time.day - lastLitter));
