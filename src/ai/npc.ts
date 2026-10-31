@@ -3,7 +3,7 @@
 // personality, talks to other cats, hunts, patrols, trains and sleeps.
 import * as THREE from 'three';
 import type { Game } from '../game';
-import { Cat, displayName } from '../cats/types';
+import { Cat, bellyFor, displayName } from '../cats/types';
 import { CatModel, Mood, Pose } from '../cats/model';
 import { simRng, hashString } from '../core/rng';
 import { angleDiff, clamp, dist2 } from '../core/math';
@@ -305,6 +305,7 @@ export class NpcManager {
         a.model.root.rotation.y = -a.heading;
         a.model.speed = a.speed;
         a.model.mood = a.mood;
+        a.model.belly = bellyFor(a.cat);
         a.model.pose = this.poseFor(a);
         a.model.setShadows(d < 28);
         // look at player when close

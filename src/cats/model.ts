@@ -384,6 +384,11 @@ export class CatModel {
   private claws: THREE.Mesh[] = [];
   /** Seconds of talking left: the mouth moves while > 0. */
   talkT = 0;
+  /** 0 = normal, ~0.5 = she has a mate, 1 = expecting kits. Rounds out the belly. */
+  belly = 0;
+  private bellyShown = -1;
+  private bellyBump: THREE.Mesh | null = null;
+  private bellyBaseR = 0.2;
   head = new THREE.Group();
   tailPivot = new THREE.Group();
   legs: THREE.Group[] = [];
@@ -562,6 +567,11 @@ export class CatModel {
     part(sphere(bodyR * 1.2, 22, 16), torsoMat, [-bodyLen * 0.42, -0.06, 0], 0, [0.78, 0.95, 1.08]);
     // fluffy belly
     part(cyl(bodyR * 0.78, bodyR * 0.78, bodyLen * 0.85, 14), bellyMat, [0, -bodyR * 0.45, 0], Math.PI / 2, [1, 0.95, 0.78]);
+    // rounder belly for she-cats with a mate (hidden until belly > 0)
+    this.bellyBaseR = bodyR;
+    this.bellyBump = part(sphere(bodyR * 0.9, 18, 14), torsoMat, [-bodyLen * 0.05, -bodyR * 0.3, 0], 0, [1.3, 0.8, 1]);
+    this.bellyBump.visible = false;
+    this.bellyShown = -1;
     // soft chest fluff just below where the neck meets the body
     part(sphere(bodyR * 0.78, 16, 14), bellyMat, [bodyLen * 0.42, -0.05, 0], 0, [0.85, 0.95, 1.0]);
     // short, chubby neck
@@ -1077,6 +1087,14 @@ export class CatModel {
     for (const c of this.claws) c.visible = clawsOut;
     // talking: the jaw opens and closes
     this.talkT = Math.max(0, this.talkT - dt);
+    if (this.bellyBump && this.belly !== this.bellyShown) {
+      this.bellyShown = this.belly;
+      const b = this.belly;
+      this.bellyBump.visible = b > 0;
+      // grows downward and outward so it shows from the side and from above
+      this.bellyBump.scale.set(1.3 + b * 0.25, 0.8 + b * 0.35, 1 + b * 0.32);
+      this.bellyBump.position.y = -this.bellyBaseR * (0.3 + b * 0.18);
+    }
     if (this.mouth) {
       const open = this.talkT > 0 ? Math.max(0, Math.sin(this.t * 15)) * 0.9 + 0.1 : pose === 'playDead' ? 0.55 : this.mood === 'angry' && pose === 'claws' ? 0.8 : 0;
       this.mouth.visible = open > 0.06;

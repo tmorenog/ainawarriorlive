@@ -222,3 +222,10 @@ export function pronoun(c: Cat, kind: 'subj' | 'obj' | 'poss'): string {
   if (c.sex === 'tom') return kind === 'subj' ? 'he' : kind === 'obj' ? 'him' : 'his';
   return kind === 'subj' ? 'she' : kind === 'obj' ? 'her' : 'her';
 }
+
+/** How round a cat's belly looks: she-cats with a mate are a little rounder, expecting queens more so. */
+export function bellyFor(c: Cat): number {
+  if (c.sex !== 'she' || c.stage === 'kit' || c.stage === 'apprentice') return 0;
+  if (c.expectingUntil !== null || c.labour) return 1;
+  return c.mate ? 0.5 : 0;
+}

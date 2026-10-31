@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { Game } from '../game';
 import { CatModel } from '../cats/model';
-import { Cat, LifeStage } from '../cats/types';
+import { Cat, LifeStage, bellyFor } from '../cats/types';
 import type { Fighter } from './combat';
 import { angleDiff, clamp, damp, dist2 } from '../core/math';
 import { simRng } from '../core/rng';
@@ -179,6 +179,7 @@ export class Player implements Fighter {
     const input = game.input;
     const cat = this.cat;
     if (!cat || !cat.alive) return;
+    this.model.belly = bellyFor(cat);
     this.attackCd -= dt;
     this.dodgeT -= dt;
     this.inCombatT -= dt;
