@@ -374,6 +374,9 @@ export class Menus {
     const menu = h('div', 'menu', '', s);
     const add = (label: string, fn: () => void) => { const b = h('button', '', label, menu); b.onclick = fn; };
     add('Resume', () => g.resume());
+    add('⏪ Go back 1 moon', () => this.confirm('Go back in time?', 'Go back to the dawn of the previous moon? Everything that happened since then will be undone.', () => g.backOneMoon()));
+    const mate = g.clan.get(g.clan.player?.mate ?? null);
+    if (mate) add(`💔 Unmate ${displayName(mate)}`, () => this.confirm('Unmate?', `Stop being mates with ${displayName(mate)}? Only the label changes — they won't be sad and nothing else changes.`, () => { g.clan.unmate(g.clan.player, mate); g.ui.toast(`You and ${displayName(mate)} are no longer mates.`, 'info'); this.pause(); }));
     add('Journal', () => { g.resume(); g.ui.panels.open('journal'); });
     add('Map', () => { g.resume(); g.ui.panels.open('map'); });
     if (g.clan.leader?.isPlayer || g.clan.deputy?.isPlayer) add('Clan council', () => { g.resume(); g.ui.panels.open('leader'); });
@@ -383,7 +386,6 @@ export class Menus {
       g.passTime(24);
     });
     add('Save game', () => { g.save(); g.ui.toast('Game saved.', 'good'); });
-    add('⏪ Go back 1 moon', () => this.confirm('Go back in time?', 'Go back to the dawn of the previous moon? Everything that happened since then will be undone.', () => g.backOneMoon()));
     // testing helpers for the Twoleg capture
     add('🧪 Test: get caught by Twolegs now', () => { g.resume(); g.twolegs.testCapture(); });
     add(g.twolegs.testVans ? '🧪 Test: vans every time — ON (tap to turn off)' : '🧪 Test: vans every time — OFF', () => {

@@ -563,6 +563,14 @@ export class ClanSim {
   }
 
   /** New mates: the next day the she-cat moves into the nursery, expecting kits. */
+  /** Remove the mate label between two cats. Feelings, memories and kits stay exactly as they are. */
+  unmate(a: Cat, b: Cat) {
+    if (a.mate === b.id) a.mate = null;
+    if (b.mate === a.id) b.mate = null;
+    a.nurseryDay = undefined; b.nurseryDay = undefined;
+    this.log(`${displayName(a)} and ${displayName(b)} are no longer mates.`, 'clan');
+  }
+
   matesFormed(a: Cat, b: Cat) {
     if (a.sex === b.sex) return;
     const she = a.sex === 'she' ? a : b;

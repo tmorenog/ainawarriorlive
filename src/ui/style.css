@@ -139,7 +139,7 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 
 /* ---------- title / creation ---------- */
 .screen { position: absolute; inset: 0; pointer-events: auto; display: flex; }
-.title-screen { flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(0,0,0,0.05), rgba(0,0,0,0.55)); }
+.title-screen { flex-direction: column; align-items: center; justify-content: safe center; overflow-y: auto; padding: 16px 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0.05), rgba(0,0,0,0.55)); }
 .title-screen h1 { font-family: var(--serif); font-size: clamp(48px, 9vw, 96px); margin: 0; letter-spacing: 2px; text-shadow: 0 4px 24px rgba(0,0,0,0.6); }
 .title-screen .tag { font-family: var(--serif); font-size: clamp(16px, 2.4vw, 24px); color: var(--ink); margin: 4px 0 30px; opacity: 0.9; text-shadow: 0 2px 8px #000; }
 .title-screen .menu { display: flex; flex-direction: column; gap: 10px; width: min(300px, 80vw); }

@@ -791,7 +791,8 @@ export class Interactions {
     // have kits with your mate
     if (pc.mate === c.id && c.mate === pc.id && pc.stage === 'warrior' && c.stage === 'warrior' && pc.sex !== c.sex) {
       const she = pc.sex === 'she' ? pc : c;
-      const busyKits = she.expectingUntil !== null || she.kits.some((k) => (clan.get(k)?.age ?? 99) < 6);
+      const lastLitter = she.lastLitterDay ?? Math.max(-999, ...she.kits.map((k) => clan.get(k)?.bornDay ?? -999));
+      const busyKits = she.expectingUntil !== null || she.kits.some((k) => (clan.get(k)?.age ?? 99) < 6) || g.time.day - lastLitter < 12;
       if (!busyKits) opts.push({ label: 'Ask to have kits together', hint: 'they\'d arrive in two moons', action: () => {
         she.expectingUntil = g.time.day + 2;
         clan.adjust(c, pc, 6, { text: `${pc.given} and I are going to have kits!`, weight: 8 });
@@ -801,6 +802,13 @@ export class Interactions {
         g.notify(she === pc ? 'You are expecting kits! They will arrive in two moons. You will get to name them.' : `${displayName(c)} is expecting your kits! You will get to name them.`);
       } });
     }
+    // unmate — only the label changes, nobody gets upset
+    if (pc.mate === c.id || c.mate === pc.id) opts.push({ label: '💔 Unmate', hint: 'just removes the mate label', action: () => {
+      g.ui.dialog({ speaker: c, text: `*blinks* You want us to just be clanmates again? That's alright — I'm still your friend.`, options: [
+        { label: '💔 Yes, unmate', action: () => { clan.unmate(pc, c); g.ui.toast(`You and ${displayName(c)} are no longer mates.`, 'info'); done(); } },
+        { label: 'Never mind', action: done },
+      ], onClose: done });
+    } });
     // mates
     const pr = clan.rel(c, pc);
     if (pc.stage === 'warrior' && c.stage === 'warrior' && !pc.mate && !c.mate && !isFamily(c, pc) && op > 45) {
