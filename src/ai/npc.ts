@@ -112,6 +112,9 @@ export class NpcAgent implements Fighter {
   mateRest = false;
   /** Game clock time until which a resting queen naps (while her mate grooms her). */
   napUntil = 0;
+  /** Your mate grooming you until you fall asleep (then sleeping beside you until you wake). */
+  tuckIn = false;
+  tuckSlept = false;
   /** A mother lies on her side while her kits nurse, or rolls about playing with them. */
   nursingUntil = 0;
   /** A new mother licks her newborn kits until they're warm. */
@@ -361,9 +364,11 @@ export class NpcManager {
   private mateNurserySpot(a: NpcAgent, day = false): { x: number; z: number; fx: number; fz: number } | null {
     const game = this.game;
     const c = a.cat;
-    if (c.sex !== 'tom' || !c.mate || c.clan !== 'home' || c.exiled || c.stage === 'kit' || c.stage === 'apprentice' || (!day && !game.time.isNight)) return null;
+    if (!c.mate || c.clan !== 'home' || c.exiled || c.stage === 'kit' || c.stage === 'apprentice' || (!day && !game.time.isNight)) return null;
     const m = game.clan.get(c.mate);
-    if (!m || !m.alive || m.exiled || m.sex !== 'she' || m.mate !== c.id) return null;
+    if (!m || !m.alive || m.exiled || m.mate !== c.id) return null;
+    // your mate (tom or she-cat) comes to you when you're the queen; between clan cats it's the tom who visits
+    if (!m.isPlayer && (c.sex !== 'tom' || m.sex !== 'she')) return null;
     const n = game.camp.dens.nursery;
     let qx: number, qz: number;
     if (m.isPlayer) {
@@ -423,6 +428,7 @@ export class NpcManager {
       a.target = null;
       a.activity = 'idle';
       a.queenRest = true;
+      if (c.labour) { a.forcedPose = 'layDown'; return; }
       if (a.lickKitsUntil > game.clock) { a.forcedPose = 'groomOther'; return; }
       if (a.nursingUntil > game.clock && !queenBed) { a.forcedPose = 'layDown'; return; }
       a.forcedPose = queenBed || a.napUntil > game.clock || game.player.sleeping && game.clan.player.mate === c.id && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 2 ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
@@ -432,6 +438,24 @@ export class NpcManager {
       return;
     } else if (a.queenRest) { a.queenRest = false; a.forcedPose = null; }
     // a tom whose mate is resting in the nursery joins her at night: he grooms her while she sleeps, then curls up beside her
+    if (a.tuckIn) {
+      const p = game.player;
+      if (!game.clan.player?.alive || ['ceremony', 'flee', 'fight'].includes(a.activity)) a.tuckIn = false;
+      else {
+        const sx = p.pos.x + Math.cos(p.heading + Math.PI / 2) * 0.5, sz = p.pos.z + Math.sin(p.heading + Math.PI / 2) * 0.5;
+        if (Math.hypot(a.pos.x - sx, a.pos.z - sz) > 0.3) {
+          a.activity = 'idle';
+          if (!a.target || Math.hypot(a.target.x - sx, a.target.z - sz) > 0.2) { a.moveSpeed = 2; a.setTarget(sx, sz); }
+          return;
+        }
+        a.target = null;
+        a.heading = Math.atan2(p.pos.z - a.pos.z, p.pos.x - a.pos.x);
+        a.forcedPose = p.sleeping ? 'sleep' : 'groomOther';
+        if (p.sleeping) a.tuckSlept = true;
+        else if (a.tuckSlept) { a.tuckIn = false; a.tuckSlept = false; a.forcedPose = null; a.say('Good morning, sleepyhead. *purrs*', 3); }
+        return;
+      }
+    }
     const spot = this.mateNurserySpot(a);
     if (spot && !['ceremony', 'flee', 'talkPlayer', 'approach', 'talk', 'leaving', 'follow', 'lead', 'shield', 'patrol'].includes(a.activity) && !a.patrol) {
       const dn = Math.hypot(a.pos.x - spot.x, a.pos.z - spot.z);
@@ -445,7 +469,11 @@ export class NpcManager {
       a.mateRest = true;
       a.heading = Math.atan2(spot.fz - a.pos.z, spot.fx - a.pos.x);
       const h = game.time.hour;
-      a.forcedPose = h > 20 && h < 23.5 ? 'groomOther' : 'sleep';
+      if (c.mate === game.clan.playerId) {
+        // grooms you until you fall asleep, then curls up beside you
+        a.forcedPose = game.player.sleeping ? 'sleep' : 'groomOther';
+        if (!game.player.sleeping && simRng.chance(dt * 0.08)) a.say(simRng.pick(['Close your eyes, my love… I\'m right here.', '*purrs softly and licks between your ears*', 'Shh… sleep now. I\'ll keep you warm.', 'You and the kits need your rest.']), 3.5);
+      } else a.forcedPose = h > 20 && h < 23.5 ? 'groomOther' : 'sleep';
       return;
     } else if (a.mateRest) { a.mateRest = false; a.forcedPose = null; }
     if (a.activity === 'follow') { this.followThink(a); return; }

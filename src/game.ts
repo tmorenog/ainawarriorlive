@@ -1114,7 +1114,7 @@ export class Game {
     this.twolegs.update(dt);
     this.story.update(dt);
     this.mateCheckT -= dt;
-    if (this.mateCheckT <= 0) { this.mateCheckT = 10; this.clan.playerMateNursery(); }
+    if (this.mateCheckT <= 0) { this.mateCheckT = 10; this.clan.playerMateNursery(); this.objectives.excuseQueen(); }
     // simulation
     this.npcs.update(dt);
     this.prey.update(dt);

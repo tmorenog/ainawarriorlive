@@ -929,12 +929,25 @@ export class ClanSim {
     const n = g.camp.dens.nursery;
     if (ag) { ag.activity = 'idle'; ag.moveSpeed = 3; ag.setTarget(n.x + 0.6, n.z + 0.6); ag.say(`${mother.given}'s kits are coming! Out of my way!`, 4); }
     if (mother.isPlayer) g.ui.toast(`🍼 Your kits are coming! ${med ? `${displayName(med)} rushes into the nursery to help you.` : 'You curl up in the nursery…'}`, 'objective');
-    else if (mAg) setTimeout(() => mAg.say('*pants* They\'re coming…', 4), 6000);
-    setTimeout(() => {
-      if (!mother.alive || !mother.labour) return;
-      if (ag) ag.say(simRng.pick(['Breathe… that\'s it… here comes the first one!', 'Bite down on this stick. You\'re doing so well.', 'One more push… there!']), 5);
-      setTimeout(() => this.birth(mother, med), 3500);
-    }, 3500);
+    // a long, hard labour: contractions, yowls and the medicine cat coaching her through it
+    const say = (who: Cat | null, text: string) => {
+      if (!who || !mother.labour || !mother.alive) return;
+      const near = mother.isPlayer || who.isPlayer || Math.hypot(g.player.pos.x - n.x, g.player.pos.z - n.z) < 30;
+      g.npcs.agents.get(who.id)?.say(text, 5);
+      if (near) g.ui.showBanner(`${displayName(who)}: ${text}`, 4.5);
+    };
+    const steps: [number, () => void][] = [
+      [6000, () => say(mother, '*pants* They\'re coming…')],
+      [13000, () => say(mother, simRng.pick(['*yowls* It hurts so much!', '*claws at the moss* Ohhh…', '*gasps* I can\'t— it hurts!']))],
+      [20000, () => say(med, simRng.pick([`Breathe, ${mother.given}… slow and steady. You're doing well.`, 'Easy, easy. Breathe with me.']))],
+      [27000, () => say(mother, simRng.pick(['*strains and yowls*', '*whimpers* How much longer?', '*pants hard* I\'m so tired…']))],
+      [34000, () => say(med, simRng.pick(['Bite down on this stick. Push when the pain comes.', 'Almost there — I can see the first one!']))],
+      [41000, () => say(mother, '*one last yowl*')],
+      [45000, () => say(med, 'Here comes the first one!')],
+      [48000, () => { if (mother.alive && mother.labour) this.birth(mother, med); }],
+    ];
+    if (mother.isPlayer) g.ui.toast('🍼 Labour has begun. It will take a while… stay in your nest.', 'info');
+    for (const [t, fn] of steps) setTimeout(fn, t);
   }
 
   /** Called when the player medicine cat reaches the queen in labour. */
@@ -976,9 +989,17 @@ export class ClanSim {
     if (!mother.labour && mother.expectingUntil === null) return;
     mother.labour = false;
     const father = this.get(mother.mate);
-    const n = mother.litterSize ?? this.rollLitter();
+    const born = mother.litterSize ?? this.rollLitter();
     mother.litterSize = undefined;
-    const herbShort = this.useBirthHerbs(n, playerHelped);
+    const herbShort = this.useBirthHerbs(born, playerHelped);
+    // not every kit survives being born, and not every queen does either
+    const healed = !!helper;
+    const kitRisk = clamp(0.06 + 0.07 * herbShort + (healed ? 0 : 0.1) - (playerHelped ? 0.03 : 0), 0.02, 0.4);
+    let lost = 0;
+    for (let i = 0; i < born; i++) if (simRng.chance(kitRisk)) lost++;
+    const n = born - lost;
+    const queenRisk = clamp((0.03 + 0.05 * herbShort + (healed ? 0 : 0.08) - (playerHelped ? 0.02 : 0)) * (mother.isPlayer ? 0.5 : 1), 0.01, 0.3);
+    const queenDies = simRng.chance(queenRisk);
     const kits: Cat[] = [];
     for (let i = 0; i < n; i++) {
       const k = createCat({ age: 0, parents: father ? [mother, father] : [mother, mother], day: this.game.time.day, usedNames: this.usedNames });
@@ -1002,11 +1023,18 @@ export class ClanSim {
       for (const k of kits.slice(-Math.min(kits.length, herbShort))) k.sick = 45;
       setTimeout(() => this.game.ui.toast(`🌿 There weren't enough herbs for such a big litter (${herbShort} short). ${displayName(mother)} is worn out and ${Math.min(kits.length, herbShort)} kit${herbShort > 1 ? 's are' : ' is'} sickly — the medicine cat should treat them!`, 'danger'), 2500);
     }
-    const names = kits.map((k) => k.given).join(', ');
-    this.log(`${displayName(mother)} welcomed ${n} new kit${n > 1 ? "s" : ""} to the nursery${helper ? ` with ${displayName(helper)}'s help` : ''}: ${names}.`, 'birth');
-    this.game.notify(`🍼 New kits in the nursery! ${displayName(mother)}'s litter: ${names}.${helper && !playerHelped ? ` ${displayName(helper)} helped them into the world.` : ''}`);
-    if (playerHelped) this.game.ui.toast(`🌿 You helped ${displayName(mother)} give birth to ${n} healthy kit${n > 1 ? 's' : ''}!`, 'good');
-    this.setRecent(`${displayName(mother)} had ${n} kits!`);
+    const names = kits.map((k) => k.given).join(', ') || 'none survived';
+    if (lost > 0) {
+      this.log(`${lost} of ${displayName(mother)}'s kits did not survive their birth.`, 'death');
+      setTimeout(() => this.game.ui.toast(`🕯 ${lost === born ? `None of ${displayName(mother)}'s kits survived their birth.` : `${lost} of ${displayName(mother)}'s kits did not survive their birth.`} They walk with StarClan now.`, 'danger'), 4000);
+      for (const c of this.home()) if (c.id === mother.id || c.id === father?.id) this.remember(c, `We lost ${lost} of our kits the day they were born.`, -8);
+    }
+    if (n > 0) {
+      this.log(`${displayName(mother)} welcomed ${n} new kit${n > 1 ? "s" : ""} to the nursery${helper ? ` with ${displayName(helper)}'s help` : ''}: ${names}.`, 'birth');
+      this.game.notify(`🍼 New kits in the nursery! ${displayName(mother)}'s litter: ${names}.${helper && !playerHelped ? ` ${displayName(helper)} helped them into the world.` : ''}`);
+      if (playerHelped) this.game.ui.toast(`🌿 You helped ${displayName(mother)} give birth to ${n} healthy kit${n > 1 ? 's' : ''}!`, 'good');
+      this.setRecent(`${displayName(mother)} had ${n} kits!`);
+    }
     if (mother.isPlayer || father?.isPlayer) {
       const me = mother.isPlayer ? mother : father!;
       this.remember(me, `My kits were born: ${names}.`, 10);
@@ -1047,19 +1075,30 @@ export class ClanSim {
     }
     this.game.npcs.syncRoster();
     // the queen licks her newborns until they're warm and dry, then they snuggle up to nurse
-    this.game.npcs.newbornCare(mother, kits);
-    this.medicineRounds(mother, kits, helper);
+    if (kits.length) this.game.npcs.newbornCare(mother, kits);
+    const roundsTime = this.medicineRounds(mother, kits, helper, lost);
+    if (queenDies) setTimeout(() => {
+      if (!mother.alive) return;
+      const ag = this.game.npcs.agents.get(mother.id);
+      ag?.say('*breathes softly* Take care of them… for me…', 5);
+      this.game.ui.showBanner(`${displayName(mother)}: *breathes softly* Take care of them… for me…`, 5);
+      setTimeout(() => {
+        this.kill(mother, 'complications after giving birth');
+        const healer = helper && helper.alive && !helper.isPlayer ? helper : this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null;
+        if (healer && !healer.isPlayer) { this.game.npcs.agents.get(healer.id)?.say('…I\'m sorry…', 5); this.game.ui.showBanner(`${displayName(healer)}: …I'm sorry…`, 5); }
+      }, 3500);
+    }, roundsTime + 3000);
   }
 
   /** After a birth the medicine cat treats the queen and each kit in turn: "Hold still, eat this poultice…" */
-  private medicineRounds(mother: Cat, kits: Cat[], med: Cat | null) {
+  private medicineRounds(mother: Cat, kits: Cat[], med: Cat | null, lost = 0): number {
     const g = this.game;
     const healer = med ?? (this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null);
-    if (!healer) return;
+    if (!healer) return 0;
     const pc = this.player;
     const n = g.camp.dens.nursery;
     const involved = mother.isPlayer || healer.isPlayer || kits.some((k) => k.parents.includes(pc.id));
-    if (!involved && Math.hypot(g.player.pos.x - n.x, g.player.pos.z - n.z) > 35) return;
+    if (!involved && Math.hypot(g.player.pos.x - n.x, g.player.pos.z - n.z) > 35) return 0;
     const name = displayName(healer);
     const ag = g.npcs.agents.get(healer.id);
     const line = (text: string, secs = 3.4) => {
@@ -1073,8 +1112,10 @@ export class ClanSim {
         ? `*licks ${displayName(k)} warm* "Hold still, little one… there you go."`
         : `"Hold still…" *presses a tiny poultice to ${displayName(k)} and licks them warm*`);
     });
-    steps.push(`"${kits.length === 1 ? 'A healthy kit' : `${kits.length} healthy kits`}! Well done, ${mother.given}. Now rest."`);
+    for (let i = 0; i < lost; i++) steps.splice(1 + Math.floor(simRng.next() * (steps.length - 1)) + 1, 0, '*nudges a tiny, still kit… and licks it again and again* …Come on, little one, breathe… *bows head* …I\'m sorry…');
+    steps.push(kits.length ? `"${kits.length === 1 ? 'A healthy kit' : `${kits.length} healthy kits`}! Well done, ${mother.given}. Now rest."` : `"I'm so sorry, ${mother.given}… I did everything I could."`);
     steps.forEach((t, i) => setTimeout(() => line(t), 1800 + i * 3600));
+    return 1800 + steps.length * 3600;
   }
 
   kill(c: Cat, cause: string) {

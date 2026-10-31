@@ -1,3 +1,4 @@
+import { isQueen } from '../cats/types';
 // Objectives / duties. Orders from the Warden, Second or a mentor are
 // "orders": ignoring them breaks the clan code.
 import type { Game } from '../game';
@@ -33,12 +34,28 @@ export class Objectives {
   get primary(): Objective | undefined { return this.list[0]; }
   has(id: string) { return this.list.some((o) => o.id === id); }
   get(id: string) { return this.list.find((o) => o.id === id); }
+  /** A task a queen is excused from. */
+  isQueenTask(o: Objective): boolean {
+    const pl = this.game.clan.player;
+    if (!pl || !isQueen(pl, (id) => this.game.clan.get(id))) return false;
+    return !!o.order || ['hunt', 'moss', 'herbs', 'patrol', 'lesson', 'escort', 'drive', 'markBorder', 'mentor', 'assessment', 'rescue'].includes(o.kind);
+  }
+
+  /** Drop tasks you were given before you became a queen. */
+  excuseQueen() {
+    const before = this.list.length;
+    this.list = this.list.filter((o) => !this.isQueenTask(o));
+    if (this.list.length < before) this.game.ui.toast('🍼 Queens don\'t have to do clan duties. Your tasks have been handed to other cats — rest!', 'info');
+  }
+
   busy() { return this.list.some((o) => o.order || o.kind === 'lesson' || o.kind === 'patrol' || o.kind === 'assessment'); }
 
   add(o: Objective) {
     // kits outside camp are never handed orders (except their own punishments)
     const pl = this.game.clan.player;
     if (pl && pl.stage === 'kit' && o.order && !o.id.startsWith('punish') && o.id !== 'meeting' && Math.hypot(this.game.player.pos.x, this.game.player.pos.z) > 17.5) return;
+    // queens rest: no duties, patrols, hunts or lessons until their kits are born and grown
+    if (pl && this.isQueenTask(o)) return;
     if (this.has(o.id)) this.list = this.list.filter((x) => x.id !== o.id);
     o.progress = o.progress ?? 0;
     // urgent objectives first
