@@ -1153,8 +1153,9 @@ export class Interactions {
       clan.remember(c, `${displayName(pc)} and I became mates.`, 10, pc.id);
       clan.setRecent(`${pc.given} and ${c.given} are mates!`);
       g.audio.purr();
-      const expecting = (c.sex === 'she' ? c : pc).expectingUntil !== null && c.sex !== pc.sex;
-      g.ui.dialog({ speaker: c, text: 'Yes. Yes, of course! I\'ve hoped you would ask.' + (expecting ? (c.sex === 'she' ? ' …And — I\'m expecting your kits! I\'ll go rest in the nursery.' : ' And our kits… you should go rest in the nursery, my love.') : ''), options: [{ label: '*purr*', action: done }], onClose: done });
+      const mum = clan.mateMother(pc, c);
+      const expecting = !!mum && mum.expectingUntil !== null;
+      g.ui.dialog({ speaker: c, text: 'Yes. Yes, of course! I\'ve hoped you would ask.' + (expecting ? (mum === c ? ' …And — I\'m expecting your kits! I\'ll go rest in the nursery.' : ' And our kits… you should go rest in the nursery, my love.') : ''), options: [{ label: '*purr*', action: done }], onClose: done });
     } else {
       clan.adjust(c, pc, -3);
       r.romance = Math.max(0, r.romance - 10);

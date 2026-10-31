@@ -626,10 +626,10 @@ export class ClanSim {
   }
 
   matesFormed(a: Cat, b: Cat) {
+    // your own mate: expecting kits right away, straight to the nursery (two she-cats: you carry them)
+    if (a.isPlayer || b.isPlayer) { this.playerMateNursery(true); return; }
     if (a.sex === b.sex) return;
     const she = a.sex === 'she' ? a : b;
-    // your own mate: expecting kits right away, straight to the nursery
-    if (a.isPlayer || b.isPlayer) { this.playerMateNursery(true); if (she.expectingUntil !== null) return; }
     she.nurseryDay = this.game.time.day + 1;
   }
 
@@ -641,10 +641,11 @@ export class ClanSim {
     return true;
   }
 
-  /** Who carries the kits for you and your mate: the she-cat (for two she-cats, your mate). */
+  /** Who carries the kits for you and your mate: the she-cat (for two she-cats, you — unless your mate is already expecting). */
   mateMother(pc: Cat, mate: Cat): Cat | null {
     if (pc.sex !== mate.sex) return pc.sex === 'she' ? pc : mate;
-    return pc.sex === 'she' ? mate : null;
+    if (pc.sex !== 'she') return null;
+    return mate.expectingUntil !== null || mate.labour ? mate : pc;
   }
 
   playerMateNursery(announce = false) {
