@@ -248,3 +248,27 @@ export function expectingProgress(c: Cat): number {
 export function queenPowerK(c: Cat): number { return isExpecting(c) ? 0.85 - 0.35 * expectingProgress(c) : 1; }
 /** How fast an expecting queen still moves. */
 export function queenSpeedK(c: Cat): number { return isExpecting(c) ? 0.9 - 0.6 * expectingProgress(c) : 1; }
+
+/** Tired, grumpy things an expecting queen says — more complaints the closer she gets. */
+export function queenComplaint(c: Cat, pick: <T>(a: T[]) => T): string {
+  const p = expectingProgress(c);
+  const lines = [
+    'Kits kicking again… I just want to be a clan cat again!',
+    '*sighs* I\'m SO tired. I could sleep for a whole moon.',
+    'I used to be the fastest cat in the clan. Now I waddle like a badger!',
+    'My paws ache, my back aches… everything aches!',
+    'I can\'t even reach my own tail to groom it anymore.',
+    'Ugh, I\'m slow as a slug. I miss hunting so much.',
+    'Kits kicking again! Stop that, little ones — let me rest!',
+    'I just want to run through the forest again…',
+    'Can someone bring me a mouse? I\'m too tired to walk to the fresh-kill pile.',
+    'I\'m hungry ALL the time. And tired. And hungry.',
+  ];
+  if (p > 0.5) lines.push(
+    'I feel as heavy as a boulder. These kits need to come out already!',
+    'Kits kicking again… I just want to be a clan cat again!',
+    'I can barely get up from my nest. Don\'t make me move!',
+    '*groans* Any day now… StarClan, please make it soon.',
+  );
+  return pick(lines);
+}
