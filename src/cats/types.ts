@@ -160,6 +160,8 @@ export interface Cat {
   secretMate?: string;
   /** A kit (or young cat) with a crush on another young cat. */
   crush?: string;
+  /** Ate deathberries: hours since (undefined = not poisoned). */
+  poisoned?: number;
   /** This cat already asked you to be mates because of an old crush. */
   crushAsked?: boolean;
   /** A kit allowed outside camp until this game hour (and who said yes). */

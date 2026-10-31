@@ -966,6 +966,7 @@ export class Game {
     const t = this.time;
     const hour = Math.floor(t.hour);
     this.clan.tickHour();
+    this.clan.poisonTick();
     this.weather.tickHour(t.season, this.events.isActive('drought'), this.events.isActive('coldSnap'));
     this.fire.tickHour();
     this.events.tickHour();

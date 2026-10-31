@@ -495,6 +495,29 @@ export class ClanSim {
     }
   }
 
+  /** Deathberries: kits sometimes eat them. Poison hurts every hour until the medicine cat treats it. */
+  poisonTick() {
+    const g = this.game;
+    const kits = this.home().filter((c) => c.stage === 'kit' && !c.isPlayer && c.poisoned === undefined);
+    if (kits.length && !g.time.isNight && simRng.chance(0.02)) {
+      const k = simRng.pick(kits);
+      k.poisoned = 0;
+      g.npcs.agents.get(k.id)?.say('*wobbles* My tummy hurts… I ate some pretty red berries…', 5);
+      g.ui.toast(`⚠ ${displayName(k)} is wobbling and drooling — did ${pronoun(k, 'subj')} eat deathberries?! Get the medicine cat!`, 'danger');
+      this.log(`${displayName(k)} ate deathberries.`, 'clan');
+    }
+    for (const c of this.home()) {
+      if (c.poisoned === undefined || c.isPlayer) continue;
+      c.poisoned++;
+      c.health = Math.max(0, c.health - (c.stage === 'kit' ? 18 : 10));
+      c.sick = Math.max(c.sick, 50);
+      if (c.health <= 0) { c.poisoned = undefined; this.kill(c, 'eating deathberries'); continue; }
+      // the medicine cat notices on their own after a while
+      const med = this.medicine;
+      if (c.poisoned >= 3 && med && med.alive && !med.isPlayer && med.id !== c.id) g.npcs.sendHealer(med, c, false);
+    }
+  }
+
   /** Childhood crushes grow into mates once both cats are grown up. */
   crushesToMates() {
     for (const a of Object.values(this.cats)) {

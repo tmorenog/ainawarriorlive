@@ -790,6 +790,29 @@ export class Interactions {
         if (nm) { clan.usedNames.delete(c.given); c.given = nm; clan.usedNames.add(nm); g.ui.toast(`Your kit is now ${nm}kit!`, 'good'); }
       });
     } });
+    // call the medicine cat to a sick, hurt or poisoned clanmate
+    if (c.role === 'medicine' && !c.isPlayer) {
+      const patients = clan.home().filter((x) => x.id !== c.id && !x.isPlayer && (x.poisoned !== undefined || x.sick > 25 || x.injury > 25))
+        .sort((x, y) => (y.poisoned !== undefined ? 100 : 0) + y.sick + y.injury - ((x.poisoned !== undefined ? 100 : 0) + x.sick + x.injury)).slice(0, 6);
+      if (patients.length) opts.unshift({ label: '🚑 Get help for a sick or hurt cat', hint: `${patients.length} need${patients.length === 1 ? 's' : ''} help`, action: () => {
+        g.ui.choice('Who needs help?', 'Tell the medicine cat who to treat.', [...patients.map((p) => ({
+          label: `${displayName(p)} — ${p.poisoned !== undefined ? '☠ ate deathberries' : p.injury > p.sick ? '🩹 hurt' : '🤒 sick'}`,
+          action: () => {
+            const what = p.poisoned !== undefined ? 'ATE DEATHBERRIES' : p.injury > p.sick ? 'IS HURT' : 'IS SICK';
+            const shout = `${c.given.toUpperCase()}${c.epithet ? c.epithet.toUpperCase() : ''}! ${displayName(p).toUpperCase()} ${what}! CAN YOU HELP?`;
+            g.ui.showBanner(`${displayName(pc)}: "${shout}"`, 4);
+            done();
+            setTimeout(() => {
+              a.say(p.poisoned !== undefined ? 'Deathberries?! Great StarClan — I need yarrow! Show me where!' : p.injury > p.sick ? 'I\'m coming! Grab me some cobweb on the way!' : 'I\'ll grab some herbs. Where are they?', 4);
+              g.ui.showBanner(`${displayName(c)}: ${p.poisoned !== undefined ? 'Deathberries?! Great StarClan — I need yarrow! Show me where!' : 'I\'m coming!'}`, 4);
+              clan.adjust(c, pc, 3);
+              pc.reputation = clamp(pc.reputation + 2, -100, 100);
+              g.npcs.sendHealer(c, p, true);
+            }, 2200);
+          },
+        })), { label: 'Never mind', action: done }]);
+      } });
+    }
     // crushes between young cats
     const youngCat = (x: Cat) => x.stage === 'kit' || x.stage === 'apprentice';
     if (youngCat(pc) && youngCat(c) && !isFamily(c, pc) && pc.crush !== c.id) opts.push({ label: '💕 Tell them you have a crush', hint: 'eep!', action: () => {

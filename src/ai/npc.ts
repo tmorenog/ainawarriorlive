@@ -15,7 +15,7 @@ import type { Fighter } from '../player/combat';
 export type Activity =
   | 'idle' | 'wander' | 'sit' | 'sleep' | 'eat' | 'talk' | 'groom' | 'patrol' | 'hunt' | 'train' | 'play'
   | 'herbs' | 'ceremony' | 'flee' | 'fight' | 'follow' | 'shelter' | 'stranded' | 'gathering' | 'approach' | 'talkPlayer'
-  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'suckle' | 'parentPlay' | 'visitMate' | 'watch' | 'leaving' | 'shield' | 'lead';
+  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'suckle' | 'parentPlay' | 'visitMate' | 'healRun' | 'watch' | 'leaving' | 'shield' | 'lead';
 
 export interface ApproachIntent {
   kind: 'training' | 'play' | 'order' | 'greet' | 'chat' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
@@ -112,6 +112,9 @@ export class NpcAgent implements Fighter {
   mateRest = false;
   /** Game clock time until which a resting queen naps (while her mate grooms her). */
   napUntil = 0;
+  /** Medicine cat: the clanmate they're rushing to treat. */
+  healTarget: string | null = null;
+  healAsked = false;
   /** Your mate grooming you until you fall asleep (then sleeping beside you until you wake). */
   tuckIn = false;
   tuckSlept = false;
@@ -504,6 +507,7 @@ export class NpcManager {
     if (a.activity === 'suckle') { this.suckleThink(a); return; }
     if (a.activity === 'parentPlay') { this.parentPlayThink(a); return; }
     if (a.activity === 'visitMate') { this.visitMateThink(a); return; }
+    if (a.activity === 'healRun') { this.healRunThink(a); return; }
     // in their "with her" half of the cycle, mates who are just idling about head to the nursery
     if (!game.time.isNight && (['idle', 'wander', 'sit', 'groom', 'guard', 'watch'].includes(a.activity) || (a.activity === 'hunt' && !a.carrying)) && !a.patrol && !a.partner && c.mate) {
       const cyc = (game.clock + Math.abs(hashString(c.id)) % 180) % 180;
@@ -708,6 +712,69 @@ export class NpcManager {
     M.lickKitsUntil = game.clock + lickFor;
     M.say('*licks the tiny kits until they are warm and dry*', 5);
     for (const k of agents) { k.pos.set(M.pos.x + simRng.range(-0.4, 0.4), k.pos.y, M.pos.z + simRng.range(-0.4, 0.4)); this.startSuckle(k, M); k.actTimer = lickFor + 20; }
+  }
+
+  /** Send the medicine cat running to treat a clanmate (asked = you called them). */
+  sendHealer(med: Cat, patient: Cat, asked: boolean) {
+    const a = this.agents.get(med.id);
+    if (!a) { this.treatPatient(med, patient); return; }
+    if (a.activity === 'healRun') return;
+    this.endConvo(a);
+    a.activity = 'healRun';
+    a.healTarget = patient.id;
+    a.healAsked = asked;
+    a.actTimer = 90;
+    a.moveSpeed = 3.6;
+    a.target = null;
+    if (!asked) a.say(`${patient.given}${patient.stage === 'kit' ? 'kit' : ''}? Something's wrong — I'm coming!`, 3);
+  }
+
+  private healRunThink(a: NpcAgent) {
+    const game = this.game;
+    const p = game.clan.get(a.healTarget);
+    const pa = p ? this.agents.get(p.id) : undefined;
+    if (!p || !p.alive || a.actTimer <= 0) { a.activity = 'idle'; a.healTarget = null; return; }
+    if (!pa) { this.treatPatient(a.cat, p); a.activity = 'idle'; a.healTarget = null; return; }
+    // the patient stays put while help is coming
+    if (pa.activity !== 'healRun' && !['ceremony', 'flee'].includes(pa.activity)) { pa.target = null; pa.forcedPose = 'lie'; }
+    const d = Math.hypot(a.pos.x - pa.pos.x, a.pos.z - pa.pos.z);
+    if (d > 0.8) { if (!a.target || simRng.chance(0.05)) a.setTarget(pa.pos.x + 0.4, pa.pos.z + 0.3); return; }
+    a.target = null;
+    a.heading = Math.atan2(pa.pos.z - a.pos.z, pa.pos.x - a.pos.x);
+    a.forcedPose = 'groomOther';
+    a.activity = 'idle';
+    a.healTarget = null;
+    this.treatPatient(a.cat, p);
+  }
+
+  /** The actual treatment, with what the healer says. */
+  treatPatient(med: Cat, p: Cat) {
+    const game = this.game;
+    const clan = game.clan;
+    const ma = this.agents.get(med.id), pa = this.agents.get(p.id);
+    const poisoned = p.poisoned !== undefined;
+    const store = clan.herbStore;
+    const herb = (['silverleaf', 'sunpetal', 'bitterroot'] as const).find((k) => store[k] > 0);
+    if (herb) store[herb]--;
+    const strong = !!herb;
+    const lines = poisoned
+      ? ['Eat this yarrow — quickly! It\'ll make you sick it all up.', '*holds them as they retch* That\'s it… get it all out…', 'There. The worst is over. Rest now, little one.']
+      : p.injury > p.sick
+        ? ['Hold still. This poultice will sting a little.', '*presses cobweb onto the wound* There — the bleeding\'s stopped.']
+        : ['Eat these herbs. All of them, even the bitter ones.', 'Rest in my den tonight. You\'ll feel better soon.'];
+    const near = Math.hypot(game.player.pos.x - (pa?.pos.x ?? 0), game.player.pos.z - (pa?.pos.z ?? 0)) < 25;
+    lines.forEach((l, i) => setTimeout(() => { ma?.say(l, 3.5); if (near) game.ui.showBanner(`${displayName(med)}: ${l}`, 3.5); }, i * 3600));
+    setTimeout(() => {
+      if (!p.alive) return;
+      if (poisoned) p.poisoned = undefined;
+      p.sick = Math.max(0, p.sick - (strong ? 60 : 30));
+      p.injury = Math.max(0, p.injury - (strong ? 50 : 25));
+      p.health = Math.min(p.maxHealth, p.health + (strong ? 30 : 15));
+      clan.adjust(p, med, 8, { text: `${med.given} saved me when I was ${poisoned ? 'poisoned' : 'sick'}.`, weight: 4 });
+      if (pa) { pa.forcedPose = null; pa.say(poisoned ? '*weakly* Th-thank you… I\'ll never eat red berries again!' : '*sighs* Thank you… I feel better already.', 3.5); }
+      if (ma) ma.forcedPose = null;
+      if (near) game.ui.toast(`🌿 ${displayName(med)} treated ${displayName(p)}${strong ? '' : ' — but the herb store is empty, so it only helped a little'}.`, 'good');
+    }, lines.length * 3600);
   }
 
   /** A tom visiting his mate in the nursery: sits by her, grooms her, chats, then leaves. */
