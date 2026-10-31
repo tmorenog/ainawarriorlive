@@ -1045,7 +1045,7 @@ export class ClanSim {
       for (const b of adults) {
         if (a === b || b.mate || a.isPlayer || b.isPlayer || isFamily(a, b)) continue;
         const ra = this.rel(a, b), rb = this.rel(b, a);
-        if (ra.romance > 45 && rb.romance > 38 && ra.opinion > 35 && rb.opinion > 30) {
+        if (ra.romance > 38 && rb.romance > 32 && ra.opinion > 30 && rb.opinion > 25) {
           a.mate = b.id;
           b.mate = a.id;
           this.matesFormed(a, b);
@@ -1063,7 +1063,7 @@ export class ClanSim {
       if (!m || !m.alive || m.sex !== 'tom') continue;
       const young = c.kits.some((k) => (this.get(k)?.age ?? 99) < 6);
       if (young) continue;
-      let p = 0.09 * (this.game.time.season === 'winter' ? 0.5 : 1) * (size > 34 ? 0.03 : size > 29 ? 0.35 : size > 24 ? 0.8 : size < 18 ? 2.2 : 1.3) * (this.food < size * 0.5 ? 0.35 : 1);
+      let p = 0.22 * (this.game.time.season === 'winter' ? 0.6 : 1) * (size > 40 ? 0.2 : size > 34 ? 0.45 : size > 29 ? 0.75 : size < 18 ? 2 : 1.2) * (this.food < size * 0.5 ? 0.5 : 1);
       if (c.isPlayer || m.isPlayer) p *= 1.5;
       if (simRng.chance(p)) {
         c.expectingUntil = this.game.time.day + 2;

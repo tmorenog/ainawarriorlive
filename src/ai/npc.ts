@@ -15,7 +15,7 @@ import type { Fighter } from '../player/combat';
 export type Activity =
   | 'idle' | 'wander' | 'sit' | 'sleep' | 'eat' | 'talk' | 'groom' | 'patrol' | 'hunt' | 'train' | 'play'
   | 'herbs' | 'ceremony' | 'flee' | 'fight' | 'follow' | 'shelter' | 'stranded' | 'gathering' | 'approach' | 'talkPlayer'
-  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'suckle' | 'parentPlay' | 'watch' | 'leaving' | 'shield' | 'lead';
+  | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'suckle' | 'parentPlay' | 'visitMate' | 'watch' | 'leaving' | 'shield' | 'lead';
 
 export interface ApproachIntent {
   kind: 'training' | 'play' | 'order' | 'greet' | 'chat' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
@@ -356,10 +356,10 @@ export class NpcManager {
   }
 
   /** Where a tom lies at night beside his mate in the nursery (and the spot he faces), or null. */
-  private mateNurserySpot(a: NpcAgent): { x: number; z: number; fx: number; fz: number } | null {
+  private mateNurserySpot(a: NpcAgent, day = false): { x: number; z: number; fx: number; fz: number } | null {
     const game = this.game;
     const c = a.cat;
-    if (c.sex !== 'tom' || !c.mate || c.clan !== 'home' || c.exiled || c.stage === 'kit' || c.stage === 'apprentice' || !game.time.isNight) return null;
+    if (c.sex !== 'tom' || !c.mate || c.clan !== 'home' || c.exiled || c.stage === 'kit' || c.stage === 'apprentice' || (!day && !game.time.isNight)) return null;
     const m = game.clan.get(c.mate);
     if (!m || !m.alive || m.exiled || m.sex !== 'she' || m.mate !== c.id) return null;
     const n = game.camp.dens.nursery;
@@ -466,6 +466,7 @@ export class NpcManager {
     a.forcedPose = null;
     if (a.activity === 'suckle') { this.suckleThink(a); return; }
     if (a.activity === 'parentPlay') { this.parentPlayThink(a); return; }
+    if (a.activity === 'visitMate') { this.visitMateThink(a); return; }
     if (this.ceremonyUntil > game.clock && a.activity === 'ceremony') {
       if (!a.target) {
         const hr = game.camp.highRock;
@@ -528,6 +529,11 @@ export class NpcManager {
         this.goToBed(a);
         return;
       }
+    }
+    // toms visit their mate in the nursery now and then during the day (then go back to their duties)
+    if (c.sex === 'tom' && !t.isNight && simRng.chance(0.3) && this.mateNurserySpot(a, true)) {
+      a.activity = 'visitMate'; a.actTimer = simRng.range(25, 50); a.moveSpeed = 1.5; a.target = null;
+      return;
     }
     // shelter from bad weather
     if ((w.p.rain > 0.6 || w.p.snow > 0.6 || w.p.storm > 0.5) && simRng.chance(0.7)) {
@@ -636,6 +642,27 @@ export class NpcManager {
     a.activity = 'wander';
     a.actTimer = simRng.range(4, 10);
     a.setTarget(Math.cos(ang) * rr, Math.sin(ang) * rr * 0.9 + 1);
+  }
+
+  /** A tom visiting his mate in the nursery: sits by her, grooms her, chats, then leaves. */
+  private visitMateThink(a: NpcAgent) {
+    const game = this.game;
+    const spot = this.mateNurserySpot(a, true);
+    if (!spot || a.actTimer <= 0) {
+      if (spot && simRng.chance(0.5)) a.say(simRng.pick(['I\'ll bring you some fresh-kill later.', 'Rest well, my love.', 'Back to my duties — I\'ll visit again soon!']), 3);
+      a.activity = 'idle'; a.actTimer = 0;
+      return;
+    }
+    if (Math.hypot(a.pos.x - spot.x, a.pos.z - spot.z) > 0.3) {
+      if (!a.target || Math.hypot(a.target.x - spot.x, a.target.z - spot.z) > 0.15) a.setTarget(spot.x, spot.z);
+      return;
+    }
+    a.target = null;
+    a.heading = Math.atan2(spot.fz - a.pos.z, spot.fx - a.pos.x);
+    const beat = Math.floor((game.clock + a.cat.age) / 8) % 3;
+    a.forcedPose = (['groomOther', 'loaf', 'sit'] as Pose[])[beat];
+    const m = game.clan.get(a.cat.mate);
+    if (m && simRng.chance(0.004)) a.say(simRng.pick([`How are you feeling, ${m.given}?`, 'Do you need anything? Water? A mouse?', 'Our kits are lucky to have you.', '*purrs and presses close*']), 3);
   }
 
   /** The kit's mother, if she's resting in the nursery right now. */
