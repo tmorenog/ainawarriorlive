@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { Game } from '../game';
 import { CatModel } from '../cats/model';
-import { Cat, LifeStage, bellyFor } from '../cats/types';
+import { Cat, LifeStage, bellyFor, isExpecting } from '../cats/types';
 import type { Fighter } from './combat';
 import { angleDiff, clamp, damp, dist2 } from '../core/math';
 import { simRng } from '../core/rng';
@@ -141,7 +141,7 @@ export class Player implements Fighter {
   get maxHp() { return this.cat.maxHealth; }
   get alive() { return !!this.cat && this.cat.alive; }
   get stageK() { return this.cat.stage === 'kit' ? 0.35 : this.cat.stage === 'apprentice' ? 0.7 : this.cat.stage === 'elder' ? 0.8 : 1; }
-  get power() { return (7 + this.cat.strength * 0.13 + this.cat.skills.fighting * 0.15) * Math.max(0.55, this.stageK); }
+  get power() { return (7 + this.cat.strength * 0.13 + this.cat.skills.fighting * 0.15) * Math.max(0.55, this.stageK) * (isExpecting(this.cat) ? 0.55 : 1); }
   get defense() { return 0.2 + this.cat.skills.fighting / 400; }
   get isDodging() { return this.dodgeT > 0; }
   get scale() { return this.model.scale; }
@@ -246,6 +246,8 @@ export class Player implements Fighter {
     else if (this.crouching && this.gait > 1) target = GAITS[0].speed;
     else target = GAITS[this.gait].speed;
     target *= stageSpeed;
+    // expecting queens are heavy and slow
+    if (isExpecting(cat)) target *= 0.65;
     // deep snow: paws sink in and every step is slow and squishy
     const snowDeep = game.weather.snowCover > 0.2 && Math.hypot(this.pos.x, this.pos.z) > 17;
     if (snowDeep) {

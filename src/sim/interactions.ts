@@ -6,7 +6,7 @@ import { clanTitle } from '../lore';
 import type { NpcAgent, ApproachIntent } from '../ai/npc';
 import type { PreyKind } from '../wildlife/models';
 import { PREY } from '../wildlife/prey';
-import { Cat, displayName, pronoun, roleLabel } from '../cats/types';
+import { Cat, displayName, isExpecting, pronoun, roleLabel } from '../cats/types';
 import { adviceLine, greetPlayer, isFamily, relLabel } from './social';
 import { FLOWER_INFO, FlowerKind, HERB_INFO, HerbKind, Interactable, TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { simRng } from '../core/rng';
@@ -890,6 +890,21 @@ export class Interactions {
     const lines: string[] = [];
     const mem = c.memories.filter((m) => m.about === pc.id).slice(-1)[0];
     if (mem && simRng.chance(0.5)) lines.push(mem.weight > 0 ? `I haven't forgotten: ${mem.text.replace(pc.given, 'you')}` : `I remember what happened. ${mem.text.replace(pc.given, 'You')}`);
+    if (isExpecting(c) && simRng.chance(0.8)) {
+      const m = clan.get(c.mate);
+      const left = c.expectingUntil !== null ? c.expectingUntil - g.time.day : 0;
+      const kitLines = [
+        '*rests a paw on her round belly* I can feel them kicking! They\'re going to be strong, I just know it.',
+        left <= 1 ? 'It won\'t be long now… the medicine cat says any day.' : `Only ${left} more moons until my kits come.`,
+        'I\'m so slow these days. I can barely chase a mouse, let alone fight!',
+        'I keep thinking of names for my kits. Do you have any ideas?',
+        m ? `${displayName(m)} brings me fresh-kill every day. I think they\'re more nervous than I am!` : 'I wonder if my kits will look like me.',
+        'The nursery moss is so soft. I don\'t want to leave it — my kits are heavy!',
+        'I hope they\'re healthy… StarClan, watch over them.',
+        'Will you play with my kits when they\'re born? They\'ll need clanmates like you.',
+      ];
+      return simRng.pick(kitLines);
+    }
     if (c.mate) { const m = clan.get(c.mate); if (m) lines.push(`${displayName(m)} and I watched the stars last night.`); }
     if (c.apprentice) { const ap = clan.get(c.apprentice); if (ap) lines.push(`${ap.given} is learning quickly. ${pronoun(ap, 'subj').replace(/^./, (s) => s.toUpperCase())} might make a fine warrior.`); }
     if (c.sick > 30) lines.push('*cough* This sickness has me weak as a newborn kit.');

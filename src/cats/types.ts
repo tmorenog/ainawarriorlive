@@ -229,3 +229,6 @@ export function bellyFor(c: Cat): number {
   if (c.expectingUntil !== null || c.labour) return 1;
   return c.mate ? 0.5 : 0;
 }
+
+/** Expecting queens move slower and fight weaker. */
+export function isExpecting(c: Cat): boolean { return c.sex === 'she' && (c.expectingUntil !== null || !!c.labour); }
