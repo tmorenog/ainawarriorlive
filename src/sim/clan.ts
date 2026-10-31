@@ -590,12 +590,11 @@ export class ClanSim {
     const she = pc.sex === 'she' ? pc : mate;
     if (she.stage === 'kit' || she.stage === 'apprentice' || she.expectingUntil !== null || she.labour) return;
     const who = she.isPlayer ? 'You' : displayName(she);
-    const young = she.kits.some((k) => { const kc = this.get(k); return !!kc && kc.alive && kc.age < 6; });
-    if (young) { if (announce) this.game.ui.toast(`🍼 ${who} still ${she.isPlayer ? 'have' : 'has'} young kits to raise. New kits can come once they are 6 moons old.`, 'info'); return; }
     const day = this.game.time.day;
-    // a rest between litters: the next litter only comes 12 moons after the last one was born
+    // a rest between litters: the next litter only comes 3 moons after the last one was born
     const last = she.lastLitterDay ?? Math.max(-999, ...she.kits.map((k) => this.get(k)?.bornDay ?? -999));
-    if (day - last < 12) { if (announce) this.game.ui.toast(`🍼 ${who} had kits not long ago. New kits can come in ${12 - (day - last)} more moon${12 - (day - last) === 1 ? '' : 's'}.`, 'info'); return; }
+    const gap = 3;
+    if (day - last < gap) { if (announce) this.game.ui.toast(`🍼 ${who} had kits not long ago. New kits can come in ${gap - (day - last)} more moon${gap - (day - last) === 1 ? '' : 's'}.`, 'info'); return; }
     she.nurseryDay = undefined;
     she.expectingUntil = day + 2;
     this.log(`${displayName(she)} moved into the nursery — she is expecting kits.`, 'clan');

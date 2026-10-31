@@ -792,7 +792,7 @@ export class Interactions {
     if (pc.mate === c.id && c.mate === pc.id && pc.stage === 'warrior' && c.stage === 'warrior' && pc.sex !== c.sex) {
       const she = pc.sex === 'she' ? pc : c;
       const lastLitter = she.lastLitterDay ?? Math.max(-999, ...she.kits.map((k) => clan.get(k)?.bornDay ?? -999));
-      const busyKits = she.expectingUntil !== null || she.kits.some((k) => (clan.get(k)?.age ?? 99) < 6) || g.time.day - lastLitter < 12;
+      const busyKits = she.expectingUntil !== null || g.time.day - lastLitter < 3;
       if (!busyKits) opts.push({ label: 'Ask to have kits together', hint: 'they\'d arrive in two moons', action: () => {
         she.expectingUntil = g.time.day + 2;
         clan.adjust(c, pc, 6, { text: `${pc.given} and I are going to have kits!`, weight: 8 });
@@ -802,10 +802,8 @@ export class Interactions {
         g.notify(she === pc ? 'You are expecting kits! They will arrive in two moons. You will get to name them.' : `${displayName(c)} is expecting your kits! You will get to name them.`);
       } });
       else opts.push({ label: 'When will we have kits?', action: () => {
-        const youngK = she.kits.some((k) => (clan.get(k)?.age ?? 99) < 6);
-        const wait = Math.max(0, 12 - (g.time.day - lastLitter));
+        const wait = Math.max(0, 3 - (g.time.day - lastLitter));
         const text = she.expectingUntil !== null ? `${she === pc ? 'You are' : 'I am'} already expecting! The kits will come in ${Math.max(0, she.expectingUntil - g.time.day)} moon${she.expectingUntil - g.time.day === 1 ? '' : 's'}.`
-          : youngK ? 'We still have young kits to raise. When they are 6 moons old, we can have more.'
           : `We had kits not long ago. In ${wait} more moon${wait === 1 ? '' : 's'} we can have more.`;
         g.ui.dialog({ speaker: c, text, options: [{ label: '*purr*', action: done }], onClose: done });
       } });
