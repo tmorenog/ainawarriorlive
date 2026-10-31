@@ -580,15 +580,29 @@ export class ClanSim {
   }
 
   /** You and your mate: the she-cat goes to the nursery (expecting) whenever she has no young kits. */
+  /** A grown cat (medicine cats count even if they were never given a warrior ceremony). */
+  grownUp(c: Cat): boolean {
+    if (c.stage === 'kit') return false;
+    if (c.stage === 'apprentice') return c.role === 'medicine' && c.age >= 12;
+    return true;
+  }
+
+  /** Who carries the kits for you and your mate: the she-cat (for two she-cats, your mate). */
+  mateMother(pc: Cat, mate: Cat): Cat | null {
+    if (pc.sex !== mate.sex) return pc.sex === 'she' ? pc : mate;
+    return pc.sex === 'she' ? mate : null;
+  }
+
   playerMateNursery(announce = false) {
     const pc = this.player;
     if (!pc || !pc.alive || pc.exiled) return;
     const mate = this.get(pc.mate) ?? Object.values(this.cats).find((x) => x.mate === pc.id && x.alive);
-    if (!mate || !mate.alive || mate.exiled || mate.sex === pc.sex) return;
+    if (!mate || !mate.alive || mate.exiled) return;
     if (pc.mate !== mate.id) pc.mate = mate.id;
     if (mate.mate !== pc.id) mate.mate = pc.id;
-    const she = pc.sex === 'she' ? pc : mate;
-    if (she.stage === 'kit' || she.stage === 'apprentice' || she.expectingUntil !== null || she.labour) return;
+    const she = this.mateMother(pc, mate);
+    if (!she) { if (announce) this.game.ui.toast('💕 Two toms can\'t have kits of their own — but the nursery kits would love you both!', 'info'); return; }
+    if (!this.grownUp(pc) || !this.grownUp(mate) || she.expectingUntil !== null || she.labour) return;
     const who = she.isPlayer ? 'You' : displayName(she);
     const day = this.game.time.day;
     // a rest between litters: the next litter only comes 3 moons after the last one was born
@@ -964,7 +978,7 @@ export class ClanSim {
       if (this.medicineId === c.id) {
         this.medicineId = null;
         const ap = this.home().find((x) => x.role === 'medicine' && x.alive) ?? this.home().find((x) => x.role === 'medicineApprentice');
-        if (ap) { ap.role = 'medicine'; this.medicineId = ap.id; this.log(`${displayName(ap)} is now the clan's healer.`, 'politics'); }
+        if (ap) { ap.role = 'medicine'; if (ap.stage === 'apprentice') ap.stage = 'warrior'; this.medicineId = ap.id; this.log(`${displayName(ap)} is now the clan's healer.`, 'politics'); }
       }
       if (this.leaderId === c.id) this.leaderSteppedDown(c, 'died');
       if (!c.isPlayer) this.game.notify(`${name} has died (${cause}).`, 'death');

@@ -789,8 +789,9 @@ export class Interactions {
       });
     } });
     // have kits with your mate
-    if (pc.mate === c.id && c.mate === pc.id && pc.stage === 'warrior' && c.stage === 'warrior' && pc.sex !== c.sex) {
-      const she = pc.sex === 'she' ? pc : c;
+    const mother = (pc.mate === c.id || c.mate === pc.id) ? clan.mateMother(pc, c) : null;
+    if (mother && clan.grownUp(pc) && clan.grownUp(c)) {
+      const she = mother;
       const lastLitter = she.lastLitterDay ?? Math.max(-999, ...she.kits.map((k) => clan.get(k)?.bornDay ?? -999));
       const busyKits = she.expectingUntil !== null || g.time.day - lastLitter < 3;
       if (!busyKits) opts.push({ label: 'Ask to have kits together', hint: 'they\'d arrive in two moons', action: () => {

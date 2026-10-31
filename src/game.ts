@@ -514,6 +514,11 @@ export class Game {
       }
       if (bornInto) { this.bornIntoClan(bornInto); return; }
       if (c.player.lifestyle === 'kittypet') this.twolegs.home.setName(c.player.given);
+      // medicine cats promoted straight from apprentice used to stay 'apprentices' forever
+      let grew = false;
+      for (const cat of Object.values(c.cats)) if (cat.role === 'medicine' && cat.stage === 'apprentice' && cat.age >= 12) { cat.stage = 'warrior'; grew = grew || cat.isPlayer; }
+      if (grew) this.player.refreshStage();
+      this.npcs.refreshModels();
       c.nurseryTick();
       if (this.twolegs.inFacility(this.player.pos.x, this.player.pos.z)) setTimeout(() => this.twolegs.resumePound(), 400);
       // saves from before the age reset existed get it once
