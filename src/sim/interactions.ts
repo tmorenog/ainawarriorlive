@@ -6,7 +6,7 @@ import { clanTitle } from '../lore';
 import type { NpcAgent, ApproachIntent } from '../ai/npc';
 import type { PreyKind } from '../wildlife/models';
 import { PREY } from '../wildlife/prey';
-import { Cat, displayName, isExpecting, pronoun, queenComplaint, roleLabel } from '../cats/types';
+import { Cat, displayName, isExpecting, isQueen, pronoun, queenComplaint, roleLabel } from '../cats/types';
 import { adviceLine, greetPlayer, isFamily, relLabel } from './social';
 import { FLOWER_INFO, FlowerKind, HERB_INFO, HerbKind, Interactable, TREASURE_INFO, TreasureKind } from '../world/chunks';
 import { simRng } from '../core/rng';
@@ -789,7 +789,7 @@ export class Interactions {
       });
     } });
     // your mate resting in the nursery: groom her while she naps, or sleep beside her
-    const queenMate = c.sex === 'she' && (c.mate === pc.id || pc.mate === c.id) && (c.expectingUntil !== null || !!c.labour || c.kits.some((k) => (clan.get(k)?.age ?? 99) < 6));
+    const queenMate = c.sex === 'she' && (c.mate === pc.id || pc.mate === c.id) && isQueen(c, (id) => clan.get(id));
     if (queenMate) {
       const besideHer = () => {
         const n = g.camp.dens.nursery;

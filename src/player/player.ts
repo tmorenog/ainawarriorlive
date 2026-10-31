@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { Game } from '../game';
 import { CatModel } from '../cats/model';
-import { Cat, LifeStage, bellyFor, queenPowerK, queenSpeedK } from '../cats/types';
+import { Cat, LifeStage, bellyFor, isQueen, queenPowerK, queenSpeedK } from '../cats/types';
 import type { Fighter } from './combat';
 import { angleDiff, clamp, damp, dist2 } from '../core/math';
 import { simRng } from '../core/rng';
@@ -578,7 +578,7 @@ export class Player implements Fighter {
     }
     if (game.clan.kitPunishPending && cat.stage === 'kit' && !this.busy && !permitted) game.npcs.summonForKitPunishment();
     // a queen stays with her kits (and unborn kits) until they're six moons old
-    const queen = cat.sex === 'she' && (cat.expectingUntil !== null || cat.labour || cat.kits.some((k) => { const kc = game.clan.get(k); return !!kc && kc.alive && kc.age < 6; }));
+    const queen = isQueen(cat, (id) => game.clan.get(id));
     if (queen && Math.hypot(x, z) > 16) {
       const d0 = Math.hypot(x, z);
       this.pos.x = (x / d0) * 15.2; this.pos.z = (z / d0) * 15.2;

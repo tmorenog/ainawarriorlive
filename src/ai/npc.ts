@@ -3,7 +3,7 @@
 // personality, talks to other cats, hunts, patrols, trains and sleeps.
 import * as THREE from 'three';
 import type { Game } from '../game';
-import { Cat, bellyFor, displayName, isExpecting, queenPowerK, queenSpeedK, queenComplaint, expectingProgress } from '../cats/types';
+import { Cat, bellyFor, displayName, isExpecting, isQueen, queenPowerK, queenSpeedK, queenComplaint, expectingProgress } from '../cats/types';
 import { CatModel, Mood, Pose } from '../cats/model';
 import { simRng, hashString } from '../core/rng';
 import { angleDiff, clamp, dist2 } from '../core/math';
@@ -277,9 +277,7 @@ export class NpcManager {
     if (c.role === 'leader') return 'leader';
     if (c.role === 'medicine' || c.role === 'medicineApprentice') return 'medicine';
     if (c.stage === 'kit') return 'nursery';
-    if (c.expectingUntil !== null || c.kits.some((k) => (this.game.clan.get(k)?.age ?? 99) < 6 && this.game.clan.get(k)?.alive)) {
-      if (c.sex === 'she') return 'nursery';
-    }
+    if (isQueen(c, (id) => this.game.clan.get(id))) return 'nursery';
     if (c.stage === 'apprentice') return 'apprentices';
     if (c.stage === 'elder') return 'elders';
     return 'warriors';
@@ -362,7 +360,7 @@ export class NpcManager {
     const n = game.camp.dens.nursery;
     let qx: number, qz: number;
     if (m.isPlayer) {
-      const queen = m.expectingUntil !== null || !!m.labour || m.kits.some((k) => (game.clan.get(k)?.age ?? 99) < 6);
+      const queen = isQueen(m, (id) => game.clan.get(id));
       const p = game.player.pos;
       if (!queen || Math.hypot(p.x - n.x, p.z - n.z) > 4.5) return null;
       qx = p.x; qz = p.z;
@@ -391,7 +389,7 @@ export class NpcManager {
     if (a.activity === 'fight') { this.fightThink(a, dt); return; }
     if (a.activity === 'stranded') { a.mood = 'afraid'; if (simRng.chance(dt * 0.25)) a.say(simRng.pick(['Help! Help me!', 'The water is rising!', 'Someone, please!']), 3); return; }
     // queens rest in the nursery until their kits are six moons old
-    const queen = c.clan === 'home' && c.sex === 'she' && !c.exiled && (c.expectingUntil !== null || !!c.labour || c.kits.some((k) => { const kc = game.clan.get(k); return !!kc && kc.alive && kc.age < 6; }));
+    const queen = c.clan === 'home' && !c.exiled && isQueen(c, (id) => game.clan.get(id));
     // bedtime for queens: from dusk to dawn they stop chatting and go to their nest to sleep
     const qh = game.time.hour;
     const queenBed = queen && (qh >= 20 || qh < 6);

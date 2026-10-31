@@ -275,3 +275,10 @@ export function queenComplaint(c: Cat, pick: <T>(a: T[]) => T, mate?: Cat | null
   );
   return pick(lines);
 }
+
+/** A queen: a she-cat expecting, or nursing young kits she gave birth to herself (not her mate's). */
+export function isQueen(c: Cat, get: (id: string) => Cat | undefined): boolean {
+  if (c.sex !== 'she') return false;
+  if (c.expectingUntil !== null || c.labour) return true;
+  return c.kits.some((k) => { const kc = get(k); return !!kc && kc.alive && kc.age < 6 && (kc.parents?.[0] ?? c.id) === c.id; });
+}
