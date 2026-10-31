@@ -109,6 +109,7 @@ export class NpcAgent implements Fighter {
   /** A leap onto (or off) something high, like the Highrock. */
   /** Resting in the nursery as a queen. */
   queenRest = false;
+  mateRest = false;
   perch: { x: number; z: number; y: number | null; stay: boolean; t: number; from: THREE.Vector3 } | null = null;
   jumpTo(x: number, z: number, y: number | null, stay: boolean) {
     this.perch = { x, z, y, stay, t: 0, from: this.pos.clone() };
@@ -346,6 +347,32 @@ export class NpcManager {
     }
   }
 
+  /** Where a tom lies at night beside his mate in the nursery (and the spot he faces), or null. */
+  private mateNurserySpot(a: NpcAgent): { x: number; z: number; fx: number; fz: number } | null {
+    const game = this.game;
+    const c = a.cat;
+    if (c.sex !== 'tom' || !c.mate || c.clan !== 'home' || c.exiled || c.stage === 'kit' || c.stage === 'apprentice' || !game.time.isNight) return null;
+    const m = game.clan.get(c.mate);
+    if (!m || !m.alive || m.exiled || m.sex !== 'she' || m.mate !== c.id) return null;
+    const n = game.camp.dens.nursery;
+    let qx: number, qz: number;
+    if (m.isPlayer) {
+      const queen = m.expectingUntil !== null || !!m.labour || m.kits.some((k) => (game.clan.get(k)?.age ?? 99) < 6);
+      const p = game.player.pos;
+      if (!queen || Math.hypot(p.x - n.x, p.z - n.z) > 4.5) return null;
+      qx = p.x; qz = p.z;
+    } else {
+      const qa = this.agents.get(m.id);
+      if (!qa || !qa.queenRest) return null;
+      qx = qa.pos.x; qz = qa.pos.z;
+    }
+    // lie on the side of her that faces the middle of the den
+    let dx = n.x - qx, dz = n.z - qz;
+    const d = Math.hypot(dx, dz) || 1;
+    dx /= d; dz /= d;
+    return { x: qx + dx * 0.55, z: qz + dz * 0.55, fx: qx, fz: qz };
+  }
+
   // ------------------------------------------------------------------ brains
   private think(a: NpcAgent, dt: number, dPlayer: number) {
     const game = this.game;
@@ -380,6 +407,23 @@ export class NpcManager {
         a.say(simRng.pick(['*shifts her heavy belly* Oof… these kits are getting big!', 'I think one just kicked!', 'Not long now until my kits arrive.', 'I\'m too slow to even catch a beetle these days.', 'I wonder what my kits will look like…', 'I can\'t wait to meet my kits.']), 4);
       return;
     } else if (a.queenRest) { a.queenRest = false; a.forcedPose = null; }
+    // a tom whose mate is resting in the nursery joins her at night: he grooms her while she sleeps, then curls up beside her
+    const spot = this.mateNurserySpot(a);
+    if (spot && !['ceremony', 'flee', 'talkPlayer', 'approach', 'talk', 'leaving', 'follow', 'lead', 'shield', 'patrol'].includes(a.activity) && !a.patrol) {
+      const dn = Math.hypot(a.pos.x - spot.x, a.pos.z - spot.z);
+      if (dn > 0.2) {
+        if (!a.target || Math.hypot(a.target.x - spot.x, a.target.z - spot.z) > 0.15) { a.activity = 'idle'; a.forcedPose = null; a.moveSpeed = 1.5; a.setTarget(spot.x, spot.z); }
+        a.mateRest = true;
+        return;
+      }
+      a.target = null;
+      a.activity = 'idle';
+      a.mateRest = true;
+      a.heading = Math.atan2(spot.fz - a.pos.z, spot.fx - a.pos.x);
+      const h = game.time.hour;
+      a.forcedPose = h > 20.5 && h < 23.5 ? 'groom' : 'sleep';
+      return;
+    } else if (a.mateRest) { a.mateRest = false; a.forcedPose = null; }
     if (a.activity === 'follow') { this.followThink(a); return; }
     if (a.activity === 'shield') { this.shieldThink(a); return; }
     if (a.activity === 'lead') { this.leadThink(a, dt); return; }
