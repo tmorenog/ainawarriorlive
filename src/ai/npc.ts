@@ -504,6 +504,11 @@ export class NpcManager {
     if (a.activity === 'suckle') { this.suckleThink(a); return; }
     if (a.activity === 'parentPlay') { this.parentPlayThink(a); return; }
     if (a.activity === 'visitMate') { this.visitMateThink(a); return; }
+    // in their "with her" half of the cycle, mates who are just idling about head to the nursery
+    if (!game.time.isNight && (['idle', 'wander', 'sit', 'groom', 'guard', 'watch'].includes(a.activity) || (a.activity === 'hunt' && !a.carrying)) && !a.patrol && !a.partner && c.mate) {
+      const cyc = (game.clock + Math.abs(hashString(c.id)) % 180) % 180;
+      if (cyc < 110 && this.mateNurserySpot(a, true)) { a.activity = 'visitMate'; a.actTimer = 110 - cyc; a.moveSpeed = 1.6; a.target = null; return; }
+    }
     if (this.ceremonyUntil > game.clock && a.activity === 'ceremony') {
       if (!a.target) {
         const hr = game.camp.highRock;
@@ -567,9 +572,11 @@ export class NpcManager {
         return;
       }
     }
-    // toms visit their mate in the nursery now and then during the day (then go back to their duties)
-    if (c.sex === 'tom' && !t.isNight && simRng.chance(0.3) && this.mateNurserySpot(a, true)) {
-      a.activity = 'visitMate'; a.actTimer = simRng.range(25, 50); a.moveSpeed = 1.5; a.target = null;
+    // mates stay with their queen in the nursery about half the day (then go back to their duties)
+    // half of every few minutes is spent with her (each couple on its own rhythm)
+    const cyc = (game.clock + Math.abs(hashString(c.id)) % 180) % 180;
+    if (!t.isNight && cyc < 110 && this.mateNurserySpot(a, true)) {
+      a.activity = 'visitMate'; a.actTimer = 110 - cyc; a.moveSpeed = 1.6; a.target = null;
       return;
     }
     // shelter from bad weather
