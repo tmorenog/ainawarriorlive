@@ -574,6 +574,8 @@ export class ClanSim {
   matesFormed(a: Cat, b: Cat) {
     if (a.sex === b.sex) return;
     const she = a.sex === 'she' ? a : b;
+    // your own mate: expecting kits right away, straight to the nursery
+    if (a.isPlayer || b.isPlayer) { this.playerMateNursery(); if (she.expectingUntil !== null) return; }
     she.nurseryDay = this.game.time.day + 1;
   }
 
@@ -597,9 +599,9 @@ export class ClanSim {
     she.expectingUntil = day + 2;
     this.log(`${displayName(she)} moved into the nursery — she is expecting kits.`, 'clan');
     if (she.isPlayer) {
-      this.game.ui.toast('🍼 You\'re expecting kits! Rest in the nursery — they\'ll arrive in two moons.', 'good');
+      this.game.notify(`🍼 You are expecting ${displayName(mate)}'s kits! Go rest in the nursery — they'll arrive in two moons.`);
     } else {
-      this.game.ui.toast(`🍼 Your mate ${displayName(she)} is expecting your kits and has moved into the nursery to rest.`, 'good');
+      this.game.notify(`🍼 Your mate ${displayName(she)} is expecting kits! She is going to the nursery to rest.`);
       const ag = this.game.npcs.agents.get(she.id);
       if (ag) ag.say('I\'m going to rest in the nursery now. Come visit me!', 4);
     }
