@@ -96,6 +96,7 @@ export class Player implements Fighter {
   }
   /** Seconds spent somewhere forbidden — a grace period lets honest mistakes be undone. */
   private graceT = { confine: 0, trespass: 0, danger: 0 };
+  private queenWarn = -99;
   private warned = { border: false, danger: false, confine: false, kit: false, permit: false };
   private checkT = 0;
   sniffCd = 0;
@@ -566,6 +567,17 @@ export class Player implements Fighter {
       else if (d < 12) this.warned.kit = false;
     }
     if (game.clan.kitPunishPending && cat.stage === 'kit' && !this.busy && !permitted) game.npcs.summonForKitPunishment();
+    // a queen stays with her kits (and unborn kits) until they're six moons old
+    const queen = cat.sex === 'she' && (cat.expectingUntil !== null || cat.labour || cat.kits.some((k) => { const kc = game.clan.get(k); return !!kc && kc.alive && kc.age < 6; }));
+    if (queen && Math.hypot(x, z) > 16) {
+      const d0 = Math.hypot(x, z);
+      this.pos.x = (x / d0) * 15.2; this.pos.z = (z / d0) * 15.2;
+      this.vel.set(0, 0, 0);
+      if (game.clock - this.queenWarn > 8) {
+        this.queenWarn = game.clock;
+        game.ui.toast(cat.expectingUntil !== null ? '🍼 You\'re expecting kits — queens stay in the nursery until their kits are born and grown. Back you go!' : '🍼 Your kits need you! Queens stay with their kits until they are six moons old.', 'info');
+      }
+    }
     // confinement
     const confined = cat.confinedUntil !== null && cat.confinedUntil > game.time.day;
     const campD = Math.hypot(x, z);

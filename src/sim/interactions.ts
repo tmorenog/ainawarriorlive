@@ -774,6 +774,20 @@ export class Interactions {
     if ((pc.role === 'medicine' || pc.role === 'medicineApprentice') && (hurt(c) || (c.stage === 'elder' && this.healedDay.get(c.id) !== g.time.day)) && c.id !== pc.id) {
       opts.push({ label: `Treat ${pronoun(c, 'poss')} ${c.sick > c.injury ? 'sickness' : 'wounds'}`, action: () => this.treatCat(a, done) });
     }
+    // a queen in labour: the medicine cat helps her
+    if (c.labour && (pc.role === 'medicine' || pc.role === 'medicineApprentice')) opts.unshift({ label: '🍼 Help her give birth', action: () => { done(); clan.helpBirth(c); } });
+    // name (or rename) your own young kits
+    if (c.stage === 'kit' && c.age < 3 && c.parents.includes(pc.id)) opts.push({ label: `Give ${pronoun(c, 'obj')} a new name`, hint: `${c.given}kit`, action: () => {
+      done();
+      const pool = ['Moss', 'Bramble', 'Fern', 'Sky', 'Pebble', 'Ember', 'Willow', 'Hazel', 'Robin', 'Ivy', 'Thistle', 'Dove'];
+      const opts2 = new Set<string>([c.given]);
+      while (opts2.size < 3) opts2.add(simRng.pick(pool));
+      g.ui.nameChoice('Name your kit', `What should ${c.given}kit be called? (They'll be ___kit, then ___paw.)`, [...opts2].map((o) => o + 'kit'), (picked) => {
+        let nm = picked.replace(/kit$/i, '').trim();
+        nm = nm.charAt(0).toUpperCase() + nm.slice(1).toLowerCase();
+        if (nm) { clan.usedNames.delete(c.given); c.given = nm; clan.usedNames.add(nm); g.ui.toast(`Your kit is now ${nm}kit!`, 'good'); }
+      });
+    } });
     // have kits with your mate
     if (pc.mate === c.id && c.mate === pc.id && pc.stage === 'warrior' && c.stage === 'warrior' && pc.sex !== c.sex) {
       const she = pc.sex === 'she' ? pc : c;

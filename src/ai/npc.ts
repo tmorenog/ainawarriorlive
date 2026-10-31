@@ -374,6 +374,19 @@ export class NpcManager {
       return;
     }
     a.forcedPose = null;
+    // queens stay by the nursery until their kits are six moons old
+    if (c.sex === 'she' && (c.expectingUntil !== null || c.labour || c.kits.some((k) => { const kc = game.clan.get(k); return !!kc && kc.alive && kc.age < 6; }))
+        && !['ceremony', 'fight', 'sleep', 'flee', 'talkPlayer', 'approach', 'talk'].includes(a.activity)) {
+      const n = game.camp.dens.nursery;
+      const dn = Math.hypot(a.pos.x - n.x, a.pos.z - n.z);
+      if (a.patrol) a.patrol = null;
+      if (dn > 7 && (!a.target || Math.hypot(a.target.x - n.x, a.target.z - n.z) > 4)) {
+        a.activity = 'idle';
+        a.moveSpeed = 1.6;
+        a.setTarget(n.x + simRng.range(-1.5, 1.5), n.z + simRng.range(-1.5, 1.5));
+        return;
+      }
+    }
     if (this.ceremonyUntil > game.clock && a.activity === 'ceremony') {
       if (!a.target) {
         const hr = game.camp.highRock;

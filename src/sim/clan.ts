@@ -495,7 +495,7 @@ export class ClanSim {
       }
       if (c.stage === 'kit' || c.stage === 'apprentice') c.strength = Math.min(95, c.strength + rng.range(1.5, 3));
       // expecting queens give birth
-      if (c.expectingUntil !== null && day >= c.expectingUntil) this.birth(c);
+      if (c.expectingUntil !== null && day >= c.expectingUntil) this.startLabour(c);
     }
     this.nurseryTick();
     // stage transitions (sorted so ceremonies read nicely)
@@ -776,7 +776,53 @@ export class ClanSim {
     }
   }
 
-  birth(mother: Cat) {
+  /** Labour begins: the medicine cat hurries to the nursery to help. */
+  startLabour(mother: Cat) {
+    const g = this.game;
+    const med = this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : this.home().find((x) => x.role === 'medicineApprentice' && x.id !== mother.id) ?? null;
+    if (mother.labour) { this.birth(mother, med); return; } // already waited a whole day
+    mother.labour = true;
+    if (med?.isPlayer) {
+      // you are the medicine cat: go and help
+      const n = g.camp.dens.nursery;
+      g.ui.toast(`🍼 ${displayName(mother)}'s kits are coming! Hurry to the nursery to help her.`, 'objective');
+      g.objectives.add({ id: `birth-${mother.id}`, kind: 'free', title: `🍼 Help ${displayName(mother)} give birth`, desc: `${displayName(mother)} is having her kits! Go to the nursery and talk to her. Bring a poultice or herbs if you have them.`, target: { x: n.x, z: n.z }, radius: 4, need: 1, data: { birthOf: mother.id } });
+      g.objectives.focus(`birth-${mother.id}`);
+      // if you don't come, the kits arrive anyway by evening
+      setTimeout(() => { if (mother.labour && mother.alive) this.birth(mother, null); }, 150000);
+      return;
+    }
+    const ag = med ? g.npcs.agents.get(med.id) : undefined;
+    const mAg = g.npcs.agents.get(mother.id);
+    const n = g.camp.dens.nursery;
+    if (ag) { ag.activity = 'idle'; ag.moveSpeed = 3; ag.setTarget(n.x + 0.6, n.z + 0.6); ag.say(`${mother.given}'s kits are coming! Out of my way!`, 4); }
+    if (mother.isPlayer) g.ui.toast(`🍼 Your kits are coming! ${med ? `${displayName(med)} rushes into the nursery to help you.` : 'You curl up in the nursery…'}`, 'objective');
+    else if (mAg) mAg.say('*pants* They\'re coming…', 4);
+    setTimeout(() => {
+      if (!mother.alive || !mother.labour) return;
+      if (ag) ag.say(simRng.pick(['Breathe… that\'s it… here comes the first one!', 'Bite down on this stick. You\'re doing so well.', 'One more push… there!']), 5);
+      setTimeout(() => this.birth(mother, med), 3500);
+    }, 3500);
+  }
+
+  /** Called when the player medicine cat reaches the queen in labour. */
+  helpBirth(mother: Cat) {
+    const g = this.game;
+    const pc = this.player;
+    g.objectives.list = g.objectives.list.filter((o) => o.id !== `birth-${mother.id}`);
+    const poultice = Object.entries(pc.poultices ?? {}).find(([, v]) => v > 0);
+    if (poultice) pc.poultices![poultice[0]]--;
+    g.ui.dialog({ speaker: mother, text: `*panting* ${pc.given}, you came! ${poultice ? 'You press a soothing poultice into her fur and give her a stick to bite on.' : 'You give her a stick to bite on and count her breaths with her.'} "Breathe… breathe… here comes the first one!"`, options: [{ label: 'Help the kits into the world', action: () => {
+      pc.skills.healing = Math.min(99, pc.skills.healing + 4);
+      pc.reputation = clamp(pc.reputation + 4, -100, 100);
+      this.adjust(mother, pc, 15, { text: `${pc.given} helped me give birth to my kits.`, weight: 8 });
+      this.birth(mother, pc, true);
+    } }] });
+  }
+
+  birth(mother: Cat, helper: Cat | null = null, playerHelped = false) {
+    if (!mother.labour && mother.expectingUntil === null) return;
+    mother.labour = false;
     const father = this.get(mother.mate);
     const n = simRng.weighted<number>([[1, 2], [2, 4], [3, 3], [4, 1]]);
     const kits: Cat[] = [];
@@ -795,8 +841,9 @@ export class ClanSim {
     }
     mother.expectingUntil = null;
     const names = kits.map((k) => k.given).join(', ');
-    this.log(`${displayName(mother)} welcomed ${n} new kit${n > 1 ? "s" : ""} to the nursery: ${names}.`, 'birth');
-    this.game.notify(`New kits in the nursery! ${displayName(mother)}'s litter: ${names}.`);
+    this.log(`${displayName(mother)} welcomed ${n} new kit${n > 1 ? "s" : ""} to the nursery${helper ? ` with ${displayName(helper)}'s help` : ''}: ${names}.`, 'birth');
+    this.game.notify(`🍼 New kits in the nursery! ${displayName(mother)}'s litter: ${names}.${helper && !playerHelped ? ` ${displayName(helper)} helped them into the world.` : ''}`);
+    if (playerHelped) this.game.ui.toast(`🌿 You helped ${displayName(mother)} give birth to ${n} healthy kit${n > 1 ? 's' : ''}!`, 'good');
     this.setRecent(`${displayName(mother)} had ${n} kits!`);
     if (mother.isPlayer || father?.isPlayer) {
       const me = mother.isPlayer ? mother : father!;
@@ -817,6 +864,24 @@ export class ClanSim {
           });
       };
       nameNext(0);
+    } else {
+      // a friend (or the cat you helped) asks you to help name one of the kits
+      const pc = this.player;
+      const close = pc && (this.opinion(mother, pc) >= 50 || isFamily(mother, pc) || playerHelped);
+      if (close && pc.alive && !pc.exiled) {
+        const k = kits[0];
+        const pool = isClassic() ? CLASSIC_PREFIXES : GIVEN_NAMES;
+        const opts = new Set<string>([k.given]);
+        while (opts.size < 3) opts.add(simRng.pick(pool));
+        setTimeout(() => this.game.ui.nameChoice(`${displayName(mother)} asks you to name a kit`, `"Would you name this one for me, ${pc.given}?" A tiny ${k.sex === 'tom' ? 'tom' : 'she-cat'} with ${PATTERN_LABEL[k.app.pattern].toLowerCase()} fur squirms beside ${mother.given}. (They'll be ___kit.)`,
+          [...opts].map((o) => o + 'kit'), (picked) => {
+            let nm = picked.replace(/kit$/i, '').trim();
+            nm = nm.charAt(0).toUpperCase() + nm.slice(1).toLowerCase();
+            if (nm) { this.usedNames.delete(k.given); k.given = nm; this.usedNames.add(nm); }
+            this.adjust(mother, pc, 6, { text: `${pc.given} named my kit ${nm}kit.`, weight: 4 });
+            this.game.npcs.refreshModels();
+          }), 1500);
+      }
     }
     this.game.npcs.syncRoster();
   }
