@@ -790,6 +790,17 @@ export class Interactions {
         if (nm) { clan.usedNames.delete(c.given); c.given = nm; clan.usedNames.add(nm); g.ui.toast(`Your kit is now ${nm}kit!`, 'good'); }
       });
     } });
+    // crushes between young cats
+    const youngCat = (x: Cat) => x.stage === 'kit' || x.stage === 'apprentice';
+    if (youngCat(pc) && youngCat(c) && !isFamily(c, pc) && pc.crush !== c.id) opts.push({ label: '💕 Tell them you have a crush', hint: 'eep!', action: () => {
+      const likes = c.crush === pc.id || (op > 30 && simRng.chance(0.4 + op / 200));
+      pc.crush = c.id;
+      clan.rel(pc, c).romance = clamp(clan.rel(pc, c).romance + 20, 0, 100);
+      if (likes) { c.crush = pc.id; clan.rel(c, pc).romance = clamp(clan.rel(c, pc).romance + 25, 0, 100); clan.adjust(c, pc, 8, { text: `${pc.given} told me they have a crush on me!`, weight: 5 }); }
+      else clan.adjust(c, pc, -1);
+      g.audio.purr();
+      g.ui.dialog({ speaker: c, text: likes ? simRng.pick(['*blushes all the way to the tips of their ears* I… I like you too!', '*squeaks* Really?! Me too! Don\'t tell anyone!', '*hides face behind tail* You\'re my favourite cat in the whole clan.']) : simRng.pick(['*giggles* Ew! Crushes are yucky!', 'Oh… um. I like someone else. Sorry!', '*blinks* We\'re friends, silly!']), options: [{ label: likes ? '💕' : 'Oh…', action: again }, { label: 'Goodbye', action: done }], onClose: done });
+    } });
     // family: nurse from your mother, let your kits nurse, play with your kits / your parents
     const myMum = pc.stage === 'kit' && pc.parents?.[0] === c.id;
     const myParent = pc.stage === 'kit' && pc.parents?.includes(c.id);
@@ -1006,6 +1017,11 @@ export class Interactions {
     if (c.injury > 30) lines.push('My leg still aches from that fight.');
     if (c.stage === 'elder') lines.push(simRng.pick(['In my day, we hunted in the snow without complaint.', 'The Long Meadow calls to me some nights. Not yet, though.', `I remember when ${clan.leader ? displayName(clan.leader) : 'our Warden'} was a scrawny kit.`]));
     if (c.stage === 'kit') lines.push(simRng.pick(['When I grow up I\'m going to fight a badger!', 'Do you know any stories?', 'I found a feather! It\'s mine.']));
+    if (c.crush) {
+      const cr = clan.get(c.crush);
+      if (cr && cr === pc) return simRng.pick([`*blushes and looks at their paws* Um… hi, ${displayName(pc)}…`, '*tail twitches shyly* D-do you want to play with me later?', '*squeaks* Oh! I wasn\'t staring at you! …Okay maybe a little.']);
+      if (cr && simRng.chance(0.6)) return simRng.pick([`*whispers* Don't tell anyone, but I have a crush on ${displayName(cr)}!`, `Do you think ${displayName(cr)} likes me? *blushes*`, `${displayName(cr)} has the prettiest eyes in the whole clan…`, `I saved the best feather for ${displayName(cr)}. Is that weird?`]);
+    }
     const fav = Object.entries(c.relations).sort((x, y) => y[1].opinion - x[1].opinion)[0];
     if (fav) { const f = clan.get(fav[0]); if (f && f.alive && f !== pc) lines.push(`${displayName(f)} is my closest friend, you know.`); }
     const foe = Object.entries(c.relations).sort((x, y) => x[1].opinion - y[1].opinion)[0];

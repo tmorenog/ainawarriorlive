@@ -158,6 +158,8 @@ export interface Cat {
   thirst?: number;
   /** A forbidden mate from another clan. */
   secretMate?: string;
+  /** A kit (or young cat) with a crush on another young cat. */
+  crush?: string;
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;

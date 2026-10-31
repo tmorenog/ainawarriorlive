@@ -479,7 +479,24 @@ export class ClanSim {
   }
 
   /** Runs at dawn (hour 6) each day — one moon passes. */
+  /** Kits get crushes on other kits (which can blossom into romance when they grow up). */
+  crushTick() {
+    const young = (c: Cat) => c.alive && !c.exiled && c.clan === 'home' && (c.stage === 'kit' || c.stage === 'apprentice');
+    for (const c of Object.values(this.cats)) {
+      if (c.crush) { const t = this.get(c.crush); if (!t || !t.alive || t.exiled) c.crush = undefined; continue; }
+      if (c.isPlayer || c.stage !== 'kit' || c.age < 1 || !young(c) || !simRng.chance(0.2)) continue;
+      const opts = Object.values(this.cats).filter((o) => o !== c && young(o) && !isFamily(c, o) && Math.abs(o.age - c.age) < 5);
+      if (!opts.length) continue;
+      const pick = opts.sort((x, y) => (this.opinion(c, y) + (y.sex !== c.sex ? 15 : 0) + simRng.range(0, 30)) - (this.opinion(c, x) + (x.sex !== c.sex ? 15 : 0) + simRng.range(0, 30)))[0];
+      c.crush = pick.id;
+      this.rel(c, pick).romance = clamp(this.rel(c, pick).romance + 25, 0, 100);
+      this.adjust(c, pick, 5);
+      if (pick.isPlayer) this.game.ui.toast(`💕 Psst… you've heard a rumour that ${displayName(c)} has a crush on you!`, 'info');
+    }
+  }
+
   tickDay() {
+    this.crushTick();
     const day = this.game.time.day;
     const rng = simRng;
     const home = this.home();
@@ -981,6 +998,33 @@ export class ClanSim {
     this.game.npcs.syncRoster();
     // the queen licks her newborns until they're warm and dry, then they snuggle up to nurse
     this.game.npcs.newbornCare(mother, kits);
+    this.medicineRounds(mother, kits, helper);
+  }
+
+  /** After a birth the medicine cat treats the queen and each kit in turn: "Hold still, eat this poultice…" */
+  private medicineRounds(mother: Cat, kits: Cat[], med: Cat | null) {
+    const g = this.game;
+    const healer = med ?? (this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null);
+    if (!healer) return;
+    const pc = this.player;
+    const n = g.camp.dens.nursery;
+    const involved = mother.isPlayer || healer.isPlayer || kits.some((k) => k.parents.includes(pc.id));
+    if (!involved && Math.hypot(g.player.pos.x - n.x, g.player.pos.z - n.z) > 35) return;
+    const name = displayName(healer);
+    const ag = g.npcs.agents.get(healer.id);
+    const line = (text: string, secs = 3.4) => {
+      if (g.state !== 'playing') return;
+      g.ui.showBanner(`${name}: ${text}`, secs);
+      ag?.say(text.replace(/\*[^*]*\*\s*/g, '').trim() || text, secs);
+    };
+    const steps: string[] = [`"Hold still, ${mother.given}. Eat this poultice — it'll ease the pain."`];
+    kits.forEach((k, i) => {
+      steps.push(i % 2 === 0
+        ? `*licks ${displayName(k)} warm* "Hold still, little one… there you go."`
+        : `"Hold still…" *presses a tiny poultice to ${displayName(k)} and licks them warm*`);
+    });
+    steps.push(`"${kits.length === 1 ? 'A healthy kit' : `${kits.length} healthy kits`}! Well done, ${mother.given}. Now rest."`);
+    steps.forEach((t, i) => setTimeout(() => line(t), 1800 + i * 3600));
   }
 
   kill(c: Cat, cause: string) {

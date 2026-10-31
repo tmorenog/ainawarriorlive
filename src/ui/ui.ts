@@ -171,7 +171,7 @@ export class UI {
       sw.style.background = `radial-gradient(circle at 35% 35%, ${c.app.base}, ${c.app.second})`;
       const pc = g.clan.player;
       const rel = c.id !== pc.id ? relLabel(c.relations[pc.id], isFamily(c, pc), c.mate === pc.id) : '';
-      h('div', '', `<div class="nm">${esc(displayName(c))}</div><div class="rl">${esc(spec.sub ?? roleLabel(c))}${rel ? ` · <span style="color:${REL_COLOR[rel]}">${rel}</span>` : ''} · ${c.traits.join(', ')}</div>`, who);
+      h('div', '', `<div class="nm">${esc(displayName(c))}</div><div class="rl">${esc(spec.sub ?? roleLabel(c))}${rel ? ` · <span style="color:${REL_COLOR[rel]}">${rel}</span>` : ''}${pc.crush === c.id ? ' · <span style="color:#f08ab4">💕 Crush</span>' : ''} · ${c.traits.join(', ')}</div>`, who);
     }
     // the speaker's mouth moves while they talk
     if (spec.speaker && !spec.text.startsWith('*')) {
@@ -527,7 +527,7 @@ export class UI {
         const c = a.cat;
         const pc = g.clan.player;
         const rel = c.clan === 'home' ? relLabel(c.relations[pc.id], isFamily(c, pc), c.mate === pc.id) : (typeof c.clan === 'number' ? g.territories.rivals[c.clan].name : 'Loner');
-        const html = `${esc(a.name)}<small>${esc(rel)}</small>`;
+        const html = `${esc(a.name)}<small>${pc.crush === c.id ? '💕 Crush' : esc(rel)}</small>`;
         if (el.innerHTML !== html) el.innerHTML = html;
         el.style.left = `${sx}px`;
         el.style.top = `${sy}px`;
