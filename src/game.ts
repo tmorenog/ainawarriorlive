@@ -1086,6 +1086,8 @@ export class Game {
     this.chunks.update(this.player.pos.x, this.player.pos.z, 1);
     this.twolegs.update(dt);
     this.story.update(dt);
+    this.mateCheckT -= dt;
+    if (this.mateCheckT <= 0) { this.mateCheckT = 10; this.clan.playerMateNursery(); }
     // simulation
     this.npcs.update(dt);
     this.prey.update(dt);
@@ -1115,6 +1117,7 @@ export class Game {
     void busy;
   }
 
+  private mateCheckT = 3;
   private bfT = 0;
   /** A best friend nearby jumps into your fights. */
   private bestFriendHelp(dt: number) {

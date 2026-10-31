@@ -569,8 +569,34 @@ export class ClanSim {
     she.nurseryDay = this.game.time.day + 1;
   }
 
+  /** You and your mate: the she-cat goes to the nursery (expecting) whenever she has no young kits. */
+  playerMateNursery() {
+    const pc = this.player;
+    if (!pc || !pc.alive || pc.exiled) return;
+    const mate = this.get(pc.mate) ?? Object.values(this.cats).find((x) => x.mate === pc.id && x.alive);
+    if (!mate || !mate.alive || mate.exiled || mate.sex === pc.sex) return;
+    if (pc.mate !== mate.id) pc.mate = mate.id;
+    if (mate.mate !== pc.id) mate.mate = pc.id;
+    const she = pc.sex === 'she' ? pc : mate;
+    if (she.stage === 'kit' || she.stage === 'apprentice' || she.expectingUntil !== null || she.labour) return;
+    const young = she.kits.some((k) => { const kc = this.get(k); return !!kc && kc.alive && kc.age < 6; });
+    if (young) return;
+    const day = this.game.time.day;
+    she.nurseryDay = undefined;
+    she.expectingUntil = day + 2;
+    this.log(`${displayName(she)} moved into the nursery — she is expecting kits.`, 'clan');
+    if (she.isPlayer) {
+      this.game.ui.toast('🍼 You\'re expecting kits! Rest in the nursery — they\'ll arrive in two moons.', 'good');
+    } else {
+      this.game.ui.toast(`🍼 Your mate ${displayName(she)} is expecting your kits and has moved into the nursery to rest.`, 'good');
+      const ag = this.game.npcs.agents.get(she.id);
+      if (ag) ag.say('I\'m going to rest in the nursery now. Come visit me!', 4);
+    }
+  }
+
   nurseryTick() {
     const day = this.game.time.day;
+    this.playerMateNursery();
     // mates paired before this was added: the she-cat still gets her turn in the nursery (once)
     for (const c of this.home()) {
       if (c.sex !== 'she' || !c.mate || c.nurseryDay !== undefined || c.expectingUntil !== null || c.stage !== 'warrior') continue;
