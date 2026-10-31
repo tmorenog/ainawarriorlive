@@ -788,6 +788,40 @@ export class Interactions {
         if (nm) { clan.usedNames.delete(c.given); c.given = nm; clan.usedNames.add(nm); g.ui.toast(`Your kit is now ${nm}kit!`, 'good'); }
       });
     } });
+    // your mate resting in the nursery: groom her while she naps, or sleep beside her
+    const queenMate = c.sex === 'she' && (c.mate === pc.id || pc.mate === c.id) && (c.expectingUntil !== null || !!c.labour || c.kits.some((k) => (clan.get(k)?.age ?? 99) < 6));
+    if (queenMate) {
+      const besideHer = () => {
+        const n = g.camp.dens.nursery;
+        let dx = n.x - a.pos.x, dz = n.z - a.pos.z;
+        const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
+        g.player.placeAt(a.pos.x + dx * 0.6, a.pos.z + dz * 0.6);
+        g.player.heading = Math.atan2(a.pos.z - g.player.pos.z, a.pos.x - g.player.pos.x);
+      };
+      opts.unshift({ label: '💤 Sleep beside her', hint: 'curl up together until you wake', action: () => {
+        done();
+        if (g.combat.playerInCombat) { g.ui.toast('You can\'t sleep while in danger!', 'danger'); return; }
+        besideHer();
+        a.napUntil = g.clock + 20;
+        a.say(simRng.pick(['*snuggles close* Stay with me…', 'Mmm… you\'re so warm.', '*purrs sleepily* Goodnight, my love.']), 3);
+        clan.adjust(c, pc, 4, { text: `${pc.given} slept beside me in the nursery.`, weight: 3 });
+        clan.adjust(pc, c, 2);
+        g.audio.purr();
+        setTimeout(() => g.sleep(), 1200);
+      } });
+      opts.unshift({ label: '🐾 Groom her', hint: 'she drifts off to sleep', action: () => {
+        done();
+        besideHer();
+        g.player.posePick = 'groom';
+        a.napUntil = g.clock + 25;
+        a.forcedPose = 'sleep';
+        a.say(simRng.pick(['*purrs* Mmm… that feels so nice…', '*yawns* Don\'t stop… zzz…', 'You always know what I need… *drifts off*']), 3.5);
+        clan.adjust(c, pc, 5, { text: `${pc.given} groomed me until I fell asleep.`, weight: 3 });
+        clan.adjust(pc, c, 2);
+        g.audio.purr();
+        g.ui.toast(`🐾 You gently groom ${displayName(c)}. She falls asleep, purring.`, 'good');
+      } });
+    }
     // have kits with your mate
     const mother = (pc.mate === c.id || c.mate === pc.id) ? clan.mateMother(pc, c) : null;
     if (mother && clan.grownUp(pc) && clan.grownUp(c)) {

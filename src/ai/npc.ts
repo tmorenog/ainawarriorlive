@@ -110,6 +110,8 @@ export class NpcAgent implements Fighter {
   /** Resting in the nursery as a queen. */
   queenRest = false;
   mateRest = false;
+  /** Game clock time until which a resting queen naps (while her mate grooms her). */
+  napUntil = 0;
   perch: { x: number; z: number; y: number | null; stay: boolean; t: number; from: THREE.Vector3 } | null = null;
   jumpTo(x: number, z: number, y: number | null, stay: boolean) {
     this.perch = { x, z, y, stay, t: 0, from: this.pos.clone() };
@@ -401,7 +403,7 @@ export class NpcManager {
       a.target = null;
       a.activity = 'idle';
       a.queenRest = true;
-      a.forcedPose = game.time.isNight ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
+      a.forcedPose = game.time.isNight || a.napUntil > game.clock || game.player.sleeping && game.clan.player.mate === c.id && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 2 ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
       // expecting queens chat about their coming kits when you're nearby
       if (isExpecting(c) && !game.time.isNight && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 9 && simRng.chance(dt * (0.12 + 0.12 * expectingProgress(c))))
         a.say(queenComplaint(c, (l) => simRng.pick(l), game.clan.get(c.mate)), 4.5);
