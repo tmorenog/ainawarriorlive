@@ -226,9 +226,25 @@ export function pronoun(c: Cat, kind: 'subj' | 'obj' | 'poss'): string {
 /** How round a cat's belly looks: she-cats with a mate are a little rounder, expecting queens more so. */
 export function bellyFor(c: Cat): number {
   if (c.sex !== 'she' || c.stage === 'kit' || c.stage === 'apprentice') return 0;
-  if (c.expectingUntil !== null || c.labour) return 1;
+  if (c.expectingUntil !== null || c.labour) return Math.round((0.6 + 0.6 * expectingProgress(c)) * 50) / 50;
   return c.mate ? 0.5 : 0;
 }
 
 /** Expecting queens move slower and fight weaker. */
 export function isExpecting(c: Cat): boolean { return c.sex === 'she' && (c.expectingUntil !== null || !!c.labour); }
+
+/** The game clock in days (set every frame by the game) so cats can tell how far along a queen is. */
+let clockDays = 0;
+export function setClockDays(d: number) { clockDays = d; }
+
+/** 0 = just started expecting, 1 = the kits are about to come. */
+export function expectingProgress(c: Cat): number {
+  if (c.labour) return 1;
+  if (c.expectingUntil === null) return 0;
+  return Math.min(1, Math.max(0, 1 - (c.expectingUntil - clockDays) / 2));
+}
+
+/** How strong an expecting queen still is: a little weaker at first, much weaker near the birth. */
+export function queenPowerK(c: Cat): number { return isExpecting(c) ? 0.85 - 0.45 * expectingProgress(c) : 1; }
+/** How fast an expecting queen still moves. */
+export function queenSpeedK(c: Cat): number { return isExpecting(c) ? 0.9 - 0.4 * expectingProgress(c) : 1; }

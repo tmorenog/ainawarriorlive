@@ -45,7 +45,7 @@ import { UI } from './ui/ui';
 import { Menus, NewGameSpec, Settings, loadSettings } from './ui/menus';
 import { TouchControls, isTouchDevice } from './ui/touch';
 import { SaveData, hasSave, readSave, readSaveSlot, writeSave, pushMoonSnapshot, moonSnapshots, keepMoonSnapshots } from './save/save';
-import { Appearance, Cat, LifeStage, displayName, pronoun, LESSONS } from './cats/types';
+import { Appearance, Cat, LifeStage, displayName, pronoun, LESSONS, setClockDays } from './cats/types';
 import { personalityFrom, createCat } from './cats/generate';
 import { CatModel } from './cats/model';
 
@@ -1090,6 +1090,7 @@ export class Game {
     const speed = this.player.sleeping ? this.time.speed : 1;
     this.time.speed = speed;
     this.time.advance(dt);
+    setClockDays(this.time.totalHours / 24);
     while (Math.floor(this.time.totalHours) > this.lastHour) {
       this.lastHour++;
       this.hourTick();

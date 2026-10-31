@@ -3,7 +3,7 @@
 // personality, talks to other cats, hunts, patrols, trains and sleeps.
 import * as THREE from 'three';
 import type { Game } from '../game';
-import { Cat, bellyFor, displayName, isExpecting } from '../cats/types';
+import { Cat, bellyFor, displayName, isExpecting, queenPowerK, queenSpeedK } from '../cats/types';
 import { CatModel, Mood, Pose } from '../cats/model';
 import { simRng, hashString } from '../core/rng';
 import { angleDiff, clamp, dist2 } from '../core/math';
@@ -97,7 +97,7 @@ export class NpcAgent implements Fighter {
   set hp(v: number) { this.cat.health = v; }
   get maxHp() { return this.cat.maxHealth; }
   get alive() { return this.cat.alive && this.cat.health > 0; }
-  get power() { return (6 + this.cat.strength * 0.08 + this.cat.skills.fighting * 0.1) * (isExpecting(this.cat) ? 0.55 : 1); }
+  get power() { return (6 + this.cat.strength * 0.08 + this.cat.skills.fighting * 0.1) * queenPowerK(this.cat); }
   get defense() { return 0.1 + this.cat.skills.fighting / 400; }
   get scale() { return this.model.scale; }
 
@@ -1303,7 +1303,7 @@ export class NpcManager {
     const want = Math.atan2(dz, dx);
     const turn = angleDiff(a.heading, want);
     a.heading += clamp(turn, -dt * 6, dt * 6);
-    let sp = a.moveSpeed * (a.cat.injury > 40 ? 0.6 : 1) * (a.cat.stage === 'elder' ? 0.8 : 1) * (isExpecting(a.cat) ? 0.65 : 1);
+    let sp = a.moveSpeed * (a.cat.injury > 40 ? 0.6 : 1) * (a.cat.stage === 'elder' ? 0.8 : 1) * queenSpeedK(a.cat);
     const depth = game.chunks.waterDepthAt(a.pos.x, a.pos.z);
     if (depth > 0.2) sp *= 0.45;
     if (Math.abs(turn) > 1.2) sp *= 0.3;
