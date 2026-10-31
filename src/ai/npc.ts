@@ -115,6 +115,8 @@ export class NpcAgent implements Fighter {
   /** Your mate grooming you until you fall asleep (then sleeping beside you until you wake). */
   tuckIn = false;
   tuckSlept = false;
+  tuckBest?: number;
+  tuckStuck?: number;
   /** A mother lies on her side while her kits nurse, or rolls about playing with them. */
   nursingUntil = 0;
   /** A new mother licks her newborn kits until they're warm. */
@@ -443,7 +445,11 @@ export class NpcManager {
       if (!game.clan.player?.alive || ['ceremony', 'flee', 'fight'].includes(a.activity)) a.tuckIn = false;
       else {
         const sx = p.pos.x + Math.cos(p.heading + Math.PI / 2) * 0.5, sz = p.pos.z + Math.sin(p.heading + Math.PI / 2) * 0.5;
-        if (Math.hypot(a.pos.x - sx, a.pos.z - sz) > 0.3) {
+        const dTo = Math.hypot(a.pos.x - sx, a.pos.z - sz);
+        // can't squeeze any closer (a wall or the den)? settle down right where they are if it's close
+        if (dTo < (a.tuckBest ?? 1e9) - 0.1) { a.tuckBest = dTo; a.tuckStuck = 0; } else a.tuckStuck = (a.tuckStuck ?? 0) + dt;
+        const settled = dTo <= 0.3 || ((a.tuckStuck ?? 0) > 2 && Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z) < 2);
+        if (!settled) {
           a.activity = 'idle';
           if (!a.target || Math.hypot(a.target.x - sx, a.target.z - sz) > 0.2) { a.moveSpeed = 2; a.setTarget(sx, sz); }
           return;
@@ -452,7 +458,7 @@ export class NpcManager {
         a.heading = Math.atan2(p.pos.z - a.pos.z, p.pos.x - a.pos.x);
         a.forcedPose = p.sleeping ? 'sleep' : 'groomOther';
         if (p.sleeping) a.tuckSlept = true;
-        else if (a.tuckSlept) { a.tuckIn = false; a.tuckSlept = false; a.forcedPose = null; a.say('Good morning, sleepyhead. *purrs*', 3); }
+        else if (a.tuckSlept) { a.tuckIn = false; a.tuckSlept = false; a.tuckBest = undefined; a.forcedPose = null; a.say('Good morning, sleepyhead. *purrs*', 3); }
         return;
       }
     }

@@ -844,14 +844,14 @@ export class Interactions {
     if (pc.mate === c.id && c.mate === pc.id && clan.grownUp(c)) opts.unshift({ label: '😴 Groom me to sleep', hint: 'they stay with you until you wake', action: () => {
       done();
       g.npcs.endConvo(a);
-      a.tuckIn = true; a.tuckSlept = false;
+      a.tuckIn = true; a.tuckSlept = false; a.tuckBest = undefined; a.tuckStuck = 0;
       a.say(simRng.pick(['Lie down, my love. I\'ll groom you until you fall asleep.', '*purrs* Come here. Close your eyes.', 'Rest — I\'m not going anywhere.']), 4);
       clan.adjust(c, pc, 3);
       g.player.posePick = 'lie';
       g.player.holdSpot = { x: g.player.pos.x, z: g.player.pos.z, until: g.clock + 30, heading: g.player.heading };
       const tryNod = (left: number) => setTimeout(() => {
         if (!a.tuckIn || g.player.sleeping) return;
-        const close = Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 1.2;
+        const close = a.forcedPose === 'groomOther' || Math.hypot(a.pos.x - g.player.pos.x, a.pos.z - g.player.pos.z) < 1.2;
         if (close || left <= 0) { g.ui.toast(`💤 ${displayName(c)} gently grooms you… your eyes grow heavy…`, 'good'); setTimeout(() => { if (!g.player.sleeping) g.sleep(); }, 4000); }
         else tryNod(left - 1);
       }, 3000);
