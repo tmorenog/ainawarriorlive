@@ -495,8 +495,45 @@ export class ClanSim {
     }
   }
 
+  /** Childhood crushes grow into mates once both cats are grown up. */
+  crushesToMates() {
+    for (const a of Object.values(this.cats)) {
+      const b = this.get(a.crush);
+      if (!b || a.mate || b.mate || !a.alive || !b.alive || a.exiled || b.exiled || a.clan !== 'home' || b.clan !== 'home') continue;
+      if (!this.grownUp(a) || !this.grownUp(b) || isFamily(a, b)) continue;
+      // (if the crush is on you, you get to decide)
+      const mutual = b.isPlayer || b.crush === a.id || this.rel(b, a).romance > 30 || this.opinion(b, a) > 40;
+      if (!mutual) continue;
+      if (a.isPlayer || b.isPlayer) {
+        // your childhood crush asks you
+        const other = a.isPlayer ? b : a;
+        const pc = a.isPlayer ? a : b;
+        if (other.crushAsked) continue;
+        other.crushAsked = true;
+        this.game.ui.dialog({ speaker: other, text: `*shuffles paws* ${pc.given}… do you remember when we were kits, and I had the biggest crush on you? I still do. Will you be my mate?`, options: [
+          { label: '💕 Yes!', action: () => { this.makeMates(pc, other); this.game.ui.closeDialog(false); this.game.ui.toast(`💕 Your childhood crush ${displayName(other)} is now your mate!`, 'good'); } },
+          { label: 'Not right now', action: () => { this.adjust(other, pc, -3); this.game.ui.closeDialog(false); } },
+        ] });
+        continue;
+      }
+      this.makeMates(a, b);
+      this.log(`Childhood sweethearts ${displayName(a)} and ${displayName(b)} became mates.`, 'clan');
+      this.setRecent(`${a.given} and ${b.given} were crushes as kits — now they're mates!`);
+    }
+  }
+
+  makeMates(a: Cat, b: Cat) {
+    a.mate = b.id; b.mate = a.id;
+    a.crush = undefined; b.crush = undefined;
+    this.rel(a, b).romance = 90; this.rel(b, a).romance = 90;
+    this.remember(a, `${displayName(b)} and I became mates.`, 10, b.id);
+    this.remember(b, `${displayName(a)} and I became mates.`, 10, a.id);
+    this.matesFormed(a, b);
+  }
+
   tickDay() {
     this.crushTick();
+    this.crushesToMates();
     const day = this.game.time.day;
     const rng = simRng;
     const home = this.home();

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import type { Game } from '../game';
 import { CatModel } from '../cats/model';
-import { Cat, LifeStage, bellyFor, isQueen, queenPowerK, queenSpeedK } from '../cats/types';
+import { Cat, LifeStage, bellyFor, isExpecting, isQueen, queenPowerK, queenSpeedK } from '../cats/types';
 import type { Fighter } from './combat';
 import { angleDiff, clamp, damp, dist2 } from '../core/math';
 import { simRng } from '../core/rng';
@@ -35,6 +35,7 @@ export class Player implements Fighter {
   /** Stay put here (grooming or sleeping beside someone) until you move. */
   /** You (a new mother) are licking your newborn kits warm. */
   lickKitsUntil = 0;
+  private heavyWarned = false;
   holdSpot: { x: number; z: number; until: number; heading?: number } | null = null;
   radius = 0.2;
   speed = 0;
@@ -252,6 +253,10 @@ export class Player implements Fighter {
     target *= stageSpeed;
     // expecting queens are heavy and slow
     target *= queenSpeedK(cat);
+    if (isExpecting(cat) !== this.heavyWarned) {
+      this.heavyWarned = isExpecting(cat);
+      if (this.heavyWarned) game.ui.toast('🍼 You feel heavy with kits — you are slower and weaker until they are born. It gets harder the closer they come.', 'info');
+    }
     // deep snow: paws sink in and every step is slow and squishy
     const snowDeep = game.weather.snowCover > 0.2 && Math.hypot(this.pos.x, this.pos.z) > 17;
     if (snowDeep) {

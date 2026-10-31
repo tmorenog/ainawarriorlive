@@ -160,6 +160,8 @@ export interface Cat {
   secretMate?: string;
   /** A kit (or young cat) with a crush on another young cat. */
   crush?: string;
+  /** This cat already asked you to be mates because of an old crush. */
+  crushAsked?: boolean;
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;
@@ -249,9 +251,9 @@ export function expectingProgress(c: Cat): number {
 }
 
 /** How strong an expecting queen still is: a little weaker at first, much weaker near the birth. */
-export function queenPowerK(c: Cat): number { return isExpecting(c) ? 0.85 - 0.35 * expectingProgress(c) : 1; }
+export function queenPowerK(c: Cat): number { return isExpecting(c) ? 0.7 - 0.2 * expectingProgress(c) : 1; }
 /** How fast an expecting queen still moves. */
-export function queenSpeedK(c: Cat): number { return isExpecting(c) ? 0.9 - 0.6 * expectingProgress(c) : 1; }
+export function queenSpeedK(c: Cat): number { return isExpecting(c) ? 0.7 - 0.4 * expectingProgress(c) : 1; }
 
 /** Tired, grumpy things an expecting queen says — more complaints the closer she gets. */
 export function queenComplaint(c: Cat, pick: <T>(a: T[]) => T, mate?: Cat | null): string {
