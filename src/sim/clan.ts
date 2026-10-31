@@ -885,7 +885,7 @@ export class ClanSim {
     if (!mother.labour && mother.expectingUntil === null) return;
     mother.labour = false;
     const father = this.get(mother.mate);
-    const n = simRng.weighted<number>([[1, 2], [2, 4], [3, 3], [4, 1]]);
+    const n = simRng.weighted<number>([[1, 19], [2, 38], [3, 28], [4, 10], [5, 5]]);
     const kits: Cat[] = [];
     for (let i = 0; i < n; i++) {
       const k = createCat({ age: 0, parents: father ? [mother, father] : [mother, mother], day: this.game.time.day, usedNames: this.usedNames });

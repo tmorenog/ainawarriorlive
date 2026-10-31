@@ -112,6 +112,8 @@ export class NpcAgent implements Fighter {
   mateRest = false;
   /** Game clock time until which a resting queen naps (while her mate grooms her). */
   napUntil = 0;
+  queenStuckT?: number;
+  queenBestD?: number;
   perch: { x: number; z: number; y: number | null; stay: boolean; t: number; from: THREE.Vector3 } | null = null;
   jumpTo(x: number, z: number, y: number | null, stay: boolean) {
     this.perch = { x, z, y, stay, t: 0, from: this.pos.clone() };
@@ -389,6 +391,10 @@ export class NpcManager {
     if (a.activity === 'stranded') { a.mood = 'afraid'; if (simRng.chance(dt * 0.25)) a.say(simRng.pick(['Help! Help me!', 'The water is rising!', 'Someone, please!']), 3); return; }
     // queens rest in the nursery until their kits are six moons old
     const queen = c.clan === 'home' && c.sex === 'she' && !c.exiled && (c.expectingUntil !== null || !!c.labour || c.kits.some((k) => { const kc = game.clan.get(k); return !!kc && kc.alive && kc.age < 6; }));
+    // bedtime for queens: from dusk to dawn they stop chatting and go to their nest to sleep
+    const qh = game.time.hour;
+    const queenBed = queen && (qh >= 20 || qh < 6);
+    if (queenBed && (a.activity === 'talk' || a.activity === 'approach')) { this.endConvo(a); a.activity = 'idle'; a.say(simRng.pick(['*yawns* I need to sleep…', 'Goodnight — these kits are wearing me out.']), 2.5); }
     if (queen && !['ceremony', 'flee', 'talkPlayer', 'approach', 'talk', 'leaving'].includes(a.activity)) {
       if (a.activity === 'follow' || a.activity === 'lead' || a.activity === 'shield' || a.activity === 'patrol') { this.endConvo(a); a.say('I need to rest in the nursery now…', 3); a.followTarget = null; }
       if (a.patrol) { for (const p of game.clan.patrols) p.members = p.members.filter((id) => id !== c.id); a.patrol = null; }
@@ -396,14 +402,19 @@ export class NpcManager {
       const bed = n.beds[Math.abs(hashString(c.id)) % n.beds.length];
       const dn = Math.hypot(a.pos.x - bed.x, a.pos.z - bed.z);
       if (dn > 0.7) {
-        if (!a.target || Math.hypot(a.target.x - bed.x, a.target.z - bed.z) > 0.5) { a.activity = 'idle'; a.forcedPose = null; a.moveSpeed = 1.6; a.setTarget(bed.x, bed.z); }
+        if (!a.target || Math.hypot(a.target.x - bed.x, a.target.z - bed.z) > 0.5) { a.activity = 'idle'; a.forcedPose = null; a.setTarget(bed.x, bed.z); }
+        a.moveSpeed = queenBed ? 3.2 : 1.6; // hurry back to bed at night
+        // stuck on the way to bed (a wall or a rock)? hop straight into the nest
+        if (dn < (a.queenBestD ?? 1e9) - 0.3) { a.queenBestD = dn; a.queenStuckT = 0; } else a.queenStuckT = (a.queenStuckT ?? 0) + dt;
+        if ((a.queenStuckT ?? 0) > 5) { a.queenStuckT = 0; a.queenBestD = undefined; a.pos.set(bed.x, game.groundAt(bed.x, bed.z), bed.z); a.target = null; }
         return;
       }
       // settled in her nest: loafing, grooming, sleeping at night
+      a.queenBestD = undefined; a.queenStuckT = 0;
       a.target = null;
       a.activity = 'idle';
       a.queenRest = true;
-      a.forcedPose = game.time.isNight || a.napUntil > game.clock || game.player.sleeping && game.clan.player.mate === c.id && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 2 ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
+      a.forcedPose = queenBed || a.napUntil > game.clock || game.player.sleeping && game.clan.player.mate === c.id && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 2 ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
       // expecting queens chat about their coming kits when you're nearby
       if (isExpecting(c) && !game.time.isNight && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 9 && simRng.chance(dt * (0.12 + 0.12 * expectingProgress(c))))
         a.say(queenComplaint(c, (l) => simRng.pick(l), game.clan.get(c.mate)), 4.5);
@@ -1202,7 +1213,7 @@ export class NpcManager {
   // ------------------------------------------------------------------ conversation
   private tryConversations() {
     const game = this.game;
-    const agents = this.list.filter((a) => a.cat.clan === 'home' && (a.activity === 'idle' || a.activity === 'wander' || a.activity === 'sit' || a.activity === 'groom' || a.activity === 'guard' || a.activity === 'watch' || a.activity === 'shelter' || a.activity === 'nurse' || a.activity === 'gathering') && a.talkCooldown <= 0 && !a.partner);
+    const agents = this.list.filter((a) => a.cat.clan === 'home' && (a.activity === 'idle' || a.activity === 'wander' || a.activity === 'sit' || a.activity === 'groom' || a.activity === 'guard' || a.activity === 'watch' || a.activity === 'shelter' || a.activity === 'nurse' || a.activity === 'gathering') && a.talkCooldown <= 0 && !a.partner && !(a.queenRest && (game.time.hour >= 20 || game.time.hour < 6)));
     for (const a of agents) {
       if (a.partner) continue;
       if (!simRng.chance(0.15 + a.cat.pers.sociability * 0.35)) { a.talkCooldown = simRng.range(4, 12); continue; }
