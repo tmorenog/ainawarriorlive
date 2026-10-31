@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { Game } from '../game';
 import { Cat, displayName } from '../cats/types';
 import { CatModel, Mood, Pose } from '../cats/model';
-import { simRng } from '../core/rng';
+import { simRng, hashString } from '../core/rng';
 import { angleDiff, clamp, dist2 } from '../core/math';
 import { DenName } from '../world/camp';
 import { chooseTopic, conversation, Topic } from '../sim/social';
@@ -107,6 +107,8 @@ export class NpcAgent implements Fighter {
   }
 
   /** A leap onto (or off) something high, like the Highrock. */
+  /** Resting in the nursery as a queen. */
+  queenRest = false;
   perch: { x: number; z: number; y: number | null; stay: boolean; t: number; from: THREE.Vector3 } | null = null;
   jumpTo(x: number, z: number, y: number | null, stay: boolean) {
     this.perch = { x, z, y, stay, t: 0, from: this.pos.clone() };
@@ -355,6 +357,25 @@ export class NpcManager {
     // emergencies override everything
     if (a.activity === 'fight') { this.fightThink(a, dt); return; }
     if (a.activity === 'stranded') { a.mood = 'afraid'; if (simRng.chance(dt * 0.25)) a.say(simRng.pick(['Help! Help me!', 'The water is rising!', 'Someone, please!']), 3); return; }
+    // queens rest in the nursery until their kits are six moons old
+    const queen = c.clan === 'home' && c.sex === 'she' && !c.exiled && (c.expectingUntil !== null || !!c.labour || c.kits.some((k) => { const kc = game.clan.get(k); return !!kc && kc.alive && kc.age < 6; }));
+    if (queen && !['ceremony', 'flee', 'talkPlayer', 'approach', 'talk', 'leaving'].includes(a.activity)) {
+      if (a.activity === 'follow' || a.activity === 'lead' || a.activity === 'shield' || a.activity === 'patrol') { this.endConvo(a); a.say('I need to rest in the nursery now…', 3); a.followTarget = null; }
+      if (a.patrol) { for (const p of game.clan.patrols) p.members = p.members.filter((id) => id !== c.id); a.patrol = null; }
+      const n = game.camp.dens.nursery;
+      const bed = n.beds[Math.abs(hashString(c.id)) % n.beds.length];
+      const dn = Math.hypot(a.pos.x - bed.x, a.pos.z - bed.z);
+      if (dn > 0.7) {
+        if (!a.target || Math.hypot(a.target.x - bed.x, a.target.z - bed.z) > 0.5) { a.activity = 'idle'; a.forcedPose = null; a.moveSpeed = 1.6; a.setTarget(bed.x, bed.z); }
+        return;
+      }
+      // settled in her nest: loafing, grooming, sleeping at night
+      a.target = null;
+      a.activity = 'idle';
+      a.queenRest = true;
+      a.forcedPose = game.time.isNight ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
+      return;
+    } else if (a.queenRest) { a.queenRest = false; a.forcedPose = null; }
     if (a.activity === 'follow') { this.followThink(a); return; }
     if (a.activity === 'shield') { this.shieldThink(a); return; }
     if (a.activity === 'lead') { this.leadThink(a, dt); return; }
@@ -374,19 +395,6 @@ export class NpcManager {
       return;
     }
     a.forcedPose = null;
-    // queens stay by the nursery until their kits are six moons old
-    if (c.sex === 'she' && (c.expectingUntil !== null || c.labour || c.kits.some((k) => { const kc = game.clan.get(k); return !!kc && kc.alive && kc.age < 6; }))
-        && !['ceremony', 'fight', 'sleep', 'flee', 'talkPlayer', 'approach', 'talk'].includes(a.activity)) {
-      const n = game.camp.dens.nursery;
-      const dn = Math.hypot(a.pos.x - n.x, a.pos.z - n.z);
-      if (a.patrol) a.patrol = null;
-      if (dn > 7 && (!a.target || Math.hypot(a.target.x - n.x, a.target.z - n.z) > 4)) {
-        a.activity = 'idle';
-        a.moveSpeed = 1.6;
-        a.setTarget(n.x + simRng.range(-1.5, 1.5), n.z + simRng.range(-1.5, 1.5));
-        return;
-      }
-    }
     if (this.ceremonyUntil > game.clock && a.activity === 'ceremony') {
       if (!a.target) {
         const hr = game.camp.highRock;

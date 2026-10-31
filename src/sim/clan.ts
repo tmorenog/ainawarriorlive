@@ -569,8 +569,16 @@ export class ClanSim {
     she.nurseryDay = this.game.time.day + 1;
   }
 
-  private nurseryTick() {
+  nurseryTick() {
     const day = this.game.time.day;
+    // mates paired before this was added: the she-cat still gets her turn in the nursery (once)
+    for (const c of this.home()) {
+      if (c.sex !== 'she' || !c.mate || c.nurseryDay !== undefined || c.expectingUntil !== null || c.stage !== 'warrior') continue;
+      const m = this.get(c.mate);
+      if (!m || !m.alive || m.sex !== 'tom' || m.mate !== c.id || !(c.isPlayer || m.isPlayer)) continue;
+      if (c.kits.some((k) => this.get(k)?.parents.includes(m.id))) continue;
+      c.nurseryDay = day;
+    }
     for (const c of this.home()) {
       if (c.nurseryDay === undefined || c.nurseryDay > day) continue;
       c.nurseryDay = undefined;

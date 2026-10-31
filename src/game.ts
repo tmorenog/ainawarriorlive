@@ -494,6 +494,7 @@ export class Game {
       }
       if (bornInto) { this.bornIntoClan(bornInto); return; }
       if (c.player.lifestyle === 'kittypet') this.twolegs.home.setName(c.player.given);
+      c.nurseryTick();
       if (this.twolegs.inFacility(this.player.pos.x, this.player.pos.z)) setTimeout(() => this.twolegs.resumePound(), 400);
       // saves from before the age reset existed get it once
       if (!d.agesReset) this.youngAgain();
