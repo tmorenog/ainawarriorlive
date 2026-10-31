@@ -33,6 +33,8 @@ export class Player implements Fighter {
   pitch = 0;
   heading = 0;
   /** Stay put here (grooming or sleeping beside someone) until you move. */
+  /** You (a new mother) are licking your newborn kits warm. */
+  lickKitsUntil = 0;
   holdSpot: { x: number; z: number; until: number; heading?: number } | null = null;
   radius = 0.2;
   speed = 0;

@@ -844,7 +844,7 @@ export class ClanSim {
     if (mother.labour) { this.birth(mother, med); return; } // already waited a whole day
     mother.labour = true;
     mother.litterSize = this.rollLitter();
-    if (mother.litterSize >= 5) setTimeout(() => this.game.ui.toast(`🌿 ${displayName(mother)} is having a BIG litter — five kits! The birth will take ${this.herbsForLitter(5)} herbs. Medicine cats, bring plenty!`, 'objective'), 1500);
+    if (mother.litterSize >= 5) setTimeout(() => this.game.ui.toast(`🌿 ${displayName(mother)} is having a BIG litter — ${mother.litterSize === 6 ? 'six' : 'five'} kits! The birth will take ${this.herbsForLitter(5)} herbs. Medicine cats, bring plenty!`, 'objective'), 1500);
     this.game.npcs.agents.get(mother.id)?.say('Oh… I think the kits are coming!', 6);
     if (mother.isPlayer) this.game.ui.showBanner(`${displayName(mother)}: Oh… I think the kits are coming!`, 5);
     if (med?.isPlayer) {
@@ -871,8 +871,8 @@ export class ClanSim {
   }
 
   /** Called when the player medicine cat reaches the queen in labour. */
-  /** Litter size: 1–5 kits, and big litters of five are common. */
-  rollLitter(): number { return simRng.weighted<number>([[1, 10], [2, 25], [3, 25], [4, 10], [5, 30]]); }
+  /** Litter size: 1–6 kits; big litters of five or six are common. */
+  rollLitter(): number { return simRng.weighted<number>([[1, 10], [2, 20], [3, 25], [4, 10], [5, 25], [6, 10]]); }
 
   /** Herbs a birth needs: a litter of five takes a lot more. */
   herbsForLitter(n: number): number { return n >= 5 ? 4 : n >= 4 ? 2 : 1; }
@@ -979,6 +979,8 @@ export class ClanSim {
       }
     }
     this.game.npcs.syncRoster();
+    // the queen licks her newborns until they're warm and dry, then they snuggle up to nurse
+    this.game.npcs.newbornCare(mother, kits);
   }
 
   kill(c: Cat, cause: string) {

@@ -796,7 +796,7 @@ export class Interactions {
     const myKit = c.stage === 'kit' && c.parents?.includes(pc.id);
     if (myMum && a.queenRest) opts.unshift({ label: '🍼 Drink milk', hint: 'snuggle up to your mother', action: () => {
       done();
-      const px = Math.cos(a.heading + Math.PI / 2), pz = Math.sin(a.heading + Math.PI / 2);
+      const px = Math.cos(a.heading - Math.PI / 2), pz = Math.sin(a.heading - Math.PI / 2);
       const x = a.pos.x + px * 0.3, z = a.pos.z + pz * 0.3;
       const heading = Math.atan2(a.pos.z - z, a.pos.x - x);
       g.player.placeAt(x, z, -heading - Math.PI / 2);

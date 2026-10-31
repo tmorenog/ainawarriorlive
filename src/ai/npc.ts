@@ -114,6 +114,8 @@ export class NpcAgent implements Fighter {
   napUntil = 0;
   /** A mother lies on her side while her kits nurse, or rolls about playing with them. */
   nursingUntil = 0;
+  /** A new mother licks her newborn kits until they're warm. */
+  lickKitsUntil = 0;
   /** Kit: the mother it's nursing from ('player' = you). Parent/kit: who they're playing with. */
   suckleWith: NpcAgent | 'player' | null = null;
   playWith: NpcAgent | 'player' | null = null;
@@ -421,6 +423,7 @@ export class NpcManager {
       a.target = null;
       a.activity = 'idle';
       a.queenRest = true;
+      if (a.lickKitsUntil > game.clock) { a.forcedPose = 'groomOther'; return; }
       if (a.nursingUntil > game.clock && !queenBed) { a.forcedPose = 'layDown'; return; }
       a.forcedPose = queenBed || a.napUntil > game.clock || game.player.sleeping && game.clan.player.mate === c.id && Math.hypot(game.player.pos.x - a.pos.x, game.player.pos.z - a.pos.z) < 2 ? 'sleep' : (Math.sin(game.clock * 0.05 + c.age) > 0.6 ? 'groom' : 'loaf');
       // expecting queens chat about their coming kits when you're nearby
@@ -644,6 +647,28 @@ export class NpcManager {
     a.setTarget(Math.cos(ang) * rr, Math.sin(ang) * rr * 0.9 + 1);
   }
 
+  /** Right after a birth: the queen licks her newborns warm, then they snuggle up to nurse. */
+  newbornCare(mother: Cat, kits: Cat[]) {
+    const game = this.game;
+    const lickFor = 25;
+    const agents = kits.map((k) => this.agents.get(k.id)).filter((k): k is NpcAgent => !!k);
+    if (mother.isPlayer) {
+      const p = game.player;
+      p.lickKitsUntil = game.clock + lickFor;
+      p.posePick = 'groomOther';
+      p.holdSpot = { x: p.pos.x, z: p.pos.z, until: game.clock + lickFor + 20, heading: p.heading };
+      for (const k of agents) { k.pos.set(p.pos.x + simRng.range(-0.4, 0.4), k.pos.y, p.pos.z + simRng.range(-0.4, 0.4)); this.startSuckle(k, 'player'); k.actTimer = lickFor + 20; }
+      setTimeout(() => game.ui.toast('👅 You lick your tiny kits all over until they are warm and dry. They squeak and wriggle closer.', 'good'), 2500);
+      setTimeout(() => { if (p.posePick === 'groomOther') p.posePick = 'layDown'; }, lickFor * 1000);
+      return;
+    }
+    const M = this.agents.get(mother.id);
+    if (!M) return;
+    M.lickKitsUntil = game.clock + lickFor;
+    M.say('*licks the tiny kits until they are warm and dry*', 5);
+    for (const k of agents) { k.pos.set(M.pos.x + simRng.range(-0.4, 0.4), k.pos.y, M.pos.z + simRng.range(-0.4, 0.4)); this.startSuckle(k, M); k.actTimer = lickFor + 20; }
+  }
+
   /** A tom visiting his mate in the nursery: sits by her, grooms her, chats, then leaves. */
   private visitMateThink(a: NpcAgent) {
     const game = this.game;
@@ -694,26 +719,33 @@ export class NpcManager {
   }
 
   /** Where a nursing kit lies: along its mother's belly, side by side with its littermates. */
-  private suckleSpot(a: NpcAgent, mx: number, mz: number, mh: number) {
+  private suckleSpot(a: NpcAgent, mx: number, mz: number, mh: number, lick = false) {
     const sibs = [...this.agents.values()].filter((k) => k.activity === 'suckle' && k.suckleWith === a.suckleWith);
     const i = Math.max(0, sibs.indexOf(a));
-    const along = (i - (sibs.length - 1) / 2) * 0.13;
-    const px = Math.cos(mh + Math.PI / 2), pz = Math.sin(mh + Math.PI / 2);
+    const along = (i - (sibs.length - 1) / 2) * 0.1 - 0.05;
+    if (lick) {
+      // newborns lie in a little heap in front of her so she can lick them
+      const sx = Math.cos(mh + Math.PI / 2), sz = Math.sin(mh + Math.PI / 2);
+      return { x: mx + Math.cos(mh) * 0.38 + sx * along, z: mz + Math.sin(mh) * 0.38 + sz * along };
+    }
+    // her belly side (she lies on her side to nurse)
+    const px = Math.cos(mh - Math.PI / 2), pz = Math.sin(mh - Math.PI / 2);
     return { x: mx + px * 0.3 + Math.cos(mh) * along, z: mz + pz * 0.3 + Math.sin(mh) * along };
   }
 
   private suckleThink(a: NpcAgent) {
     const game = this.game;
     const m = a.suckleWith;
-    const mum = m === 'player' ? { x: game.player.pos.x, z: game.player.pos.z, h: game.player.heading, ok: true }
-      : m ? { x: m.pos.x, z: m.pos.z, h: m.heading, ok: m.queenRest && m.cat.alive } : null;
-    if (!mum || !mum.ok || a.actTimer <= 0 || game.time.isNight) {
+    const mum = m === 'player' ? { x: game.player.pos.x, z: game.player.pos.z, h: game.player.heading, ok: true, lick: game.player.lickKitsUntil > game.clock }
+      : m ? { x: m.pos.x, z: m.pos.z, h: m.heading, ok: m.cat.alive && (m.queenRest || m.lickKitsUntil > game.clock), lick: m.lickKitsUntil > game.clock } : null;
+    const newborn = a.cat.age < 1;
+    if (!mum || !mum.ok || a.actTimer <= 0 || (game.time.isNight && !newborn)) {
       if (a.actTimer <= 0) { a.cat.hunger = 100; if (simRng.chance(0.4)) a.say(simRng.pick(['*hiccup* So full!', '*yawns* Milk makes me sleepy…', 'Mmm, thanks Mama!']), 2.5); }
       a.activity = 'idle'; a.suckleWith = null; a.actTimer = 0;
       return;
     }
-    if (m !== 'player' && m) m.nursingUntil = game.clock + 1.5;
-    const spot = this.suckleSpot(a, mum.x, mum.z, mum.h);
+    if (m !== 'player' && m && !mum.lick) m.nursingUntil = game.clock + 1.5;
+    const spot = this.suckleSpot(a, mum.x, mum.z, mum.h, mum.lick);
     if (Math.hypot(a.pos.x - spot.x, a.pos.z - spot.z) > 0.3) {
       if (!a.target || Math.hypot(a.target.x - spot.x, a.target.z - spot.z) > 0.1) a.setTarget(spot.x, spot.z);
       return;
@@ -722,7 +754,7 @@ export class NpcManager {
     a.pos.x += (spot.x - a.pos.x) * 0.2; a.pos.z += (spot.z - a.pos.z) * 0.2;
     a.target = null;
     a.heading = Math.atan2(mum.z - a.pos.z, mum.x - a.pos.x);
-    a.forcedPose = 'suckle';
+    a.forcedPose = mum.lick ? 'sleep' : 'suckle';
     a.cat.hunger = Math.min(100, a.cat.hunger + 0.05);
   }
 
