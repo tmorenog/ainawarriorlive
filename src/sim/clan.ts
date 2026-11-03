@@ -415,8 +415,9 @@ export class ClanSim {
       const drain = (c.stage === 'kit' ? 0.9 : 1.05) * (cold ? 1.3 : 1) * (drought ? 1.15 : 1);
       c.hunger = clamp(c.hunger - drain, 0, 100);
       // healing and sickness
-      if (c.injury > 0) c.injury = Math.max(0, c.injury - (c.role === 'medicine' ? 1.2 : 0.6) - (this.medicine ? 0.4 : 0));
-      if (c.sick > 0) {
+      // (your own wounds and sickness only heal with a medicine cat's care, herbs or the vet)
+      if (c.injury > 0 && !c.isPlayer) c.injury = Math.max(0, c.injury - (c.role === 'medicine' ? 1.2 : 0.6) - (this.medicine ? 0.4 : 0));
+      if (c.sick > 0 && !c.isPlayer) {
         const care = this.medicine && !this.medicine.isPlayer ? 0.35 : 0.1;
         c.sick = clamp(c.sick + (cold ? 0.5 : 0.1) - care - (c.age < 80 ? 0.3 : 0), 0, 100);
       }

@@ -906,7 +906,7 @@ export class Game {
     this.time.speed = 1;
     this.player.sleeping = false;
     const c = this.clan.player;
-    c.health = Math.min(c.maxHealth, c.health + 20);
+    // sleeping doesn't heal you — only a medicine cat, herbs or the vet can
     this.player.stamina = 100;
     this.ui.fade(false);
     this.ui.toast(this.time.hour < 8 ? 'Dawn light filters into the den. A new moon begins.' : 'You wake, refreshed.', 'info');
@@ -1017,7 +1017,7 @@ export class Game {
         c.health -= 7 * this.player.poison;
         this.player.poison = Math.max(0, this.player.poison - 0.07);
         if (c.health <= 0) { this.clan.kill(c, 'deathberries'); return; }
-      } else if (c.hunger > 25 && !this.combat.playerInCombat) c.health = Math.min(c.maxHealth, c.health + (this.player.sleeping ? 8 : 3));
+      } // no healing on your own: only a medicine cat, a poultice, herbs or the vet heal you
       if (c.health <= 0) this.clan.kill(c, 'hunger');
     }
     this.camp.setHerbCount(this.clan.herbTotal());
