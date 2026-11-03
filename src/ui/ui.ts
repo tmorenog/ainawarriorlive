@@ -302,6 +302,35 @@ export class UI {
     this.modalEl = back;
   }
 
+  /** Ask for a number (e.g. a cat's age in moons). */
+  numberInput(title: string, text: string, value: number, min: number, max: number, onOk: (n: number) => void) {
+    if (this.modalEl || this.dialogEl) { this.modalQueue.push(() => this.numberInput(title, text, value, min, max, onOk)); return; }
+    const g = this.game;
+    g.player.busy = true;
+    g.input.unlock();
+    const back = h('div', 'modal-back', '', this.root);
+    const m = h('div', 'modal', `<h2>${esc(title)}</h2><p>${esc(text)}</p>`, back);
+    const row = h('div', 'row', '', m);
+    const minus = h('button', 'btn dim', '−', row);
+    const inp = h('input', '', undefined, row) as HTMLInputElement;
+    inp.type = 'number'; inp.min = String(min); inp.max = String(max); inp.value = String(Math.floor(value));
+    inp.style.width = '90px'; inp.style.fontSize = '18px'; inp.style.textAlign = 'center';
+    const plus = h('button', 'btn dim', '+', row);
+    const quick = h('div', 'row', '', m);
+    for (const [label, v] of [['Kit (2)', 2], ['Apprentice (8)', 8], ['Warrior (20)', 20], ['Elder (85)', 85]] as [string, number][]) { const b = h('button', 'btn dim', label, quick); b.onclick = () => (inp.value = String(v)); }
+    const step = (d: number) => (inp.value = String(clamp((parseInt(inp.value) || 0) + d, min, max)));
+    minus.onclick = () => step(-1); plus.onclick = () => step(1);
+    const btns = h('div', 'row', '', m);
+    const ok = h('button', 'btn', 'Set age', btns);
+    const cancel = h('button', 'btn dim', 'Cancel', btns);
+    const close = () => { this.closeModal(); this.afterClose(); };
+    ok.onclick = () => { const n = clamp(parseInt(inp.value) || 0, min, max); close(); onOk(n); };
+    cancel.onclick = close;
+    inp.onkeydown = (e) => { if (e.key === 'Enter') ok.click(); e.stopPropagation(); };
+    this.modalEl = back;
+    setTimeout(() => inp.focus(), 50);
+  }
+
   closeModal() {
     this.modalEl?.remove();
     this.modalEl = null;

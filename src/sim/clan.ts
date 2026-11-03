@@ -602,7 +602,7 @@ export class ClanSim {
     const rng = simRng;
     const home = this.home();
     for (const c of home) {
-      c.age += 1;
+      c.age += c.stage === 'kit' ? 2 : 1; // kits grow up fast
       // training for NPC apprentices
       if (c.stage === 'apprentice' && !c.isPlayer) {
         const l = rng.pick(LESSONS);
@@ -781,6 +781,38 @@ export class ClanSim {
         if (ag) { const n = this.game.camp.dens.nursery; ag.say(simRng.pick(['Time to move into the nursery!', 'I\'m expecting kits!', '*purrs* The nursery will be my den for a while.']), 4); ag.activity = 'idle'; ag.setTarget(n.x, n.z); }
       }
     }
+  }
+
+  /** Set a cat to a chosen age (in moons); they move to the right stage with the proper ceremony. */
+  setAge(c: Cat, moons: number) {
+    const ranked = c.role === 'leader' || c.role === 'deputy' || c.role === 'medicine';
+    let m = Math.round(clamp(moons, 0, 150));
+    if (ranked && m < 13) m = 13; // leaders, deputies and medicine cats stay grown
+    const want = stageForAge(m);
+    const old = c.stage;
+    c.age = m;
+    c.ceremonyDelay = 0;
+    if (want === 'kit' && old !== 'kit') {
+      if (c.mentor) { const mt = this.get(c.mentor); if (mt && mt.apprentice === c.id) mt.apprentice = null; c.mentor = null; }
+      if (c.apprentice) { const ap = this.get(c.apprentice); if (ap && ap.mentor === c.id) { ap.mentor = null; const nm = this.pickMentor(ap); if (nm) { ap.mentor = nm.id; nm.apprentice = ap.id; } } c.apprentice = null; }
+      if (c.mate) { const mt = this.get(c.mate); if (mt && mt.mate === c.id) mt.mate = null; c.mate = null; }
+      if (c.role === 'medicineApprentice') c.role = 'none';
+      c.expectingUntil = null; c.labour = false;
+      c.stage = 'kit';
+    } else if (want === 'apprentice' && old === 'kit') this.apprenticeCeremony(c);
+    else if (want === 'apprentice' && old !== 'apprentice') {
+      if (c.apprentice) { const ap = this.get(c.apprentice); if (ap && ap.mentor === c.id) ap.mentor = null; c.apprentice = null; }
+      c.stage = 'apprentice';
+      const mt = this.pickMentor(c); if (mt) { c.mentor = mt.id; mt.apprentice = c.id; }
+    } else if (want === 'warrior' && (old === 'kit' || old === 'apprentice')) {
+      if (old === 'kit') c.stage = 'apprentice';
+      this.warriorCeremony(c);
+    } else if (want === 'warrior' && old === 'elder') c.stage = 'warrior';
+    else if (want === 'elder' && old !== 'elder') this.retire(c);
+    this.log(`${displayName(c)} is now ${m} moons old.`, 'clan');
+    this.game.npcs.syncRoster();
+    this.game.npcs.refreshModels();
+    if (c.isPlayer) this.game.player.refreshStage();
   }
 
   checkStage(c: Cat) {

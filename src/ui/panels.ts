@@ -356,6 +356,14 @@ export class Panels {
       ${c.apprentice ? `<b>Apprentice</b><span>${esc(displayName(clan.get(c.apprentice)!))}</span>` : ''}
       <b>Family</b><span>${fam.length ? esc(fam.join('; ')) : '—'}</span>
       ${!c.alive ? `<b>Died</b><span>Moon ${(c.deathDay ?? 0) + 1}, of ${esc(c.deathCause ?? '?')}</span>` : ''}`, d);
+    if (c.alive && (c.clan === 'home' || c === pc)) {
+      const ab = h('button', 'btn', `🎂 Set ${c === pc ? 'your' : esc(c.given) + '\'s'} age`, d);
+      ab.onclick = () => g.ui.numberInput(`🎂 How old is ${displayName(c)}?`, 'Pick an age in moons. Kits are under 6, apprentices 6–12, warriors 13–79, elders 80+. They move to that stage (with the right ceremony).', c.age, 0, 150, (n) => {
+        g.clan.setAge(c, n);
+        g.ui.toast(`🎂 ${displayName(c)} is now ${Math.floor(c.age)} moons old.`, 'good');
+        this.render();
+      });
+    }
     if (c !== pc) {
       const sl = h('button', 'btn', `💾 Save ${esc(c.given)}'s look`, d);
       sl.onclick = () => { saveLookOf(`${displayName(c)}'s look`, c.app); g.ui.toast(`Saved ${displayName(c)}'s look! Wear or edit it in Journal → Wardrobe.`, 'good'); };
