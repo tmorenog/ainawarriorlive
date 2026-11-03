@@ -989,6 +989,13 @@ export class Game {
       if (before >= 30 && c.thirst < 30) this.ui.toast('💧 You\'re getting thirsty. Find water: a stream, pond, the camp pool, or dew in the morning.', 'info');
       if (before >= 10 && c.thirst < 10) this.ui.toast('💧 You are parched! Drink soon or you will grow weak.', 'danger');
       if (c.thirst <= 0) { c.health -= 4; if (c.health <= 0) { this.clan.kill(c, 'thirst'); return; } }
+      // with a mate you're easily worn down: getting very hungry or thirsty costs a lot of health (once each time)
+      if (c.mate) {
+        if (c.hunger < 20 && !this.player.hungerHit) { this.player.hungerHit = true; c.health = Math.max(5, c.health - 40); this.ui.toast('🍖 You are so hungry you feel weak and shaky! (−40 health) Eat something soon.', 'danger'); }
+        else if (c.hunger >= 40) this.player.hungerHit = false;
+        if ((c.thirst ?? 100) < 15 && !this.player.thirstHit) { this.player.thirstHit = true; c.health = Math.max(5, c.health - 40); this.ui.toast('💧 Your mouth is dry and your head spins from thirst! (−40 health) Drink soon.', 'danger'); }
+        else if ((c.thirst ?? 100) >= 40) this.player.thirstHit = false;
+      }
       if (this.player.poison > 0) {
         c.health -= 7 * this.player.poison;
         this.player.poison = Math.max(0, this.player.poison - 0.07);

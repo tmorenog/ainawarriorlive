@@ -57,6 +57,10 @@ export class Player implements Fighter {
   /** You (a new mother) are licking your newborn kits warm. */
   lickKitsUntil = 0;
   private heavyWarned = false;
+  private hurtCd = 30;
+  /** Already lost health this time for being very hungry / thirsty. */
+  hungerHit = false;
+  thirstHit = false;
   private heavySprintT = -99;
   holdSpot: { x: number; z: number; until: number; heading?: number } | null = null;
   radius = 0.2;
@@ -342,6 +346,23 @@ export class Player implements Fighter {
     this.tripT = Math.max(0, this.tripT - dt);
     if (cat.traits.includes('clumsy') && this.onGround && moving && this.tripT <= 0 && game.clock > this.tripCd
         && Math.random() < dt * (this.sprinting ? 0.06 : this.gait >= 4 ? 0.025 : 0.006)) this.trip();
+    // cats with a mate get hurt easily: stumbles and falls, thorn scrapes
+    if (cat.mate && this.onGround && moving && !this.swimming && game.clock > this.hurtCd) {
+      const outside = Math.hypot(this.pos.x, this.pos.z) > 17;
+      if (Math.random() < dt * (this.sprinting ? 0.02 : this.gait >= 3 ? 0.008 : 0.003)) {
+        this.hurtCd = game.clock + 45;
+        this.tripT = 0.9; this.vel.set(0, 0, 0);
+        cat.health = Math.max(5, cat.health - 40);
+        game.audio.hit(true); game.ui.hurtFlash?.();
+        game.ui.toast(`💥 ${simRng.pick(['You stumble over a root and fall hard!', 'Your paw slips on wet leaves and you tumble over!', 'You trip on a stone and crash to the ground!'])} (−40 health)`, 'danger');
+      } else if (outside && Math.random() < dt * 0.004) {
+        this.hurtCd = game.clock + 45;
+        cat.health = Math.max(5, cat.health - 50);
+        cat.injury = Math.min(100, cat.injury + 15);
+        game.audio.hit(false); game.ui.hurtFlash?.();
+        game.ui.toast(`🩸 ${simRng.pick(['You brush past a thorn bush and scrape your leg!', 'A sharp bramble catches your side — just a tiny scrape, but it stings!', 'You scrape your paw on a jagged stone!'])} (−50 health)`, 'danger');
+      }
+    }
     // stamina
     if (this.sprinting) this.stamina -= dt * 17 * (isExpecting(this.cat) ? 2 : 1);
     else if (this.swimming) this.stamina -= dt * (moving ? 5 : 2.5);

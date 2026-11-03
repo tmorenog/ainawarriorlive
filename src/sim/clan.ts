@@ -498,6 +498,13 @@ export class ClanSim {
   /** Deathberries: kits sometimes eat them. Poison hurts every hour until the medicine cat treats it. */
   poisonTick() {
     const g = this.game;
+    // clan cats with mates get hurt easily too: falls, scrapes, going hungry
+    if (!g.time.isNight) for (const c of this.home()) {
+      if (c.isPlayer || !c.mate || c.stage === 'kit' || !c.alive) continue;
+      if (simRng.chance(0.015)) { c.health = Math.max(5, c.health - 40); g.npcs.agents.get(c.id)?.say(simRng.pick(['*stumbles and falls* Oof!', '*trips over a root* Ow…']), 3); }
+      else if (simRng.chance(0.01)) { c.health = Math.max(5, c.health - 50); c.injury = Math.min(100, c.injury + 15); g.npcs.agents.get(c.id)?.say('Ow! A thorn scraped me!', 3); }
+      if (c.hunger < 20 && simRng.chance(0.3)) c.health = Math.max(5, c.health - 40);
+    }
     const kits = this.home().filter((c) => c.stage === 'kit' && !c.isPlayer && c.poisoned === undefined);
     if (kits.length && !g.time.isNight && simRng.chance(0.02)) {
       const k = simRng.pick(kits);
