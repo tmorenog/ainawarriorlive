@@ -244,7 +244,7 @@ export class Player implements Fighter {
     const stageSpeed = STAGE_SPEED[cat.stage] * (cat.injury > 40 ? 0.7 : 1) * (cat.hunger < 10 ? 0.8 : 1);
     const ground = game.groundAt(this.pos.x, this.pos.z);
     const depth = game.chunks.waterDepthAt(this.pos.x, this.pos.z);
-    this.swimming = depth > 0.28 * Math.max(0.5, scale) + 0.05;
+    this.swimming = !cat.ghost && depth > 0.28 * Math.max(0.5, scale) + 0.05; // spirits never sink or swim
 
     // --- pounce in progress
     if (this.leap) {
@@ -344,10 +344,10 @@ export class Player implements Fighter {
 
     // clumsy cats trip over their own paws now and then
     this.tripT = Math.max(0, this.tripT - dt);
-    if (cat.traits.includes('clumsy') && this.onGround && moving && this.tripT <= 0 && game.clock > this.tripCd
+    if (!cat.ghost && cat.traits.includes('clumsy') && this.onGround && moving && this.tripT <= 0 && game.clock > this.tripCd
         && Math.random() < dt * (this.sprinting ? 0.06 : this.gait >= 4 ? 0.025 : 0.006)) this.trip();
     // cats with a mate get hurt easily: stumbles and falls, thorn scrapes
-    if (cat.mate && this.onGround && moving && !this.swimming && game.clock > this.hurtCd) {
+    if (!cat.ghost && cat.mate && this.onGround && moving && !this.swimming && game.clock > this.hurtCd) {
       const outside = Math.hypot(this.pos.x, this.pos.z) > 17;
       if (Math.random() < dt * (this.sprinting ? 0.02 : this.gait >= 3 ? 0.008 : 0.003)) {
         this.hurtCd = game.clock + 45;
@@ -635,6 +635,7 @@ export class Player implements Fighter {
   private periodicChecks() {
     const game = this.game;
     const cat = this.cat;
+    if (cat.ghost) return; // spirits don't trespass, break the code or get warned
     const x = this.pos.x, z = this.pos.z;
     const inCamp = Math.hypot(x, z) < 17.5;
     const owner = game.territories.ownerAt(x, z);

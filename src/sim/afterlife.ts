@@ -64,7 +64,7 @@ export class Afterlife {
   realm: Realm | null = null;
   get inSky() { return this.realm === 'starclan' || !!this.dreaming; }
   /** Walking inside a sleeping cat's dream. */
-  dreaming: { a: NpcAgent; model: CatModel; pos: THREE.Vector3; heading: number; home: THREE.Vector3; back: THREE.Vector3; group: THREE.Group; exit: THREE.Vector3; t: number } | null = null;
+  dreaming: { a: NpcAgent; model: CatModel; pos: THREE.Vector3; heading: number; home: THREE.Vector3; back: THREE.Vector3; group: THREE.Group; exit: THREE.Vector3; t: number; greeted?: boolean } | null = null;
   static readonly DREAM_X = 4000;
   private pool: THREE.Group | null = null;
   private floor: THREE.Mesh[] = [];
@@ -714,6 +714,8 @@ export class Afterlife {
       const dx = tx - dr.pos.x, dz = tz - dr.pos.z, d = Math.hypot(dx, dz);
       if (d > 0.15) { speed = 0.8; dr.heading = Math.atan2(dz, dx); dr.pos.x += (dx / d) * Math.min(d, speed * dt); dr.pos.z += (dz / d) * Math.min(d, speed * dt); }
     } else dr.heading = Math.atan2(p.z - dr.pos.z, p.x - dr.pos.x); // they look at you
+    // walk up to them and they start talking to you
+    if (!dr.greeted && near < 2 && !g.ui.isBusy() && !g.player.busy) { dr.greeted = true; this.dreamTalk(dr.a); }
     dr.pos.y = Afterlife.SKY_Y + Math.sin(dr.t * 1.4) * 0.03;
     dr.model.root.position.copy(dr.pos);
     dr.model.root.rotation.y = -dr.heading;
@@ -738,10 +740,12 @@ export class Afterlife {
   }
 
   /** Talking with a cat inside their dream. */
-  private dreamTalk(a: NpcAgent) {
+  private dreamTalk(a: NpcAgent, opening?: string) {
     const g = this.game;
     const c = a.cat;
     const clan = g.clan;
+    const again = (text: string) => this.dreamTalk(a, text);
+    const dm = this.dreaming;
     const dangers = g.events.active.filter((e) => ['fire', 'flood', 'storm', 'coldSnap', 'badger', 'fox', 'dog', 'illness', 'rivalSkirmish', 'rockslide', 'fallenTree', 'deathberries'].includes(e.type));
     const pending = g.pendingProphecy;
     const opts: { label: string; hint?: string; action: () => void }[] = [];
@@ -771,7 +775,7 @@ export class Afterlife {
         : isExpecting(c) ? 'I\'m so heavy with kits! I can\'t wait to meet them.'
         : c.hunger < 30 ? 'I\'m so hungry… the fresh-kill pile has been empty for days.'
         : mate ? `I\'m happy. ${mate.given} makes every day warm.` : 'I\'m alright. Just… tired. And I miss the cats we\'ve lost.';
-      g.ui.dialog({ speaker: c, text: line, options: [{ label: 'Back', action: () => this.dreamTalk(a) }] });
+      again(line);
     } });
     if ((c.relations[pc.id]?.opinion ?? 0) > 30 || c.parents.includes(pc.id) || c.mate === pc.id) opts.push({ label: `💕 Tell ${c.given} you miss them`, action: () => {
       clan.remember(c, `${pc.given} visited me in a dream and said they miss me.`, 8, pc.id);
@@ -798,10 +802,30 @@ export class Afterlife {
       opts.push({ label: `🐍 Whisper ambition to ${c.given}`, action: () => { if (!c.traits.includes('ambitious')) c.traits = [...c.traits.slice(-1), 'ambitious'] as Cat['traits']; const ld = clan.leader; if (ld) clan.adjust(c, ld, -20); done(`🐍 ${c.given} wakes hungry for power…`); } });
       opts.push({ label: `😈 Give ${c.given} a nightmare`, action: () => { c.health = Math.max(5, c.health - 15); a.mood = 'afraid'; done(`😈 ${c.given} thrashes in their nest, haunted by red eyes.`); } });
     }
-    opts.push({ label: 'Goodbye', action: () => {} });
-    g.ui.dialog({ speaker: c, text: this.realm === 'starclan'
+    // everything you could talk about with a clanmate, here in the dream
+    opts.push({ label: '💬 Chat', action: () => { clan.adjust(c, pc, 2); again(g.interactions.chatLine(c)); } });
+    opts.push({ label: '📰 Ask for news of the clan', action: () => {
+      const news = clan.lastRecent ? `Have you heard? ${clan.lastRecent}` : 'It\'s been quiet. The hunting is ' + (clan.food > clan.home().length ? 'good' : 'hard') + ' and the borders are ' + (clan.borderSafety > 50 ? 'safe' : 'smelling of rivals') + '.';
+      again(news);
+    } });
+    opts.push({ label: '📖 Ask for a story', action: () => again(simRng.pick([
+      'My mother used to tell me about a kit who followed a shooting star all the way to the Moonstone…',
+      'They say if you dream of a white owl, a great change is coming. And now here you are.',
+      'The elders say every cat who dies becomes a star. I never believed it… until tonight.',
+    ])) });
+    opts.push({ label: '😺 Share tongues', action: () => { clan.adjust(c, pc, 4); g.audio.purr(); again('*leans into you* Your fur smells of stars and night air…'); } });
+    opts.push({ label: '🐾 Play-fight', action: () => { g.player.startPounce(0.3, false); clan.adjust(c, pc, 3); again(simRng.pick(['*tumbles over in the dream-grass, laughing* Even dead, you\'re fast!', 'Ha! Just like old times!'])); } });
+    opts.push({ label: '😜 Tease', action: () => { const likes = c.traits.includes('playful') || c.traits.includes('mischievous'); clan.adjust(c, pc, likes ? 3 : -2); again(likes ? 'Hey! Even a ghost can\'t get away with that!' : '*flattens ears* Is that why you came all the way from StarClan?'); } });
+    if (c.sick > 20 || c.injury > 20 || c.widowOf || c.griefDark || a.mood === 'sad' || a.mood === 'afraid') opts.push({ label: '🤗 Comfort them', action: () => { clan.adjust(c, pc, 5); c.griefDark = false; a.mood = 'neutral'; again('*breathes shakily, then calms* …Thank you. I feel lighter, somehow.'); } });
+    opts.push({ label: this.realm === 'dark' ? '🔥 Tell them about the Dark Forest' : '✨ Tell them about StarClan', action: () => again(this.realm === 'dark' ? '*shudders* A forest with no stars… I hope I never see it.' : '*eyes shining* Clouds you can walk on… and everyone we\'ve lost, waiting? I\'m not afraid anymore.') });
+    opts.push({ label: 'Goodbye', action: () => { if (dm) dm.greeted = true; } });
+    g.ui.dialog({ speaker: c, text: opening ?? (this.realm === 'starclan'
       ? simRng.pick(['*blinks at you in wonder* You glow like the stars… are you from StarClan?', 'Is this a dream? It feels so real…', `*whispers* I've heard of this… StarClan visiting in dreams.`])
-      : simRng.pick(['*shivers* Your eyes… why are they so red?', 'What do you want from me? This place is so cold.', '*backs away* Who are you?']), options: opts });
+      : simRng.pick(['*shivers* Your eyes… why are they so red?', 'What do you want from me? This place is so cold.', '*backs away* Who are you?'])), options: opts, input: (t) => {
+      const r = smartReply(g, c, t);
+      if (r) { clan.adjust(c, pc, r.opinion); if (r.romance) clan.rel(c, pc).romance = clamp(clan.rel(c, pc).romance + r.romance, 0, 100); }
+      again(r?.reply ?? simRng.pick(['*tilts head* In this dream, your words sound like music.', 'Tell me more… I don\'t want to wake up yet.', '*listens closely*']));
+    } });
   }
 
   // ------------------------------------------------------------ judging the newly dead
