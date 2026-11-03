@@ -3,6 +3,7 @@
 // personality, talks to other cats, hunts, patrols, trains and sleeps.
 import * as THREE from 'three';
 import type { Game } from '../game';
+import { isFamily } from '../sim/social';
 import { Cat, bellyFor, displayName, isExpecting, isQueen, queenPowerK, queenSpeedK, queenComplaint, expectingProgress } from '../cats/types';
 import { CatModel, Mood, Pose } from '../cats/model';
 import { simRng, hashString } from '../core/rng';
@@ -18,7 +19,7 @@ export type Activity =
   | 'guard' | 'rivalPatrol' | 'moss' | 'nurse' | 'suckle' | 'parentPlay' | 'visitMate' | 'healRun' | 'watch' | 'leaving' | 'shield' | 'lead';
 
 export interface ApproachIntent {
-  kind: 'training' | 'play' | 'order' | 'greet' | 'chat' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit';
+  kind: 'training' | 'play' | 'order' | 'greet' | 'chat' | 'apprentice' | 'rescueThanks' | 'warning' | 'loner' | 'scoldKit' | 'punishKit' | 'proposeMate';
   text: string;
   data?: any;
 }
@@ -112,6 +113,13 @@ export class NpcAgent implements Fighter {
   mateRest = false;
   /** Game clock time until which a resting queen naps (while her mate grooms her). */
   napUntil = 0;
+  /** Scripted moments (a death scene): walk to a spot, face someone, hold a pose. */
+  sceneUntil = 0;
+  sceneSpot: { x: number; z: number } | null = null;
+  sceneFace: { x: number; z: number } | null = null;
+  scenePose: Pose | null = null;
+  /** Crying: little tears fall from their eyes. */
+  tears = false;
   /** Medicine cat: the clanmate they're rushing to treat. */
   healTarget: string | null = null;
   healAsked = false;
@@ -299,8 +307,41 @@ export class NpcManager {
   }
 
   // ------------------------------------------------------------------ update
+  /** Hold a cat in a scripted moment: go to a spot, face someone, keep a pose. */
+  playScene(a: NpcAgent, spot: { x: number; z: number } | null, face: { x: number; z: number } | null, pose: Pose, secs: number, speed = 2.6) {
+    this.endConvo(a);
+    a.activity = 'idle';
+    a.patrol = null;
+    a.sceneUntil = this.game.clock + secs;
+    a.sceneSpot = spot; a.sceneFace = face; a.scenePose = pose;
+    a.moveSpeed = speed;
+    a.target = null;
+  }
+
+  private drops: { mesh: THREE.Mesh; vy: number; life: number }[] = [];
+  private dropGeo = new THREE.SphereGeometry(0.012, 6, 5);
+  private dropMat = new THREE.MeshBasicMaterial({ color: 0x9fd4ff, transparent: true, opacity: 0.9 });
+  private updateTears(dt: number) {
+    for (const a of this.agents.values()) {
+      if (!a.tears || !a.model.root.visible || Math.random() > dt * 5) continue;
+      const s = a.model.scale;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const fx = Math.cos(a.heading), fz = Math.sin(a.heading);
+      const m = new THREE.Mesh(this.dropGeo, this.dropMat);
+      m.position.set(a.pos.x + fx * 0.2 * s - fz * 0.035 * side * s, a.pos.y + a.model.eyeHeight * 0.92, a.pos.z + fz * 0.2 * s + fx * 0.035 * side * s);
+      this.game.scene.add(m);
+      this.drops.push({ mesh: m, vy: 0, life: 0.9 });
+    }
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      d.vy -= 3 * dt; d.mesh.position.y += d.vy * dt; d.life -= dt;
+      if (d.life <= 0) { this.game.scene.remove(d.mesh); this.drops.splice(i, 1); }
+    }
+  }
+
   update(dt: number) {
     const game = this.game;
+    this.updateTears(dt);
     const player = game.player;
     const cam = game.camera.position;
     this.convoCheck -= dt;
@@ -404,6 +445,14 @@ export class NpcManager {
 
     // emergencies override everything
     if (a.activity === 'fight') { this.fightThink(a, dt); return; }
+    if (a.sceneUntil > game.clock) {
+      const sp = a.sceneSpot;
+      if (sp && Math.hypot(a.pos.x - sp.x, a.pos.z - sp.z) > 0.3) { a.forcedPose = null; if (!a.target || Math.hypot(a.target.x - sp.x, a.target.z - sp.z) > 0.2) a.setTarget(sp.x, sp.z); return; }
+      a.target = null;
+      if (a.sceneFace) a.heading = Math.atan2(a.sceneFace.z - a.pos.z, a.sceneFace.x - a.pos.x);
+      a.forcedPose = a.scenePose;
+      return;
+    } else if (a.sceneSpot) { a.sceneSpot = null; a.sceneFace = null; a.scenePose = null; a.forcedPose = null; a.tears = false; }
     if (a.activity === 'stranded') { a.mood = 'afraid'; if (simRng.chance(dt * 0.25)) a.say(simRng.pick(['Help! Help me!', 'The water is rising!', 'Someone, please!']), 3); return; }
     // queens rest in the nursery until their kits are six moons old
     const queen = c.clan === 'home' && !c.exiled && isQueen(c, (id) => game.clan.get(id));
@@ -813,7 +862,8 @@ export class NpcManager {
 
   /** The kit's mother, if she's resting in the nursery right now. */
   private motherAgent(a: NpcAgent): NpcAgent | null {
-    const mumId = a.cat.parents?.[0];
+    const real = this.game.clan.get(a.cat.parents?.[0]);
+    const mumId = real && real.alive ? real.id : a.cat.foster;
     if (!mumId) return null;
     const m = this.agents.get(mumId);
     return m && m.queenRest && m.cat.alive ? m : null;
@@ -1379,6 +1429,12 @@ export class NpcManager {
     }
     // player's apprentice wants a lesson
     if (c.mentor === p.id && simRng.chance(0.4) && !game.objectives.busy()) return { kind: 'apprentice', text: `Can we train today? Please?` };
+    // a cat who has fallen for you asks you to be their mate
+    if (!p.mate && !c.mate && game.clan.grownUp(p) && game.clan.grownUp(c) && !isFamily(c, p) && c.clan === 'home'
+      && game.clan.rel(c, p).romance > 45 && op > 40 && !c.crushAsked && simRng.chance(0.35)) {
+      c.crushAsked = true;
+      return { kind: 'proposeMate', text: simRng.pick([`${p.given}… I have to tell you something. I think about you all the time. Will you be my mate?`, `*shuffles paws nervously* ${p.given}, would you… would you be my mate?`, `I've never felt like this about any cat before. ${p.given}, will you be my mate?`]) };
+    }
     // kits want to play
     if (c.stage === 'kit' && (p.stage === 'kit' || p.stage === 'apprentice') && simRng.chance(0.25)) return { kind: 'play', text: `${p.given}! Let's play-fight!` };
     // orders from leader/deputy

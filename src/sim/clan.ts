@@ -2,7 +2,7 @@
 // politics (leader/deputy), reputation and the clan code.
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
-import { Cat, LESSONS, Lesson, Relation, displayName, pronoun } from '../cats/types';
+import { Cat, LESSONS, Lesson, Relation, displayName, isQueen, pronoun } from '../cats/types';
 import { EYE_COLORS, GIVEN_NAMES, PATTERN_LABEL, createCat, randomAppearance, epithetOptions, makeEpithet, personalityFrom, stageForAge } from '../cats/generate';
 import { BOOK_CATS, BookCat, CLASSIC_PREFIXES, isClassic } from '../lore';
 import { RNG, simRng } from '../core/rng';
@@ -481,13 +481,15 @@ export class ClanSim {
   /** Runs at dawn (hour 6) each day — one moon passes. */
   /** Kits get crushes on other kits (which can blossom into romance when they grow up). */
   crushTick() {
-    const young = (c: Cat) => c.alive && !c.exiled && c.clan === 'home' && (c.stage === 'kit' || c.stage === 'apprentice');
+    const young = (c: Cat) => c.alive && !c.exiled && c.clan === 'home' && (c.stage === 'kit' || c.stage === 'apprentice' || (c.isPlayer && c.age <= 18));
     for (const c of Object.values(this.cats)) {
       if (c.crush) { const t = this.get(c.crush); if (!t || !t.alive || t.exiled) c.crush = undefined; continue; }
       if (c.isPlayer || c.stage !== 'kit' || c.age < 1 || !young(c) || !simRng.chance(0.2)) continue;
-      const opts = Object.values(this.cats).filter((o) => o !== c && young(o) && !isFamily(c, o) && Math.abs(o.age - c.age) < 5);
+      const opts = Object.values(this.cats).filter((o) => o !== c && young(o) && !isFamily(c, o) && Math.abs(o.age - c.age) < (o.isPlayer ? 14 : 5));
       if (!opts.length) continue;
-      const pick = opts.sort((x, y) => (this.opinion(c, y) + (y.sex !== c.sex ? 15 : 0) + simRng.range(0, 30)) - (this.opinion(c, x) + (x.sex !== c.sex ? 15 : 0) + simRng.range(0, 30)))[0];
+      // you're everyone's favourite: kits often get a crush on you
+      const score = (o: Cat) => this.opinion(c, o) + (o.sex !== c.sex ? 15 : 0) + (o.isPlayer ? 40 : 0) + simRng.range(0, 30);
+      const pick = opts.sort((x, y) => score(y) - score(x))[0];
       c.crush = pick.id;
       this.rel(c, pick).romance = clamp(this.rel(c, pick).romance + 25, 0, 100);
       this.adjust(c, pick, 5);
@@ -568,27 +570,68 @@ export class ClanSim {
     const mate = this.get(mother.mate);
     const mateHere = mate && mate.alive ? mate : null;
     const banner = (who: Cat, text: string) => { g.npcs.agents.get(who.id)?.say(text.replace(/\*[^*]*\*\s*/g, '').trim() || text, 5); g.ui.showBanner(`${displayName(who)}: ${text}`, 5); };
-    const die = () => {
-      mother.fatalBirth = false;
-      this.kill(mother, 'complications after giving birth');
-      const healer = helper && helper.alive && !helper.isPlayer ? helper : this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null;
-      if (healer && !healer.isPlayer) setTimeout(() => banner(healer, '…I\'m sorry…'), 2500);
-      if (mateHere) this.remember(mateHere, `${displayName(mother)} died giving birth to our kits. I'll never forget her last words.`, -10, mother.id);
+    const kitsAlive = mother.kits.map((k) => this.get(k)).filter((k): k is Cat => !!k && k.alive && k.age < 1);
+    const healerOf = () => helper && helper.alive && !helper.isPlayer ? helper : this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null;
+    const griefFor = () => {
+      if (!mateHere) return;
+      this.remember(mateHere, `${displayName(mother)} died giving birth to our kits. I'll never forget her last words.`, -10, mother.id);
+      // grief can darken a heart
+      if (!mateHere.isPlayer && simRng.chance(0.35)) {
+        mateHere.griefDark = true;
+        mateHere.traits = [...mateHere.traits.filter((t) => t !== 'kind' && t !== 'friendly' && t !== 'calm'), 'aggressive'].slice(-2) as Cat['traits'];
+        this.log(`Grief has darkened ${displayName(mateHere)}'s heart.`, 'clan');
+      }
     };
-    const reply = () => {
-      if (!mateHere) { setTimeout(die, 3000); return; }
-      setTimeout(() => {
-        banner(mateHere, '*presses close* No… please don\'t!');
-        const ma = g.npcs.agents.get(mateHere.id);
-        if (ma) { ma.mood = 'sad'; ma.forcedPose = 'lie'; }
-        setTimeout(die, 3800);
-      }, 3500);
+    // where everyone gathers: the mate at her reaching paw, the kits pressed against her
+    const pos = mother.isPlayer ? g.player.pos : g.npcs.agents.get(mother.id)?.pos;
+    const ma = mateHere ? g.npcs.agents.get(mateHere.id) : undefined;
+    const gather = (secs: number) => {
+      if (!pos) return;
+      const p = { x: pos.x, z: pos.z };
+      let face = 0;
+      if (ma) face = Math.atan2(ma.pos.z - p.z, ma.pos.x - p.x);
+      if (mother.isPlayer) {
+        g.player.heading = face;
+        g.player.posePick = 'reach';
+        g.player.holdSpot = { x: p.x, z: p.z, until: g.clock + secs + 30, heading: face };
+      } else {
+        const qa = g.npcs.agents.get(mother.id);
+        if (qa) g.npcs.playScene(qa, null, ma ? { x: ma.pos.x, z: ma.pos.z } : null, 'reach', secs);
+      }
+      if (ma) {
+        g.npcs.playScene(ma, { x: p.x + Math.cos(face) * 0.55, z: p.z + Math.sin(face) * 0.55 }, p, 'groomOther', secs + 25, 3.5);
+        ma.tears = true;
+      }
+      kitsAlive.forEach((k, i) => {
+        const ka = g.npcs.agents.get(k.id);
+        if (!ka) return;
+        const ang = face + Math.PI * (0.55 + i * 0.3);
+        g.npcs.playScene(ka, { x: p.x + Math.cos(ang) * 0.38, z: p.z + Math.sin(ang) * 0.38 }, p, i % 2 ? 'groomOther' : 'suckle', secs + 25, 1.4);
+      });
     };
     const preset = 'Goodbye… I will join the stars, waiting for you.';
     if (mother.isPlayer) {
-      // your last words to your mate
       const to = mateHere ? displayName(mateHere) : 'your clan';
-      const say = (w: string) => { g.ui.closeDialog(false); banner(mother, w); reply(); };
+      const say = (w: string) => {
+        g.ui.closeDialog(false);
+        gather(20);
+        g.player.deathCam = { t: 0, a0: g.player.heading + Math.PI * 0.65 };
+        g.ui.showHud(false);
+        banner(mother, w);
+        g.ui.toast('🐾 Your paw stretches out toward your mate one last time…', 'info');
+        if (mateHere) setTimeout(() => banner(mateHere, '*tears stream down his face* No… please don\'t! Please don\'t leave me!'), 3500);
+        if (kitsAlive.length) setTimeout(() => g.ui.toast(`🍼 Your tiny kits squirm close, nuzzling and licking your fur…`, 'info'), 6500);
+        setTimeout(() => {
+          g.ui.fade(true, '');
+          setTimeout(() => g.ui.starSparkles('StarClan is waiting for you…', 4500, () => {
+            mother.fatalBirth = false;
+            g.player.deathCam = null;
+            griefFor();
+            g.cinematicDeath = true;
+            this.kill(mother, 'complications after giving birth');
+          }), 1800);
+        }, 10500);
+      };
       g.ui.choice('💫 Your last words', `You feel yourself slipping away toward StarClan… What do you say to ${to}?`, [
         { label: `"${preset}"`, action: () => say(preset) },
         { label: '"Take care of our kits… tell them I loved them."', action: () => say('Take care of our kits… tell them I loved them.') },
@@ -596,8 +639,26 @@ export class ClanSim {
       ]);
       return;
     }
-    banner(mother, `*breathes softly* ${preset}`);
-    reply();
+    // a clan queen's last moments
+    gather(16);
+    banner(mother, `*stretches a paw toward ${mateHere ? mateHere.given : 'the stars'}* ${preset}`);
+    setTimeout(() => {
+      if (mateHere) banner(mateHere, '*tears stream down his face* No… please don\'t!');
+      setTimeout(() => {
+        mother.fatalBirth = false;
+        this.kill(mother, 'complications after giving birth');
+        griefFor();
+        const healer = healerOf();
+        if (healer && !healer.isPlayer) setTimeout(() => banner(healer, '…I\'m sorry…'), 2500);
+        if (mateHere && ma) setTimeout(() => banner(mateHere, '*licks her still fur, again and again*'), 5000);
+        // one of her kits doesn't understand yet
+        const kitT = mother.kits.map((k) => this.get(k)).find((k) => k && k.alive && k.stage === 'kit');
+        if (kitT && mateHere) {
+          setTimeout(() => banner(kitT, 'Where\'s Mama? Is she sleeping?'), 9500);
+          setTimeout(() => banner(mateHere, `*voice breaking* No, ${displayName(kitT)}… she's not coming back.`), 13500);
+        }
+      }, 4500);
+    }, 4000);
   }
 
   /** When labour starts, the queen's mate hurries to her side and stays for the birth. */
@@ -652,6 +713,14 @@ export class ClanSim {
 
   tickDay() {
     this.crushTick();
+    // a heart darkened by grief may turn its back on the clan
+    for (const c of this.home()) if (c.griefDark && !c.isPlayer && simRng.chance(0.12)) {
+      c.exiled = true; c.griefDark = false;
+      if (c.mate) { const m = this.get(c.mate); if (m && m.mate === c.id && m.alive) m.mate = null; }
+      this.log(`${displayName(c)}, twisted by grief, left the clan to walk a darker path.`, 'politics');
+      this.game.notify(`🌑 ${displayName(c)}, twisted by grief, has left the clan to walk a darker path.`);
+      this.game.npcs.syncRoster();
+    }
     // a queen who was dying after her birth never pulls through
     for (const c of Object.values(this.cats)) if (c.fatalBirth && c.alive) { c.fatalBirth = false; this.kill(c, 'complications after giving birth'); }
     // the nursery never sits empty for long
@@ -1156,12 +1225,15 @@ export class ClanSim {
     const kitRisk = clamp(0.06 + 0.07 * herbShort + (healed ? 0 : 0.1) - (playerHelped ? 0.03 : 0), 0.02, 0.4);
     let lost = 0;
     for (let i = 0; i < born; i++) if (simRng.chance(kitRisk)) lost++;
-    const n = born - lost;
+    let n = born - lost;
     const queenRisk = clamp((0.03 + 0.05 * herbShort + (healed ? 0 : 0.08) - (playerHelped ? 0.02 : 0)) * (mother.isPlayer ? 0.5 : 1), 0.01, 0.3);
     // a weak queen (under half health) almost never survives giving birth
     // under 30 health: no chance at all; under 50: almost certain
     const queenDies = mother.health < 30 || simRng.chance(mother.health < 50 ? 0.9 : queenRisk);
     if (queenDies) mother.fatalBirth = true;
+    // if you won't survive, only three kits live — the rest come to StarClan with you
+    if (queenDies && mother.isPlayer && n > 3) { lost += n - 3; n = 3; }
+    if (queenDies && mother.isPlayer) mother.starKits = Array.from({ length: lost }, () => simRng.pick(GIVEN_NAMES));
     const kits: Cat[] = [];
     for (let i = 0; i < n; i++) {
       const k = createCat({ age: 0, parents: father ? [mother, father] : [mother, mother], day: this.game.time.day, usedNames: this.usedNames });
@@ -1197,7 +1269,10 @@ export class ClanSim {
       if (playerHelped) this.game.ui.toast(`🌿 You helped ${displayName(mother)} give birth to ${n} healthy kit${n > 1 ? 's' : ''}!`, 'good');
       this.setRecent(`${displayName(mother)} had ${n} kits!`);
     }
-    if (mother.isPlayer || father?.isPlayer) {
+    if (mother.isPlayer && queenDies) {
+      // no time to name them — you're slipping away
+      this.remember(mother, `My kits were born: ${names}.`, 10);
+    } else if (mother.isPlayer || father?.isPlayer) {
       const me = mother.isPlayer ? mother : father!;
       this.remember(me, `My kits were born: ${names}.`, 10);
       // you get to name your own kits
@@ -1278,6 +1353,18 @@ export class ClanSim {
     c.health = 0;
     const name = displayName(c);
     if (c.clan === 'home') {
+      // her young kits still need milk: another queen takes them in
+      const orphans = c.kits.map((k) => this.get(k)).filter((k): k is Cat => !!k && k.alive && k.age < 6 && k.parents?.[0] === c.id);
+      if (orphans.length) {
+        const queens = this.home().filter((q) => q.id !== c.id && q.alive && q.sex === 'she' && !q.isPlayer && isQueen(q, (id) => this.get(id)));
+        const foster = queens[0] ?? this.home().find((q) => q.id !== c.id && q.alive && q.sex === 'she' && q.stage === 'warrior' && q.role === 'none' && !q.isPlayer);
+        if (foster) {
+          foster.fosterKits = [...(foster.fosterKits ?? []), ...orphans.map((k) => k.id)];
+          for (const k of orphans) { k.foster = foster.id; this.rel(foster, k).opinion = Math.max(this.rel(foster, k).opinion, 70); }
+          setTimeout(() => this.game.notify(`🍼 ${displayName(foster)} will nurse ${name}'s kits as her own.`), 6000);
+          this.log(`${displayName(foster)} took in ${name}'s kits to nurse them.`, 'clan');
+        }
+      }
       this.log(`${name} died of ${cause}. They walk the Long Meadow now.`, 'death');
       this.setRecent(`${name} has died.`);
       // grief & memories

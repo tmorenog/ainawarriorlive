@@ -1635,6 +1635,19 @@ export class Interactions {
       case 'scoldKit':
         this.scoldKit(a, done, intent.text);
         return;
+      case 'proposeMate':
+        g.ui.dialog({ speaker: a.cat, text: intent.text, options: [
+          { label: '💕 Yes! I\'ll be your mate', action: () => {
+            done();
+            clan.makeMates(pc, a.cat);
+            clan.log(`${displayName(pc)} and ${displayName(a.cat)} became mates.`, 'clan');
+            clan.setRecent(`${pc.given} and ${a.cat.given} are mates!`);
+            g.audio.purr();
+            g.ui.toast(`💕 You and ${displayName(a.cat)} are now mates!`, 'good');
+          } },
+          { label: 'I\'m sorry… I just see you as a friend', action: () => { clan.adjust(a.cat, pc, -4); clan.rel(a.cat, pc).romance = Math.max(0, clan.rel(a.cat, pc).romance - 25); a.say('*ears droop* Oh… I understand.', 3); done(); } },
+        ], onClose: done });
+        return;
       case 'play':
         g.ui.dialog({ speaker: a.cat, text: intent.text, options: [
           { label: 'Play-fight!', action: () => { done(); this.playFight(a); } },

@@ -166,6 +166,14 @@ export interface Cat {
   crushAsked?: boolean;
   /** Won't survive the birth she just had (dies after her last words). */
   fatalBirth?: boolean;
+  /** Kits who died with this queen and went to StarClan with her. */
+  starKits?: string[];
+  /** Kits (not her own) this queen is nursing. */
+  fosterKits?: string[];
+  /** The queen nursing this kit since its mother died. */
+  foster?: string;
+  /** Grief has darkened this cat's heart. */
+  griefDark?: boolean;
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;
@@ -291,5 +299,7 @@ export function queenComplaint(c: Cat, pick: <T>(a: T[]) => T, mate?: Cat | null
 export function isQueen(c: Cat, get: (id: string) => Cat | undefined): boolean {
   if (c.sex !== 'she') return false;
   if (c.expectingUntil !== null || c.labour) return true;
-  return c.kits.some((k) => { const kc = get(k); return !!kc && kc.alive && kc.age < 6 && (kc.parents?.[0] ?? c.id) === c.id; });
+  const young = (k: string) => { const kc = get(k); return !!kc && kc.alive && kc.age < 6; };
+  if ((c.fosterKits ?? []).some(young)) return true;
+  return c.kits.some((k) => young(k) && (get(k)!.parents?.[0] ?? c.id) === c.id);
 }

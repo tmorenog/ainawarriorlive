@@ -488,6 +488,14 @@ export class Menus {
       dead.deeds ? `${dead.deeds} good deeds remembered` : '',
     ].filter(Boolean).join(' · ');
     h('div', 'epitaph', summary, s);
+    // a mother lost at the birth: her kit doesn't understand yet
+    const mateL = clan.get(dead.mate);
+    const kitL = dead.kits.map((k) => clan.get(k)).find((k) => k && k.alive && k.stage === 'kit');
+    if (cause.includes('giving birth') && kitL) {
+      h('div', 'epitaph', `<i>${esc(displayName(kitL))}:</i> "Where's Mama? Is she sleeping?"`, s);
+      if (mateL && mateL.alive) h('div', 'epitaph', `<i>${esc(displayName(mateL))}:</i> "No, ${esc(displayName(kitL))}… she's not coming back."`, s);
+    }
+    if ((dead.starKits ?? []).length) h('div', 'epitaph', `${dead.starKits!.length === 1 ? 'One tiny kit' : `${dead.starKits!.length} tiny kits`} went to StarClan with ${esc(dead.given)} — ${esc(dead.starKits!.map((n) => n + 'kit').join(', '))}.`, s);
     const mourners = clan.home().filter((c) => (c.relations[dead.id]?.opinion ?? 0) > 40).slice(0, 5).map((c) => displayName(c));
     if (mourners.length) h('div', 'epitaph', `Mourned by ${esc(mourners.join(', '))}.`, s);
     this.lifeCard(dead, s);

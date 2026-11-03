@@ -750,6 +750,9 @@ export class Game {
     }, 2500);
   }
 
+  /** The death already had its own scene (last words, sparkles) — skip the plain fade. */
+  cinematicDeath = false;
+
   onPlayerDeath(cause: string) {
     if (this.state === 'dead') return;
     this.state = 'dead';
@@ -757,21 +760,26 @@ export class Game {
     this.combat.active.clear();
     this.input.unlock();
     this.ui.panels.close();
+    this.ui.clearQueue();
     this.ui.closeDialog(false);
     this.ui.closeModal();
+    this.player.deathCam = null;
     this.objectives.list = [];
     this.audio.toll();
-    this.ui.fade(true, `${displayName(c)} has died.`);
+    const quick = this.cinematicDeath;
+    this.cinematicDeath = false;
+    if (!quick) this.ui.fade(true, `${displayName(c)} has died.`);
     this.ui.showHud(false);
     this.touch?.show(false);
     // the cat's closest friend grieves first
-    const friend = this.clan.home().filter((x) => !x.isPlayer && x.id !== c.id && (x.relations[c.id]?.opinion ?? 0) >= 30)
+    const mateG = this.clan.get(c.mate);
+    const friend = (mateG && mateG.alive && !mateG.isPlayer ? mateG : undefined) ?? this.clan.home().filter((x) => !x.isPlayer && x.id !== c.id && (x.relations[c.id]?.opinion ?? 0) >= 30)
       .sort((a, b) => (b.relations[c.id]?.opinion ?? 0) - (a.relations[c.id]?.opinion ?? 0))[0];
     setTimeout(() => {
       this.ui.fade(false);
       if (friend) this.menus.griefScene(friend, c, () => this.menus.memorial(c, cause));
       else this.menus.memorial(c, cause);
-    }, 3000);
+    }, quick ? 200 : 3000);
   }
 
   continueAs(cat: Cat) {

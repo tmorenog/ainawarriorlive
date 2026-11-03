@@ -312,3 +312,11 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 .hud-kits { margin: 4px 0 2px; padding: 3px 8px; border-radius: 8px; background: rgba(240, 138, 180, 0.18); color: #f6b6d2; font-size: 13px; }
 
 .hud-prompt.cooling { opacity: 0.55; }
+
+.sparkles { position: fixed; inset: 0; background: #000; z-index: 60; opacity: 0; transition: opacity 0.9s; pointer-events: none; overflow: hidden; }
+.sparkles.on { opacity: 1; }
+.sparkles i { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px 3px rgba(170, 210, 255, 0.85); animation: twinkle 2.4s ease-in-out infinite; opacity: 0; }
+.sparkles.dark i { background: #ff5a4a; box-shadow: 0 0 10px 3px rgba(200, 30, 20, 0.85); }
+.sparkles-text { position: absolute; left: 0; right: 0; top: 46%; text-align: center; font-family: var(--serif); font-size: clamp(22px, 4vw, 40px); color: #e8f0ff; text-shadow: 0 0 18px rgba(150, 190, 255, 0.9); }
+.sparkles.dark .sparkles-text { color: #ffc9c0; text-shadow: 0 0 18px rgba(200, 30, 20, 0.9); }
+@keyframes twinkle { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }

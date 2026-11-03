@@ -773,10 +773,22 @@ export class Player implements Fighter {
     m.update(dt);
   }
 
+  /** A slow, drifting camera for your last moments (it rises and turns a little). */
+  deathCam: { t: number; a0: number } | null = null;
+
   updateCamera(dt: number) {
     const cam = this.game.camera;
     const m = this.model;
     const scale = m.scale;
+    if (this.deathCam) {
+      const dc = this.deathCam;
+      dc.t += dt;
+      const a = dc.a0 + dc.t * 0.07;
+      const r = 1.6 + dc.t * 0.06;
+      cam.position.set(this.pos.x + Math.cos(a) * r, this.pos.y + 0.7 + dc.t * 0.12, this.pos.z + Math.sin(a) * r);
+      cam.lookAt(this.pos.x, this.pos.y + 0.12, this.pos.z);
+      return;
+    }
     const f = this.forward();
     if (this.speed > 0.2 && this.onGround) this.bob += dt * this.speed * 3.2 / Math.max(0.5, scale);
     const bobY = Math.sin(this.bob * 2) * 0.012 * scale * Math.min(1, this.speed / 3);

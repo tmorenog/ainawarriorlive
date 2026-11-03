@@ -152,6 +152,24 @@ export class UI {
     this.banner.classList.add('hidden');
   }
 
+  /** Black screen that fills with twinkling StarClan sparkles, then calls done. */
+  starSparkles(text: string, ms: number, done: () => void, dark = false) {
+    const el = h('div', `sparkles${dark ? ' dark' : ''}`, '', this.root);
+    for (let i = 0; i < 90; i++) {
+      const s = h('i', '', '', el);
+      s.style.left = `${Math.random() * 100}%`;
+      s.style.top = `${Math.random() * 100}%`;
+      s.style.animationDelay = `${Math.random() * 2.5}s`;
+      s.style.transform = `scale(${0.4 + Math.random() * 1.2})`;
+    }
+    h('div', 'sparkles-text', esc(text), el);
+    requestAnimationFrame(() => el.classList.add('on'));
+    setTimeout(() => { el.classList.remove('on'); setTimeout(() => { el.remove(); done(); }, 900); }, ms);
+  }
+
+  /** Forget any boxes that were waiting to open (e.g. when you die). */
+  clearQueue() { this.modalQueue.length = 0; }
+
   fade(on: boolean, text = '') {
     this.fadeEl.textContent = loreText(text);
     this.fadeEl.classList.toggle('on', on);

@@ -7,7 +7,7 @@ import { Accessory, Appearance, LifeStage } from './types';
 import { RNG, hashString } from '../core/rng';
 import { clamp } from '../core/math';
 
-export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink' | 'loaf' | 'layDown' | 'playDead' | 'claws' | 'lashTail' | 'stretch' | 'groomOther' | 'suckle';
+export type Pose = 'stand' | 'walk' | 'sit' | 'lie' | 'sleep' | 'crouch' | 'pounce' | 'fight' | 'groom' | 'eat' | 'swim' | 'drink' | 'loaf' | 'layDown' | 'playDead' | 'claws' | 'lashTail' | 'stretch' | 'groomOther' | 'suckle' | 'reach';
 export type Mood = 'neutral' | 'happy' | 'angry' | 'afraid' | 'alert' | 'sad';
 
 const STAGE_SCALE: Record<LifeStage, number> = { kit: 0.42, apprentice: 0.7, warrior: 1, elder: 0.97 };
@@ -966,6 +966,10 @@ export class CatModel {
       case 'sleep':
         // curled up: body rolled onto its side a little, head tucked, tail over the nose
         bodyY = -this.legLen * 0.98; legF = 1.45; legB = -1.45; headP = 0.55; tailUp = 0.25; lie = 1; curl = 0.55; roll = 0.28;
+        break;
+      case 'reach':
+        // lying on her side, one paw stretched out toward someone she loves
+        bodyY = -this.legLen * 0.98; legF = 1.75; legB = -0.5; headP = 0.25; tailUp = 0.3; lie = 1; roll = 1.0;
         break;
       case 'suckle':
         // a kit pressed against its mother's belly, nuzzling and kneading for milk
