@@ -322,5 +322,5 @@ h3 { font-family: var(--serif); font-size: 20px; margin: 14px 0 6px; }
 @keyframes twinkle { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
 
 .realm-tint { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
-.realm-tint.starclan { background: radial-gradient(ellipse at center, rgba(255,255,255,0) 45%, rgba(190, 215, 255, 0.45) 100%); }
+.realm-tint.starclan { background: radial-gradient(ellipse at center, rgba(255,255,255,0) 45%, rgba(20, 40, 110, 0.5) 100%); }
 .realm-tint.dark { background: radial-gradient(ellipse at center, rgba(70, 0, 0, 0.45) 0%, rgba(25, 0, 0, 0.82) 70%, rgba(0, 0, 0, 0.95) 100%); mix-blend-mode: multiply; }

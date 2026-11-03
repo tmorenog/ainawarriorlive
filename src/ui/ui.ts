@@ -587,7 +587,7 @@ export class UI {
     const pp = g.player.pos;
     const W = window.innerWidth, H = window.innerHeight;
     let i = 0;
-    if (Math.hypot(pp.x, pp.z) < 45 || g.twolegs.places().length) {
+    if (!g.afterlife?.inSky && (Math.hypot(pp.x, pp.z) < 45 || g.twolegs.places().length)) {
       const places: { label: string; icon: string; x: number; z: number; y: number }[] = [];
       const icons: Record<string, string> = { leader: '👑', warriors: '⚔️', apprentices: '🐾', nursery: '🍼', elders: '🌙', medicine: '🌿' };
       for (const d of Object.values(camp.dens)) places.push({ label: d.label, icon: icons[d.name] ?? '🏠', x: d.x, z: d.z, y: g.groundAt(d.x, d.z) + d.radius * 0.85 + 0.55 });
@@ -620,6 +620,7 @@ export class UI {
     let bi = 0, pi = 0;
     const pp = g.player.pos;
     for (const a of g.npcs.agents.values()) {
+      if (g.afterlife?.inSky) break; // the living aren't up here
       const d = a.pos.distanceTo(pp);
       if (d > 22 || !a.model.root.visible) continue;
       this.v.set(a.pos.x, a.pos.y + (a.model.eyeHeight + 0.18) * 1, a.pos.z);

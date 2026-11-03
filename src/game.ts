@@ -216,8 +216,9 @@ export class Game {
   }
 
   // ------------------------------------------------------------ helpers used by systems
-  groundAt(x: number, z: number) { return this.chunks.groundHeight(x, z); }
+  groundAt(x: number, z: number) { return this.afterlife?.inSky ? Afterlife.SKY_Y : this.chunks.groundHeight(x, z); }
   collidersNear(x: number, z: number, out: Collider[] = []): Collider[] {
+    if (this.afterlife?.inSky) return out; // nothing to bump into among the clouds
     this.chunks.collidersNear(x, z, out);
     if (x * x + z * z < 30 * 30) for (const c of this.campColliders) if (Math.abs(c.x - x) < c.r + 3 && Math.abs(c.z - z) < c.r + 3) out.push(c);
     this.twolegs.collidersNear(x, z, out);
@@ -1071,7 +1072,8 @@ export class Game {
     this.input.endFrame();
     // a 3D cutscene (the ride in the animal-control van) takes over the screen
     if (this.overlay) { this.overlay.update(dt); this.renderer.render(this.overlay.scene, this.overlay.camera); return; }
-    this.renderer.render(this.scene, this.camera);
+    if (this.afterlife?.inSky) this.afterlife.renderSky(() => this.renderer.render(this.scene, this.camera));
+    else this.renderer.render(this.scene, this.camera);
   };
 
   private idleUpdate(dt: number) {
