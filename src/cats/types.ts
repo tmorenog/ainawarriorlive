@@ -176,6 +176,8 @@ export interface Cat {
   griefDark?: boolean;
   /** Kittypet: the vet already checked on your kits. */
   vetKits?: boolean;
+  /** The warrior name StarClan chose for this apprentice. */
+  starName?: string;
   /** Kittypet: how many times your Tallfolk were cruel to you. */
   badOwner?: number;
   /** You walk the afterlife as a spirit. */

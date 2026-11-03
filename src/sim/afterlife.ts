@@ -42,6 +42,20 @@ export function ghostify(model: CatModel, tint: number, opacity: number, noFog =
   });
 }
 
+/** The ancient spirits who always walk in StarClan (the founders and old heroes). */
+const ANCIENTS: [string, string, string][] = [
+  ['Thunder', 'star', 'I founded ThunderClan in the oak forest, long before your grandmothers\' grandmothers. Be brave, little one.'],
+  ['Wind', 'star', 'I ran the moors faster than any rabbit. WindClan still runs with my heart.'],
+  ['River', 'star', 'I taught my cats to swim and fish. The river remembers every paw.'],
+  ['Shadow', 'star', 'They called me harsh. But I kept my clan alive through the coldest leaf-bare.'],
+  ['Sky', 'star', 'I walked away from my clan once. Never again. Hold on to the cats you love.'],
+  ['Moth', 'flight', 'I was the first medicine cat to walk in dreams. Now you can too.'],
+  ['Lion', 'heart', 'I fought a whole patrol of rogues alone. Courage isn\'t never being afraid.'],
+  ['Spotted', 'leaf', 'Every herb has a story. Every cat has a destiny.'],
+  ['Feather', 'tail', 'I gave my life for my friends. I would do it again.'],
+  ['Silver', 'stream', 'Love doesn\'t care about clan borders. Don\'t let anyone tell you otherwise.'],
+];
+
 export class Afterlife {
   /** StarClan is a land of clouds high in a dreamy blue sky. */
   static readonly SKY_Y = 600;
@@ -61,6 +75,11 @@ export class Afterlife {
   private skyT = 0;
   private judging: Cat[] = [];
   private kitPlayT = 0;
+  // StarClan fun and decisions
+  private starPrey: { mesh: THREE.Mesh; pos: THREE.Vector3; heading: number; hop: number }[] = [];
+  starCatches = 0;
+  private councilT = 45;
+  private ancientLines = new Map<string, string>();
 
   constructor(private game: Game) {
     game.scene.add(this.cloudGroup);
@@ -116,6 +135,8 @@ export class Afterlife {
     for (const c of this.floor) this.cloudGroup.remove(c);
     this.floor = [];
     if (this.pool) { this.cloudGroup.remove(this.pool); this.pool = null; }
+    for (const sp of this.starPrey) this.cloudGroup.remove(sp.mesh);
+    this.starPrey = [];
     this.tint?.remove(); this.tint = null;
     g.player.placeAt(g.player.pos.x, g.player.pos.z); // back down to the forest floor
     document.body.classList.remove('realm-starclan', 'realm-dark');
@@ -194,6 +215,19 @@ export class Afterlife {
     const dead = g.clan.dead().filter((d) => d.clan === 'home' && d.id !== pc.id && Afterlife.fateOf(d) === this.realm)
       .sort((a, b) => (pc.relations[b.id]?.opinion ?? 0) - (pc.relations[a.id]?.opinion ?? 0)).slice(0, this.inSky ? 30 : 10);
     for (const d of dead) this.addGhost(d, false);
+    // StarClan is never empty: the founders and old heroes are always here
+    if (this.realm === 'starclan') {
+      for (const [given, suffix, line] of ANCIENTS) {
+        if (this.ghosts.size >= 18) break;
+        const a = createCat({ age: simRng.range(30, 90), given, day: g.time.day, usedNames: new Set() });
+        a.epithet = suffix; a.stage = 'warrior'; a.alive = false; a.id = `ancient-${given}`;
+        if (suffix === 'star') a.role = 'leader';
+        if (given === 'Moth' || given === 'Spotted') a.role = 'medicine';
+        a.deathCause = 'old age, many seasons ago';
+        this.ancientLines.set(a.id, line);
+        this.addGhost(a, false);
+      }
+    }
     // the kits who died with you play at your paws
     if (this.realm === 'starclan') for (const name of pc.starKits ?? []) {
       const k = createCat({ age: 0.2, parents: [pc, pc], day: g.time.day, usedNames: new Set() });
@@ -271,6 +305,12 @@ export class Afterlife {
     }
     // a newly dead clanmate is waiting to be judged
     if (this.judging.length && !g.ui.isBusy() && !g.player.busy) this.judge(this.judging.shift()!);
+    if (this.realm === 'starclan') {
+      this.updateStarPrey(dt);
+      // the spirits bring you decisions about the living
+      this.councilT -= dt;
+      if (this.councilT <= 0 && !g.ui.isBusy() && !g.player.busy) { this.councilT = simRng.range(90, 150); this.council(); }
+    }
   }
 
   /** The sky looks different in the afterlife. */
@@ -328,6 +368,14 @@ export class Afterlife {
     if (this.realm === 'starclan' && this.pool && Math.hypot(this.pool.position.x - p.x, this.pool.position.z - p.z) < 2.6) {
       return { text: '🌙 Gaze into the Star Pool — visit a dream', at: { x: this.pool.position.x, y: Afterlife.SKY_Y + 0.6, z: this.pool.position.z }, action: () => this.starPool() };
     }
+    // glowing star-mice to chase across the clouds
+    if (this.realm === 'starclan') {
+      const f = g.player.forward();
+      for (const sp of this.starPrey) {
+        const dx = sp.pos.x - p.x, dz = sp.pos.z - p.z, d = Math.hypot(dx, dz);
+        if (d < 2.6 && (d < 1.4 || (dx * f.x + dz * f.z) / Math.max(d, 0.01) > -0.2)) return { text: '✨ Pounce on the star-mouse!', at: { x: sp.pos.x, y: sp.pos.y + 0.25, z: sp.pos.z }, action: () => this.pounceStar(sp) };
+      }
+    }
     // spirits and your kits
     let best: Ghost | null = null, bd = 2.2;
     for (const gh of this.ghosts.values()) { const d = Math.hypot(gh.pos.x - p.x, gh.pos.z - p.z); if (d < bd) { bd = d; best = gh; } }
@@ -353,6 +401,123 @@ export class Afterlife {
       return { text: `💭 Enter ${a.name}'s dream`, at: { x: a.pos.x, y: a.pos.y + 0.3, z: a.pos.z }, action: () => this.dream(a) };
     }
     return null;
+  }
+
+  // ------------------------------------------------------------ StarClan fun: star-mice
+  private updateStarPrey(dt: number) {
+    const g = this.game;
+    const p = g.player.pos;
+    while (this.starPrey.length < 5) {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshBasicMaterial({ color: 0xfff6c0 }));
+      mesh.scale.set(1.6, 0.9, 1);
+      const a = simRng.range(0, Math.PI * 2), r = simRng.range(4, 14);
+      const pos = new THREE.Vector3(p.x + Math.cos(a) * r, Afterlife.SKY_Y, p.z + Math.sin(a) * r);
+      this.cloudGroup.add(mesh);
+      this.starPrey.push({ mesh, pos, heading: simRng.range(0, 6), hop: Math.random() * 6 });
+    }
+    for (const sp of this.starPrey) {
+      sp.hop += dt * 6;
+      const d = Math.hypot(sp.pos.x - p.x, sp.pos.z - p.z);
+      if (d < 3) sp.heading = Math.atan2(sp.pos.z - p.z, sp.pos.x - p.x) + Math.sin(sp.hop) * 0.6; // scampers away from you
+      else sp.heading += Math.sin(sp.hop * 0.3) * dt;
+      const speed = d < 3 ? 0.9 : 0.5;
+      sp.pos.x += Math.cos(sp.heading) * speed * dt;
+      sp.pos.z += Math.sin(sp.heading) * speed * dt;
+      if (d > 30) { const a = simRng.range(0, Math.PI * 2); sp.pos.set(p.x + Math.cos(a) * 10, Afterlife.SKY_Y, p.z + Math.sin(a) * 10); }
+      sp.mesh.position.set(sp.pos.x, Afterlife.SKY_Y + 0.07 + Math.abs(Math.sin(sp.hop)) * 0.12, sp.pos.z);
+      sp.mesh.rotation.y = -sp.heading;
+    }
+  }
+
+  private pounceStar(sp: { mesh: THREE.Mesh; pos: THREE.Vector3 }) {
+    const g = this.game;
+    const dx = sp.pos.x - g.player.pos.x, dz = sp.pos.z - g.player.pos.z;
+    g.player.yaw = Math.atan2(-dx, -dz); g.player.heading = -g.player.yaw - Math.PI / 2;
+    g.player.startPounce(Math.min(1, Math.max(0, (Math.hypot(dx, dz) - 0.9) / 2.4)), false);
+    if (simRng.chance(0.7)) {
+      this.cloudGroup.remove(sp.mesh);
+      this.starPrey.splice(this.starPrey.indexOf(sp as typeof this.starPrey[number]), 1);
+      this.starCatches++;
+      g.audio.purr();
+      g.ui.toast(`✨ You caught a star-mouse! It bursts into sparkles. (${this.starCatches} caught)`, 'good');
+      if (this.starCatches % 5 === 0) g.ui.showBanner(`A StarClan spirit: *purrs* ${this.starCatches} star-mice! You hunt as well here as you did in the forest.`, 4);
+    } else g.ui.toast('✨ The star-mouse slips between your paws in a puff of sparkles!', 'info');
+  }
+
+  // ------------------------------------------------------------ StarClan decisions about the living
+  private council() {
+    const g = this.game;
+    const clan = g.clan;
+    const living = clan.home(false);
+    const spirit = [...this.ghosts.values()].filter((x) => !x.kit)[0]?.cat;
+    const say = (text: string, options: { label: string; hint?: string; action: () => void }[]) => g.ui.dialog({ speaker: spirit, text: `${spirit ? '' : 'A voice like starlight: '}${text}`, options });
+    const ok = (t: string) => g.ui.toast(t, 'good');
+    const choices: (() => boolean)[] = [
+      // a sick or hurt cat: heal them, or call them home
+      () => {
+        const c = living.filter((x) => x.sick > 25 || x.injury > 25 || x.poisoned !== undefined || x.stage === 'elder').sort((a, b) => (b.sick + b.injury) - (a.sick + a.injury))[0];
+        if (!c) return false;
+        say(`${displayName(c)} is ${c.sick > 25 || c.poisoned !== undefined ? 'very sick' : c.injury > 25 ? 'badly hurt' : 'growing very old'}. Shall we send them strength — or is it their time to join us?`, [
+          { label: `💫 Send ${c.given} strength`, action: () => { c.sick = 0; c.injury = 0; c.poisoned = undefined; c.health = c.maxHealth; ok(`💫 ${displayName(c)} wakes up feeling strong again.`); } },
+          { label: `🌟 Call ${c.given} to StarClan`, hint: 'they pass peacefully', action: () => { clan.kill(c, 'StarClan called them home'); ok(`🌟 ${displayName(c)} passes peacefully in their sleep and walks up into the stars.`); } },
+          { label: 'Let fate decide', action: () => {} },
+        ]);
+        return true;
+      },
+      // an omen for the clan
+      () => {
+        say('The clan below needs a sign from us. What omen shall we send tonight?', [
+          { label: '🌠 A shower of falling stars', hint: 'great hunting', action: () => { clan.addFood(8); ok('🌠 Stars streak over the camp. The next morning the hunting patrols come back heavy with prey!'); } },
+          { label: '☁ A dark cloud over the moon', hint: 'the clan grows careful', action: () => { clan.borderSafety = Math.min(100, (clan.borderSafety ?? 50) + 20); ok('☁ The clan sees the dark cloud and doubles its border patrols.'); } },
+          { label: '🍃 A leaf falling on the medicine den', hint: 'more herbs', action: () => { clan.herbStore.silverleaf += 2; clan.herbStore.sunpetal += 2; ok('🍃 The medicine cat takes the sign and gathers extra herbs.'); } },
+        ]);
+        return true;
+      },
+      // an apprentice's warrior name
+      () => {
+        const ap = living.find((x) => x.stage === 'apprentice' && !x.starName && x.role !== 'medicineApprentice');
+        if (!ap) return false;
+        const opts = ['heart', 'claw', 'storm', 'whisker', 'fur', 'pelt', 'song', 'flight', 'leap', 'fang', 'tail', 'frost'].sort(() => Math.random() - 0.5).slice(0, 3);
+        say(`${displayName(ap)} will be a warrior soon. StarClan will whisper their name to the leader. What shall it be?`, [
+          ...opts.map((s) => ({ label: `${ap.given}${s}`, action: () => { ap.starName = s; ok(`✨ When ${ap.given}paw becomes a warrior, they will be named ${ap.given}${s}.`); } })),
+        ]);
+        return true;
+      },
+      // two cats who love each other
+      () => {
+        const pairs: [Cat, Cat][] = [];
+        for (const a of living) for (const b of living) if (a.id < b.id && !a.mate && !b.mate && a.sex !== b.sex && clan.grownUp(a) && clan.grownUp(b) && clan.rel(a, b).romance > 20) pairs.push([a, b]);
+        const pr = pairs[0];
+        if (!pr) return false;
+        const [a, b] = pr;
+        say(`${displayName(a)} and ${displayName(b)} are always looking at each other… Shall we bring them together?`, [
+          { label: '💕 Bring them together', action: () => { clan.makeMates(a, b); ok(`💕 ${displayName(a)} and ${displayName(b)} become mates.`); } },
+          { label: 'Let them find their own way', action: () => {} },
+        ]);
+        return true;
+      },
+      // bless a kit
+      () => {
+        const k = living.find((x) => x.stage === 'kit');
+        if (!k) return false;
+        say(`Little ${displayName(k)} is still so small. Which gift will you give them?`, [
+          { label: '⚔ Courage', action: () => { k.skills.fighting = Math.min(99, k.skills.fighting + 10); ok(`⚔ ${displayName(k)} will grow up brave.`); } },
+          { label: '🐭 Sharp senses', action: () => { k.skills.hunting = Math.min(99, k.skills.hunting + 10); k.skills.tracking = Math.min(99, k.skills.tracking + 10); ok(`🐭 ${displayName(k)} will be a great hunter.`); } },
+          { label: '🌿 Wisdom', action: () => { k.skills.knowledge = Math.min(99, k.skills.knowledge + 12); ok(`🌿 ${displayName(k)} will understand the herbs and the stars.`); } },
+        ]);
+        return true;
+      },
+      // a rival patrol
+      () => {
+        say('A rival patrol is creeping toward your clan\'s border. Shall we warn them?', [
+          { label: '⚠ Warn them in a dream', action: () => { clan.borderSafety = Math.min(100, (clan.borderSafety ?? 50) + 25); ok('⚠ The deputy wakes from a dream and sends an extra border patrol. The rivals turn back.'); } },
+          { label: 'Let them learn on their own', action: () => {} },
+        ]);
+        return true;
+      },
+    ];
+    const order = choices.map((f, i) => ({ f, r: Math.random() + (i === 0 ? 0.3 : 0) })).sort((a, b) => b.r - a.r);
+    for (const o of order) if (o.f()) return;
   }
 
   /** Look down through the Star Pool and choose a sleeping cat to visit. */
@@ -396,6 +561,8 @@ export class Afterlife {
     const c = gh.cat;
     const pc = g.clan.player;
     const good = c.memories.filter((m) => m.weight > 0).slice(-2).map((m) => m.text);
+    const own = this.ancientLines.get(c.id);
+    if (own) { g.ui.dialog({ speaker: c, text: `*fur glittering with countless stars* ${own}`, options: [{ label: '*bows head respectfully*', action: () => {} }, { label: 'Tell me about the old days', action: () => g.ui.dialog({ speaker: c, text: simRng.pick(['When I was young the forest had no borders — just cats, and the stars above them.', 'We met at Fourtrees under the full moon, even then. Some things never change.', 'The first warrior code was only a few words. Protect the kits. Feed the elders. Never forget StarClan.']), options: [{ label: '*listens, wide-eyed*', action: () => {} }] }) }] }); return; }
     const lines = this.realm === 'dark'
       ? [`*eyes glinting red* So you've come to the Dark Forest too, ${pc.given}.`, 'The living are weak. Visit their dreams… make them strong. Make them ours.', 'StarClan won\'t have us. So we make our own path.']
       : [`*purrs, fur shimmering with stars* Welcome, ${pc.given}. You're home now.`, `I watch over ${g.territories.homeName} every night. ${good[0] ? `I still remember: ${good[0]}` : ''}`, 'When the living sleep, go to them. Warn them. They need us.'];

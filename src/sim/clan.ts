@@ -1076,6 +1076,7 @@ export class ClanSim {
   }
 
   warriorCeremony(c: Cat, epithet?: string) {
+    epithet = epithet ?? c.starName; // the name StarClan chose for them
     const mentor = this.get(c.mentor);
     c.stage = 'warrior';
     if (c.role === 'medicineApprentice') {
@@ -1348,6 +1349,12 @@ export class ClanSim {
 
   kill(c: Cat, cause: string) {
     if (!c.alive || c.ghost) return;
+    // dying while expecting: your unborn kits come to StarClan with you
+    if (c.isPlayer && (c.expectingUntil !== null || c.labour) && !c.fatalBirth) {
+      const n = c.litterSize ?? this.rollLitter();
+      c.starKits = [...(c.starKits ?? []), ...Array.from({ length: n }, () => simRng.pick(GIVEN_NAMES))];
+      c.expectingUntil = null; c.labour = false;
+    }
     c.alive = false;
     c.deathDay = this.game.time.day;
     c.deathCause = cause;
