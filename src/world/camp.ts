@@ -39,6 +39,16 @@ export class Camp {
   dens: Record<DenName, DenDef> = {} as any;
   colliders: Collider[] = [];
   highRock = { x: 0, z: -9, top: 0 };
+  /** Invisible copy of the Highrock shape, used to find its surface. */
+  private highRockMesh: THREE.Mesh | null = null;
+
+  /** Height of the Highrock's surface at a spot (or null if that spot is off the rock). */
+  highRockSurface(x: number, z: number): number | null {
+    if (!this.highRockMesh) return null;
+    const ray = new THREE.Raycaster(new THREE.Vector3(x, this.highRock.top + 6, z), new THREE.Vector3(0, -1, 0));
+    const hit = ray.intersectObject(this.highRockMesh, false)[0];
+    return hit ? hit.point.y : null;
+  }
   pile = { x: 3.2, z: 1.5 };
   /** A little rock-ringed pool of rainwater where the clan drinks. */
   pool = { x: -3.6, z: 2.6 };
@@ -68,6 +78,8 @@ export class Camp {
     const hy = terrain.height(this.highRock.x, this.highRock.z);
     hr.translate(this.highRock.x, hy + 0.3, this.highRock.z);
     this.highRock.top = hy + 3.1;
+    this.highRockMesh = new THREE.Mesh(hr.clone(), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    this.highRockMesh.updateMatrixWorld();
     parts.push(prep(hr, (x, y, z) => {
       const v = 0.55 + (y - hy) * 0.06 + noise.noise(x * 3, z * 3) * 0.05;
       const moss = y - hy > 2.4 ? 0.1 : 0;

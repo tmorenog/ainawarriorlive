@@ -41,7 +41,8 @@ export class Player implements Fighter {
   leapTo(x: number, y: number, z: number, perch: boolean) {
     const to = new THREE.Vector3(x, y, z);
     this.perch = null;
-    this.leap = { t: 0, dur: 0.7, from: this.pos.clone(), to, h: 0.9, perch };
+    const up = Math.max(0, to.y - this.pos.y);
+    this.leap = { t: 0, dur: 0.6 + up * 0.08, from: this.pos.clone(), to, h: 0.7 + up * 0.25, perch };
     this.vel.set(0, 0, 0);
     this.game.audio.jump();
   }

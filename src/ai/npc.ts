@@ -271,7 +271,7 @@ export class NpcManager {
       this.endConvo(a);
       a.activity = 'ceremony';
       a.actTimer = 22;
-      if (a.cat.role === 'leader') { const hr = this.game.camp.highRock; a.jumpTo(hr.x, hr.z + 0.9, hr.top - 0.32, true); a.heading = Math.PI / 2; }
+      if (a.cat.role === 'leader') { const hr = this.game.camp.highRock; a.jumpTo(hr.x, hr.z + 0.9, this.game.camp.highRockSurface(hr.x, hr.z + 0.9) ?? hr.top - 0.32, true); a.heading = Math.PI / 2; }
       else {
         const ang = simRng.range(-Math.PI * 0.8, -Math.PI * 0.2) + Math.PI;
         const r = ids.includes(a.id) ? 3.5 : simRng.range(5, 9);

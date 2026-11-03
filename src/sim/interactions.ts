@@ -463,7 +463,7 @@ export class Interactions {
     if (dist2(p.x, p.z, hr.x, hr.z) < 4.5 && !pl.perch) {
       this.current = pc.stage === 'kit'
         ? { text: '⤴ Try to leap onto the Highrock', action: () => { g.ui.toast('You crouch and spring… but you only reach halfway and slide back down. You\'re too small!', 'info'); pl.startPounce(0.3, false); }, hold: 0.5, at: { x: hr.x, y: hr.top + 0.2, z: hr.z } }
-        : { text: '⤴ Leap onto the Highrock', action: () => pl.leapTo(hr.x, hr.top - 0.32, hr.z + 0.9, true), hold: 0.5, strength: true, at: { x: hr.x, y: hr.top + 0.3, z: hr.z + 0.9 } };
+        : { text: '⤴ Leap onto the Highrock', action: () => { const sz = hr.z + 0.6; pl.leapTo(hr.x, g.camp.highRockSurface(hr.x, sz) ?? hr.top, sz, true); }, hold: 0.5, strength: true, at: { x: hr.x, y: hr.top + 0.3, z: hr.z + 0.6 } };
       return;
     }
     // exiled: ask to return near clan cats is handled via talk

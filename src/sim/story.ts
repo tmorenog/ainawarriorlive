@@ -133,7 +133,7 @@ export class Story {
         if (playerHeals) g.ui.toast(`🌿 Bluestar is hurt! She's coming to you, ${displayName(pc)}. Have a poultice ready (H).`, 'objective');
       }],
       [19500, () => {
-        if (B) { B.forcedPose = null; B.mood = 'angry'; B.jumpTo(hr.x, hr.z + 0.9, hr.top - 0.32, true); B.heading = Math.PI / 2; }
+        if (B) { B.forcedPose = null; B.mood = 'angry'; B.jumpTo(hr.x, hr.z + 0.9, g.camp.highRockSurface(hr.x, hr.z + 0.9) ?? hr.top - 0.32, true); B.heading = Math.PI / 2; }
         g.audio.jump();
       }],
       [21000, () => { line(blue, '*leaps onto the Highrock* TIGERCLAW, YOU ARE EXILED FROM OUR CLAN! FIREHEART — EXPLAIN.', 6); g.audio.chime(); }],
