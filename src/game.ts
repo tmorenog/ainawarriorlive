@@ -1078,8 +1078,9 @@ export class Game {
     const busy = this.ui.isBusy();
     // global keys
     if (!this.player.busy && !this.player.sleeping) {
-      if (input.pressed('KeyE')) this.interactions.interact();
-    }
+      // hold E (or touch and hold the prompt) — quick things are a tap, hard things fill the ring
+      this.interactions.tickHold(dt, input.isDown('KeyE') || this.ui.promptHeld, input.pressed('KeyE') || this.ui.takePromptTap());
+    } else this.interactions.tickHold(dt, false, false);
     if (input.pressed('KeyX') && this.combat.playerInCombat) this.combat.playerYield();
     if (input.pressed('KeyJ')) this.ui.panels.toggle('journal');
     if (input.pressed('KeyM')) this.ui.panels.toggle('map');

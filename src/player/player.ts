@@ -33,6 +33,26 @@ export class Player implements Fighter {
   pitch = 0;
   heading = 0;
   /** Stay put here (grooming or sleeping beside someone) until you move. */
+  /** Standing on a high perch (the Highrock). */
+  perch: THREE.Vector3 | null = null;
+  private leap: { t: number; dur: number; from: THREE.Vector3; to: THREE.Vector3; h: number; perch: boolean } | null = null;
+
+  /** Leap in an arc to a spot (onto the Highrock, or back down). */
+  leapTo(x: number, y: number, z: number, perch: boolean) {
+    const to = new THREE.Vector3(x, y, z);
+    this.perch = null;
+    this.leap = { t: 0, dur: 0.7, from: this.pos.clone(), to, h: 0.9, perch };
+    this.vel.set(0, 0, 0);
+    this.game.audio.jump();
+  }
+
+  /** Hop down off a perch, forward onto the ground. */
+  leapDown() {
+    const f = this.forward();
+    const x = this.pos.x + f.x * 2, z = this.pos.z + f.z * 2;
+    this.leapTo(x, this.game.groundAt(x, z), z, false);
+  }
+
   /** You (a new mother) are licking your newborn kits warm. */
   lickKitsUntil = 0;
   private heavyWarned = false;
@@ -172,6 +192,7 @@ export class Player implements Fighter {
   placeAt(x: number, z: number, yaw?: number) {
     this.pos.set(x, this.game.groundAt(x, z), z);
     this.vel.set(0, 0, 0);
+    this.perch = null; this.leap = null;
     if (yaw !== undefined) this.yaw = yaw;
     this.pounce = null;
   }
@@ -221,6 +242,31 @@ export class Player implements Fighter {
     this.swimming = depth > 0.28 * Math.max(0.5, scale) + 0.05;
 
     // --- pounce in progress
+    if (this.leap) {
+      const l = this.leap;
+      l.t += dt;
+      const k = Math.min(1, l.t / l.dur);
+      this.pos.x = l.from.x + (l.to.x - l.from.x) * k;
+      this.pos.z = l.from.z + (l.to.z - l.from.z) * k;
+      this.pos.y = l.from.y + (l.to.y - l.from.y) * k + Math.sin(k * Math.PI) * l.h;
+      this.speed = 3;
+      this.model.pose = 'pounce';
+      if (k >= 1) { this.leap = null; this.speed = 0; this.onGround = true; if (l.perch) this.perch = l.to.clone(); else game.audio.land(); }
+      this.syncModel(dt);
+      this.updateCamera(dt);
+      return;
+    }
+    if (this.perch) {
+      // stay up on the rock; walk off the edge to leap down
+      const ax0 = controllable ? input.moveAxis() : { x: 0, y: 0 };
+      if (ax0.x !== 0 || ax0.y !== 0 || (controllable && input.pressed('Space'))) this.leapDown();
+      else { this.pos.copy(this.perch); this.vel.set(0, 0, 0); this.speed = 0; this.onGround = true; }
+      const camHeading = -this.yaw - Math.PI / 2;
+      this.heading += angleDiff(this.heading, camHeading) * Math.min(1, dt * 12);
+      this.syncModel(dt);
+      this.updateCamera(dt);
+      return;
+    }
     if (this.pounce) {
       const p = this.pounce;
       p.t += dt;

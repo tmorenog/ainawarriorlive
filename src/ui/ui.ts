@@ -69,6 +69,7 @@ export class UI {
     this.obj = h('div', 'hud-obj interactive', '', this.hud);
     this.obj.onclick = () => this.panels.open('journal', 'duties');
     this.prompt = h('div', 'hud-prompt hidden', '', this.hud);
+    this.buildPrompt();
     this.crosshair = h('div', 'crosshair', '', this.hud);
     this.pounce = h('div', 'pounce-meter hidden', '', this.hud);
     this.placeLayer = h('div', '', '', this.hud);
@@ -418,13 +419,55 @@ export class UI {
     return 'Hunt, patrol, explore, help your clan';
   }
 
+  // ---- the floating "E" prompt (hold E, or touch and hold it on a phone)
+  promptHeld = false;
+  private promptTap = false;
+  private promptText!: HTMLElement;
+  private promptRing!: SVGCircleElement;
+  private promptTip!: HTMLElement;
+  private promptV = new THREE.Vector3();
+  takePromptTap() { const t = this.promptTap; this.promptTap = false; return t; }
+
+  private buildPrompt() {
+    const touch = 'ontouchstart' in window || (navigator.maxTouchPoints ?? 0) > 0;
+    this.prompt.innerHTML = `<div class="pp-key"><svg viewBox="0 0 48 48"><circle class="pp-bg" cx="24" cy="24" r="21"/><circle class="pp-fill" cx="24" cy="24" r="21"/></svg><b>${touch ? '👆' : 'E'}</b></div><div class="pp-txt"><div class="pp-main"></div><div class="pp-tip"></div></div>`;
+    this.promptText = this.prompt.querySelector('.pp-main') as HTMLElement;
+    this.promptTip = this.prompt.querySelector('.pp-tip') as HTMLElement;
+    this.promptRing = this.prompt.querySelector('.pp-fill') as SVGCircleElement;
+    const down = (e: Event) => { this.promptHeld = true; this.promptTap = true; this.prompt.classList.add('on'); e.preventDefault(); e.stopPropagation(); };
+    const up = () => { this.promptHeld = false; this.prompt.classList.remove('on'); };
+    this.prompt.addEventListener('touchstart', down, { passive: false });
+    this.prompt.addEventListener('touchend', up);
+    this.prompt.addEventListener('touchcancel', up);
+    this.prompt.addEventListener('mousedown', down);
+    window.addEventListener('mouseup', up);
+  }
+
   private updatePrompt() {
     const g = this.game;
-    const cur = g.interactions.current;
-    if (cur && !g.player.busy) {
-      this.prompt.classList.remove('hidden');
-      this.prompt.innerHTML = `<kbd>E</kbd>${esc(cur.text)}`;
-    } else this.prompt.classList.add('hidden');
+    const ia = g.interactions;
+    const cur = ia.current;
+    if (!cur || g.player.busy) { this.prompt.classList.add('hidden'); this.promptHeld = false; return; }
+    this.prompt.classList.remove('hidden');
+    if (this.promptText.textContent !== cur.text) this.promptText.textContent = cur.text;
+    const dur = ia.holdDuration(cur);
+    const tip = dur > 0 ? (cur.strength ? `Hold · takes strength (${dur.toFixed(1)}s)` : 'Hold') : '';
+    if (this.promptTip.textContent !== tip) this.promptTip.textContent = tip;
+    const C = 2 * Math.PI * 21;
+    this.promptRing.style.strokeDasharray = `${C}`;
+    this.promptRing.style.strokeDashoffset = `${C * (1 - ia.holdProgress)}`;
+    this.prompt.classList.toggle('holding', ia.holdProgress > 0);
+    // float over the thing you can interact with (or near the middle of the screen)
+    let x = innerWidth / 2, y = innerHeight * 0.7;
+    if (cur.at) {
+      const v = this.promptV.set(cur.at.x, cur.at.y, cur.at.z).project(g.camera);
+      if (v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1) {
+        x = clamp((v.x + 1) / 2 * innerWidth, 110, innerWidth - 110);
+        y = clamp((1 - v.y) / 2 * innerHeight, 90, innerHeight - 40);
+      }
+    }
+    this.prompt.style.left = `${x}px`;
+    this.prompt.style.top = `${y}px`;
   }
 
   private updateCompass() {

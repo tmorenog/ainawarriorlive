@@ -61,7 +61,7 @@ export class TouchControls {
       return b;
     };
     hold('👃', 'sniff', 'KeyQ');
-    hold('✋', 'use', 'KeyE');
+    // (no "use" button: touch and hold the floating prompt instead)
     hold('🐾', 'swipe', 'KeyF');
     this.crouchBtn = h('div', 'tbtn', '⬇<small>crouch</small>', btns);
     this.crouchBtn.addEventListener('touchstart', (e) => { input.virtualDown('KeyC'); setTimeout(() => input.virtualUp('KeyC'), 50); e.preventDefault(); }, { passive: false });

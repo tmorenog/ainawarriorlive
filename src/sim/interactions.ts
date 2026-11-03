@@ -15,7 +15,16 @@ import { bearing } from '../player/scent';
 import { localReply, sentiment } from './chatbot';
 import { aiReply, chatHistory } from './aiChat';
 
-export interface Prompt { text: string; action: () => void }
+export interface Prompt {
+  text: string;
+  action: () => void;
+  /** Seconds you hold E (or touch and hold) to do it; 0 = just tap. */
+  hold?: number;
+  /** Takes strength: weaker cats hold longer, strong cats are quicker. */
+  strength?: boolean;
+  /** Where the prompt floats in the world. */
+  at?: { x: number; y: number; z: number };
+}
 
 export class Interactions {
   current: Prompt | null = null;
@@ -304,6 +313,34 @@ export class Interactions {
     // vigil for a clanmate who died
     const vg = g.vigils?.nearest(p.x, p.z);
     if (vg) { const dc = g.clan.get(vg.catId); this.current = { text: `Sit vigil for ${dc ? displayName(dc) : 'them'}`, action: () => g.vigils.sitVigil(vg) }; return; }
+    // standing on the Highrock: speak to the clan (leader) or leap back down
+    if (pl.perch) {
+      const at = { x: p.x, y: p.y + 0.9, z: p.z };
+      this.current = g.clan.leader?.isPlayer ? { text: '📣 Call the clan beneath the Highrock', action: () => g.ui.openLeader(), at } : { text: '⤵ Leap down', action: () => pl.leapDown(), at };
+      return;
+    }
+    // hunting: prey right in front of you — pounce!
+    if (pc.stage !== 'kit' || Math.hypot(p.x, p.z) > 20) {
+      let prey: { pos: { x: number; y: number; z: number } } | null = null, pd = 3.4 * Math.max(0.7, pl.scale);
+      for (const pr of g.prey.list) {
+        if (pr.hidden) continue;
+        const d = dist2(pr.pos.x, pr.pos.z, p.x, p.z);
+        if (d > pd) continue;
+        const dot = ((pr.pos.x - p.x) * f.x + (pr.pos.z - p.z) * f.z) / Math.max(d, 0.01);
+        if (dot > 0.35) { pd = d; prey = pr; }
+      }
+      if (prey) {
+        const tgt = prey.pos;
+        this.current = { text: 'Pounce!', at: { x: tgt.x, y: tgt.y + 0.35, z: tgt.z }, action: () => {
+          const dx = tgt.x - pl.pos.x, dz = tgt.z - pl.pos.z;
+          pl.yaw = Math.atan2(-dx, -dz);
+          pl.heading = -pl.yaw - Math.PI / 2;
+          const sc = Math.max(0.45, pl.model.scale) * (pc.stage === 'kit' ? 1.3 : 1);
+          pl.startPounce(Math.max(0, Math.min(1, (Math.hypot(dx, dz) / sc - 0.9) / 2.4)), false);
+        } };
+        return;
+      }
+    }
     // Twoleg things: bowls, beds, owners, cages, vans…
     const tp = g.twolegs.prompt();
     if (tp) { this.current = tp; return; }
@@ -311,7 +348,7 @@ export class Interactions {
     const beast = g.creatures.list.find((c) => c.alive && c.state !== 'fight' && dist2(c.pos.x, c.pos.z, p.x, p.z) < 2.6);
     if (beast) {
       const fr = pc.animalFriends?.[beast.type] ?? 0;
-      this.current = { text: `${fr >= 50 ? '💛 ' : ''}Talk to the ${beast.name.toLowerCase()}${fr >= 50 ? ' (friend)' : ''}`, action: () => this.talkAnimal(beast) };
+      this.current = { text: `${fr >= 50 ? '💛 ' : ''}Talk to the ${beast.name.toLowerCase()}${fr >= 50 ? ' (friend)' : ''}`, action: () => this.talkAnimal(beast), at: { x: beast.pos.x, y: beast.pos.y + 0.45, z: beast.pos.z } };
       return;
     }
     // NPC in front
@@ -325,11 +362,18 @@ export class Interactions {
     }
     if (best && best.activity !== 'fight') {
       const a = best;
-      if (a.activity === 'stranded') { this.current = { text: `Help ${a.name} — "Follow me!"`, action: () => this.rescue(a) }; return; }
-      if (g.npcs.evacuate && (a.cat.stage === 'kit' || a.cat.stage === 'elder') && a.activity !== 'follow') {
-        this.current = { text: `Tell ${a.name} to follow you`, action: () => this.escort(a) }; return;
+      const at = { x: a.pos.x, y: a.pos.y + a.model.shoulderY * a.model.scale * 0.9, z: a.pos.z }; // on their torso
+      if (a.activity === 'stranded') { this.current = { text: `Help ${a.name} — "Follow me!"`, action: () => this.rescue(a), hold: 1.2, strength: true, at }; return; }
+      // a hurt or sick cat and you can heal: treat them right here
+      const c = a.cat;
+      const healer = pc.role === 'medicine' || pc.role === 'medicineApprentice' || Object.values(pc.poultices ?? {}).some((v) => v > 0);
+      if (healer && c.id !== pc.id && (c.injury > 25 || c.sick > 25 || c.poisoned !== undefined) && a.activity !== 'sleep') {
+        this.current = { text: `🩹 Treat ${a.name}`, action: () => this.treatCat(a, () => {}), hold: 1.2, at }; return;
       }
-      this.current = { text: `Talk to ${a.name}${a.activity === 'sleep' ? ' (sleeping)' : ''}`, action: () => this.talk(a) };
+      if (g.npcs.evacuate && (a.cat.stage === 'kit' || a.cat.stage === 'elder') && a.activity !== 'follow') {
+        this.current = { text: `Tell ${a.name} to follow you`, action: () => this.escort(a), at }; return;
+      }
+      this.current = { text: `Talk to ${a.name}${a.activity === 'sleep' ? ' (sleeping)' : ''}`, action: () => this.talk(a), at };
       return;
     }
     // moss balls in camp
@@ -392,8 +436,8 @@ export class Interactions {
         return;
       }
       if (it.type === 'treasure') { const ti = TREASURE_INFO[it.kind as TreasureKind]; this.current = { text: `Pick up the ${ti.name} ✨`, action: () => { if (g.fun.collectTreasure(it.kind as TreasureKind)) g.chunks.takeInteractable(it); } }; return; }
-      if (it.type === 'herb') { const info = HERB_INFO[it.kind as HerbKind]; this.current = { text: `Pick ${info.name} (${info.use})`, action: () => this.collect(it) }; }
-      else this.current = { text: 'Gather soft moss', action: () => this.collect(it) };
+      if (it.type === 'herb') { const info = HERB_INFO[it.kind as HerbKind]; this.current = { text: `🌿 Gather ${info.name} (${info.use})`, action: () => this.collect(it), hold: 0.6, at: { x: it.x, y: it.y + 0.15, z: it.z } }; }
+      else this.current = { text: '🌿 Gather soft moss', action: () => this.collect(it), hold: 0.6, at: { x: it.x, y: it.y + 0.15, z: it.z } };
       return;
     }
     // dens
@@ -416,12 +460,47 @@ export class Interactions {
     }
     // High Rock
     const hr = g.camp.highRock;
-    if (dist2(p.x, p.z, hr.x, hr.z) < 4 && g.clan.leader?.isPlayer) { this.current = { text: 'Call the clan beneath the High Rock', action: () => g.ui.openLeader() }; return; }
+    if (dist2(p.x, p.z, hr.x, hr.z) < 4.5 && !pl.perch) {
+      this.current = pc.stage === 'kit'
+        ? { text: '⤴ Try to leap onto the Highrock', action: () => { g.ui.toast('You crouch and spring… but you only reach halfway and slide back down. You\'re too small!', 'info'); pl.startPounce(0.3, false); }, hold: 0.5, at: { x: hr.x, y: hr.top + 0.2, z: hr.z } }
+        : { text: '⤴ Leap onto the Highrock', action: () => pl.leapTo(hr.x, hr.top - 0.32, hr.z + 0.9, true), hold: 0.5, strength: true, at: { x: hr.x, y: hr.top + 0.3, z: hr.z + 0.9 } };
+      return;
+    }
     // exiled: ask to return near clan cats is handled via talk
   }
 
   interact() {
     this.current?.action();
+  }
+
+  // ---------------------------------------------------------------- hold-to-interact (E / touch and hold)
+  /** 0..1: how full the ring around the E key is. */
+  holdProgress = 0;
+  private holdT = 0;
+  private holdKey: string | null = null;
+  private waitRelease = false;
+
+  /** How long you must hold for a prompt (strength jobs: stronger cats are quicker). */
+  holdDuration(p: Prompt): number {
+    const base = p.hold ?? 0;
+    if (base <= 0) return 0;
+    if (!p.strength) return base;
+    const str = this.game.clan.player?.strength ?? 50;
+    return base * clamp(1.7 - str / 70, 0.5, 1.8);
+  }
+
+  tickHold(dt: number, held: boolean, tapped: boolean) {
+    const cur = this.current;
+    if (!cur) { this.holdT = 0; this.holdProgress = 0; this.holdKey = null; if (!held) this.waitRelease = false; return; }
+    const key = cur.text.replace(/\(.*\)/, '');
+    if (key !== this.holdKey) { this.holdKey = key; this.holdT = 0; this.waitRelease = held && !tapped; }
+    const dur = this.holdDuration(cur);
+    if (dur <= 0) { this.holdProgress = 0; if (tapped) cur.action(); return; }
+    if (held && !this.waitRelease) {
+      this.holdT += dt;
+      if (this.holdT >= dur) { this.holdT = 0; this.waitRelease = true; this.holdProgress = 1; cur.action(); return; }
+    } else if (!held) { this.holdT = Math.max(0, this.holdT - dt * 3); this.waitRelease = false; }
+    this.holdProgress = this.holdT / dur;
   }
 
   // ---------------------------------------------------------------- talking
@@ -1813,7 +1892,7 @@ export class Interactions {
     const ready = ([want, 'silverleaf', 'sunpetal', 'bitterroot'] as HerbKind[]).find((k) => (pc.poultices![k] ?? 0) > 0);
     if (ready) {
       this.applyPoultice(ready, c);
-      c.injury = 0; c.sick = 0; c.health = c.maxHealth;
+      c.injury = 0; c.sick = 0; c.health = c.maxHealth; c.poisoned = undefined;
       this.healedDay.set(c.id, g.time.day);
       pc.reputation = clamp(pc.reputation + 1.5, -100, 100);
       clan.adjust(c, pc, 6, { text: `${pc.given} treated me with a poultice.`, weight: 2 });

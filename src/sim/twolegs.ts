@@ -1853,7 +1853,7 @@ export class TwolegSystem {
       if (ac.cage !== null && !this.fac.cages[ac.cage].open) {
         const cg = this.fac.cages[ac.cage];
         if (near(cg.bowl, 0.9) && g.time.totalHours - ((ac as any).ateAt ?? -99) > 6) return { text: 'Eat the dry Twoleg food in the bowl', action: () => { (ac as any).ateAt = g.time.totalHours; pc.hunger = 100; g.interactions.drink(100); g.audio.eat(); g.ui.toast('The food is dry and tastes of nothing, but it fills your belly. You lap the stale water too.', 'info'); } };
-        return { text: `Wiggle the latch with your paw (${ac.latch}/${ac.need})${watching ? ' — the Twoleg is WATCHING!' : ''}`, action: () => this.wiggle() };
+        return { text: `Wiggle the latch with your paw (${ac.latch}/${ac.need})${watching ? ' — the Twoleg is WATCHING!' : ''}`, action: () => this.wiggle(), hold: 0.9, strength: true };
       }
       for (let i = 0; i < this.fac.cages.length; i++) {
         const cg = this.fac.cages[i];
@@ -1862,7 +1862,7 @@ export class TwolegSystem {
         return { text: `${occ.cat.given}'s cage — talk or open it${watching ? ' (the Twoleg is watching!)' : ''}`, action: () => this.talkPound(occ) };
       }
       if (near(this.fac.vent.inside, 1.2)) {
-        if (!ac.ventOpen) return { text: `Pry at the loose, rusty vent cover (${ac.vent}/4)`, action: () => this.pryVent() };
+        if (!ac.ventOpen) return { text: `Pry at the loose, rusty vent cover (${ac.vent}/4)`, action: () => this.pryVent(), hold: 1.4, strength: true };
         return { text: 'Squeeze through the vent and escape!', action: () => this.escape('vent') };
       }
       const pal = this.occupants.find((o) => o.freed && !o.player && near(o.pos, 1.3));
@@ -1871,11 +1871,11 @@ export class TwolegSystem {
       return null;
     }
     // slip the leash!
-    if (this.leash && this.isKittypet) return { text: '🏃 Break free from the leash!', action: () => this.breakLeash() };
+    if (this.leash && this.isKittypet) return { text: '🏃 Break free from the leash!', action: () => this.breakLeash(), hold: 1.2, strength: true };
     // rubbish bins
     for (const b of this.bins) {
       if (!near(b, 1.25)) continue;
-      return { text: b.tipped ? '🗑 Rummage through the spilled rubbish' : '🗑 Knock the lid off and rummage in the bin', action: () => this.rummage(b) };
+      return { text: b.tipped ? '🗑 Rummage through the spilled rubbish' : '🗑 Knock the lid off and rummage in the bin', action: () => this.rummage(b), hold: b.tipped ? 0 : 0.8, strength: !b.tipped };
     }
     // bait set out by the van: a trick!
     for (const c of this.cars) {
