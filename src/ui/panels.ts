@@ -2,6 +2,7 @@
 // memories, discoveries, controls), territory map and the leader's council.
 import type { Game } from '../game';
 import { writeSave } from '../save/save';
+import { createCat } from '../cats/generate';
 import { clanTitle } from '../lore';
 import type { UI } from './ui';
 import { h, esc } from './ui';
@@ -357,6 +358,61 @@ export class Panels {
       ${c.apprentice ? `<b>Apprentice</b><span>${esc(displayName(clan.get(c.apprentice)!))}</span>` : ''}
       <b>Family</b><span>${fam.length ? esc(fam.join('; ')) : '—'}</span>
       ${!c.alive ? `<b>Died</b><span>Moon ${(c.deathDay ?? 0) + 1}, of ${esc(c.deathCause ?? '?')}</span>` : ''}`, d);
+    // fix your family if a save lost it: choose your mate, add your kits back
+    if (c !== pc && pc.mate !== c.id && c.clan === 'home' && c.stage !== 'kit' && c.stage !== 'apprentice') {
+      const mb = h('button', 'btn', `💕 Make ${esc(c.given)} my mate`, d);
+      mb.onclick = () => {
+        const old = g.clan.get(pc.mate); if (old && old.mate === pc.id) old.mate = null;
+        const theirOld = g.clan.get(c.mate); if (theirOld && theirOld.mate === c.id) theirOld.mate = null;
+        pc.mate = c.id;
+        if (c.alive && !pc.ghost) c.mate = pc.id;
+        else if (c.alive && pc.ghost) { c.mate = null; c.widowOf = pc.id; } // you're in StarClan: they're grieving you
+        else c.mate = pc.id;
+        g.clan.rel(c, pc).romance = 100; g.clan.rel(pc, c).romance = 100;
+        g.clan.rel(c, pc).opinion = Math.max(g.clan.rel(c, pc).opinion, 90); g.clan.rel(pc, c).opinion = Math.max(g.clan.rel(pc, c).opinion, 90);
+        g.clan.remember(c, `${pc.given} is my mate. I love ${pc.sex === 'she' ? 'her' : 'him'} more than anything.`, 12, pc.id);
+        if (pc.ghost && c.alive) g.clan.remember(c, `${displayName(pc)} died giving birth to our kits. I miss ${pc.sex === 'she' ? 'her' : 'him'} every day.`, -10, pc.id);
+        g.clan.remember(pc, `${displayName(c)} is my mate.`, 12, c.id);
+        writeSave(g);
+        g.ui.toast(`💕 ${displayName(c)} is your mate again${pc.ghost && c.alive ? ' — and remembers you, and misses you' : ''}. (Saved)`, 'good');
+        this.render();
+      };
+    }
+    if (c === pc && c.clan === 'home') {
+      const kb = h('button', 'btn', '🍼 Add one of my kits', d);
+      kb.onclick = () => {
+        const mate = g.clan.get(pc.mate);
+        g.ui.nameChoice('🍼 Add one of your kits', 'What was your kit\'s name? Pick one or type it (without "kit").', ['Buggy', 'Lovey', 'Little', 'Lucky', 'Clover', 'Mallow'], (name) => {
+          g.ui.choice(`🍼 ${name}kit`, `Where is ${name}kit now?`, [
+            { label: '🌿 Alive, in the clan nursery', action: () => {
+              const k = createCat({ age: 1, parents: mate ? [pc, mate] : [pc, pc], given: name, day: g.time.day, usedNames: g.clan.usedNames });
+              k.parents = mate ? [pc.id, mate.id] : [pc.id];
+              k.bornDay = g.time.day - 1;
+              g.clan.cats[k.id] = k; g.clan.usedNames.add(k.given);
+              pc.kits.push(k.id); if (mate) mate.kits.push(k.id);
+              g.clan.rel(k, pc).opinion = 80;
+              if (mate) { g.clan.rel(mate, k).opinion = 90; g.clan.rel(k, mate).opinion = 80; }
+              if (pc.ghost || !pc.alive) {
+                // a queen nurses the kits of a mother who died
+                const q = g.clan.home(false).find((x) => x.sex === 'she' && x.stage === 'warrior' && x.role === 'none' && !x.isPlayer);
+                if (q) { k.foster = q.id; q.fosterKits = [...(q.fosterKits ?? []), k.id]; }
+              }
+              g.npcs.syncRoster(); g.npcs.refreshModels();
+              writeSave(g);
+              g.ui.toast(`🍼 ${name}kit is back in the nursery. (Saved)`, 'good');
+              this.render();
+            } },
+            { label: '✨ With me in StarClan', action: () => {
+              pc.starKits = [...(pc.starKits ?? []), name];
+              if (g.afterlife.realm === 'starclan') { g.afterlife.leave(); g.afterlife.enter('starclan', true); }
+              writeSave(g);
+              g.ui.toast(`✨ ${name}kit is with you among the stars. (Saved)`, 'good');
+              this.render();
+            } },
+          ]);
+        });
+      };
+    }
     // as a spirit, you can step into any living clanmate's dream
     if (pc.ghost && c !== pc && c.alive && !c.ghost && c.clan === 'home') {
       const db = h('button', 'btn', `💭 Walk in ${esc(c.given)}'s dream`, d);
@@ -427,6 +483,8 @@ export class Panels {
       ['Elders', (c) => c.stage === 'elder' && c.role === 'none'],
     ];
     const used = new Set<string>();
+    // as a spirit you're not in the living clan list — but you can still open your own page
+    if (clan.player?.ghost) { h('h3', '', 'You (spirit)', body); this.catCard(clan.player, h('div', 'cards', '', body)); }
     for (const [title, f] of groups) {
       const list = home.filter((c) => !used.has(c.id) && f(c));
       if (!list.length) continue;
