@@ -7,7 +7,7 @@ import type { Game } from '../game';
 import type { NpcAgent } from '../ai/npc';
 import type { Prompt } from './interactions';
 import { CatModel, Pose } from '../cats/model';
-import { Cat, displayName } from '../cats/types';
+import { Cat, displayName, isExpecting } from '../cats/types';
 import { createCat } from '../cats/generate';
 import { simRng } from '../core/rng';
 import { clamp } from '../core/math';
@@ -46,7 +46,10 @@ export class Afterlife {
   /** StarClan is a land of clouds high in a dreamy blue sky. */
   static readonly SKY_Y = 600;
   realm: Realm | null = null;
-  get inSky() { return this.realm === 'starclan'; }
+  get inSky() { return this.realm === 'starclan' || !!this.dreaming; }
+  /** Walking inside a sleeping cat's dream. */
+  dreaming: { a: NpcAgent; model: CatModel; pos: THREE.Vector3; heading: number; home: THREE.Vector3; back: THREE.Vector3; group: THREE.Group; exit: THREE.Vector3; t: number } | null = null;
+  static readonly DREAM_X = 4000;
   private pool: THREE.Group | null = null;
   private floor: THREE.Mesh[] = [];
   private ghosts = new Map<string, Ghost>();
@@ -96,12 +99,15 @@ export class Afterlife {
         ? '🌟 You walk among StarClan. The living can\'t see you — but you can visit their dreams while they sleep, warn them of danger and guide their fate.'
         : '🔥 You wander the Dark Forest. The living can\'t see you — but you can creep into their dreams to tempt and train them.', 'objective');
     }
+    // a save made inside a dream: wake back up in your own realm
+    if (fromLoad && Math.abs(g.player.pos.x) > 3000) g.player.placeAt(0, 3);
     this.applyLook();
     this.spawnGhosts();
   }
 
   leave() {
     const g = this.game;
+    if (this.dreaming) this.leaveDream();
     this.realm = null;
     for (const gh of this.ghosts.values()) { g.scene.remove(gh.model.root); gh.model.dispose(); }
     this.ghosts.clear();
@@ -214,6 +220,7 @@ export class Afterlife {
     if (!this.realm) return;
     const g = this.game;
     const p = g.player.pos;
+    if (this.dreaming) { this.updateDream(dt); return; }
     for (const f of this.floor) if (Math.hypot(f.position.x - p.x, f.position.z - p.z) > 34) this.placeFloor(f, false);
     // keep the clouds around you
     for (const c of this.clouds) {
@@ -311,8 +318,14 @@ export class Afterlife {
     if (!this.realm) return null;
     const g = this.game;
     const p = g.player.pos;
+    const dr = this.dreaming;
+    if (dr) {
+      if (Math.hypot(dr.pos.x - p.x, dr.pos.z - p.z) < 2.4) return { text: `💬 Talk to ${dr.a.name}`, at: { x: dr.pos.x, y: dr.pos.y + dr.model.shoulderY * dr.model.scale, z: dr.pos.z }, action: () => this.dreamTalk(dr.a) };
+      if (Math.hypot(dr.exit.x - p.x, dr.exit.z - p.z) < 2.2) return { text: '🌙 Leave the dream', at: { x: dr.exit.x, y: dr.exit.y + 0.8, z: dr.exit.z }, action: () => this.leaveDream() };
+      return null;
+    }
     // StarClan: the Star Pool shows you the living, and lets you walk into their dreams
-    if (this.inSky && this.pool && Math.hypot(this.pool.position.x - p.x, this.pool.position.z - p.z) < 2.6) {
+    if (this.realm === 'starclan' && this.pool && Math.hypot(this.pool.position.x - p.x, this.pool.position.z - p.z) < 2.6) {
       return { text: '🌙 Gaze into the Star Pool — visit a dream', at: { x: this.pool.position.x, y: Afterlife.SKY_Y + 0.6, z: this.pool.position.z }, action: () => this.starPool() };
     }
     // spirits and your kits
@@ -325,7 +338,7 @@ export class Afterlife {
         ? { text: `🐾 Play with ${gh.cat.given}kit`, at, action: () => this.playWithKit(gh) }
         : { text: `✨ Talk to ${displayName(gh.cat)}'s spirit`, at, action: () => this.talkGhost(gh) };
     }
-    if (this.inSky) return null;
+    if (this.realm === 'starclan') return null;
     // the living, but only in their dreams
     let sleeper: NpcAgent | null = null, sd = 2.4;
     for (const a of g.npcs.agents.values()) {
@@ -359,8 +372,9 @@ export class Afterlife {
   /** Draw the world while you're up in StarClan: only the sky, the clouds and the spirits. */
   renderSky(render: () => void) {
     const g = this.game;
-    const keep = new Set<THREE.Object3D>([this.cloudGroup, g.player.model.root]);
-    for (const gh of this.ghosts.values()) keep.add(gh.model.root);
+    const keep = new Set<THREE.Object3D>([g.player.model.root]);
+    if (this.dreaming) { keep.add(this.dreaming.group); keep.add(this.dreaming.model.root); }
+    else { keep.add(this.cloudGroup); for (const gh of this.ghosts.values()) keep.add(gh.model.root); }
     const hidden: THREE.Object3D[] = [];
     for (const o of g.scene.children) {
       const sky = o instanceof THREE.AmbientLight || o instanceof THREE.HemisphereLight || o instanceof THREE.DirectionalLight;
@@ -368,12 +382,14 @@ export class Afterlife {
       o.visible = false; hidden.push(o);
     }
     const bg = g.scene.background;
-    g.scene.background = this.skyColor;
+    g.scene.background = this.dreaming ? (this.realm === 'dark' ? this.nightmareColor : this.dreamColor) : this.skyColor;
     render();
     g.scene.background = bg;
     for (const o of hidden) o.visible = true;
   }
   private skyColor = new THREE.Color(0x1f3a86);
+  private dreamColor = new THREE.Color(0x231a5c);
+  private nightmareColor = new THREE.Color(0x1c0306);
 
   private talkGhost(gh: Ghost) {
     const g = this.game;
@@ -400,7 +416,86 @@ export class Afterlife {
   }
 
   // ------------------------------------------------------------ dreams
+  /** Step into a sleeping cat's dream: a misty, starry place where you can walk and talk with them. */
   private dream(a: NpcAgent) {
+    const g = this.game;
+    const c = a.cat;
+    g.ui.closeDialog(false);
+    const X = Afterlife.DREAM_X, Y = Afterlife.SKY_Y;
+    const group = new THREE.Group();
+    const nightmare = this.realm === 'dark';
+    // a soft glowing meadow of mist, scattered stars, and a ring of light to leave by
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshLambertMaterial({ color: nightmare ? 0x2a0808 : 0x6a5fc0, emissive: nightmare ? 0x3a0505 : 0x3b2f8a, emissiveIntensity: 0.6 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set(X, Y - 0.02, 0); group.add(floor);
+    const mistMat = new THREE.MeshBasicMaterial({ color: nightmare ? 0x5a1010 : 0xd8d0ff, transparent: true, opacity: 0.28, depthWrite: false });
+    const mg = new THREE.SphereGeometry(1, 10, 8);
+    for (let i = 0; i < 26; i++) {
+      const m = new THREE.Mesh(mg, mistMat);
+      const ang = simRng.range(0, Math.PI * 2), r = simRng.range(5, 24), s = simRng.range(1.5, 4);
+      m.scale.set(s * 1.5, s * 0.35, s); m.position.set(X + Math.cos(ang) * r, Y + simRng.range(0.1, 1.2), Math.sin(ang) * r);
+      group.add(m);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    const pts: number[] = [];
+    for (let i = 0; i < 400; i++) { const ang = Math.random() * Math.PI * 2, r = 20 + Math.random() * 60; pts.push(X + Math.cos(ang) * r, Y + 6 + Math.random() * 40, Math.sin(ang) * r); }
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    group.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: nightmare ? 0xff6050 : 0xffffff, size: 0.35, fog: false })));
+    const exit = new THREE.Vector3(X, Y, -4.5);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.08, 8, 32), new THREE.MeshBasicMaterial({ color: nightmare ? 0xff4a3a : 0xbfe0ff }));
+    ring.position.set(exit.x, Y + 1, exit.z); group.add(ring);
+    const light = new THREE.PointLight(nightmare ? 0xff4030 : 0xb8b0ff, 1.4, 30); light.position.set(X, Y + 4, 0); group.add(light);
+    g.scene.add(group);
+    // the dreamer, glowing softly
+    const model = new CatModel(c.app, c.stage);
+    ghostify(model, nightmare ? 0xc02020 : 0xd8d0ff, 0.92);
+    const home = new THREE.Vector3(X, Y, 3.5);
+    model.root.position.copy(home);
+    g.scene.add(model.root);
+    this.dreaming = { a, model, pos: home.clone(), heading: -Math.PI / 2, home, back: g.player.pos.clone(), group, exit, t: 0 };
+    g.player.placeAt(X, 0);
+    g.player.yaw = Math.PI; g.player.heading = -Math.PI - Math.PI / 2; // face the dreamer
+    g.ui.toast(nightmare ? `😈 You slip into ${c.given}'s dream like a shadow. Walk up and speak to them — the red ring takes you back.` : `💭 You step into ${c.given}'s dream. Walk up to them and talk — the ring of light takes you back to StarClan.`, 'info');
+    setTimeout(() => g.ui.showBanner(`${displayName(c)}: ${nightmare ? 'Where… where am I? Why is it so dark?' : 'Who… who\'s there? Are you from StarClan?'}`, 4.5), 900);
+  }
+
+  private updateDream(dt: number) {
+    const g = this.game;
+    const dr = this.dreaming!;
+    const p = g.player.pos;
+    dr.t += dt;
+    const near = Math.hypot(dr.pos.x - p.x, dr.pos.z - p.z);
+    let speed = 0;
+    if (near > 4.5) {
+      // the dreamer drifts around their little patch of dream
+      const tx = dr.home.x + Math.cos(dr.t * 0.25) * 2.2, tz = dr.home.z + Math.sin(dr.t * 0.18) * 1.6;
+      const dx = tx - dr.pos.x, dz = tz - dr.pos.z, d = Math.hypot(dx, dz);
+      if (d > 0.15) { speed = 0.8; dr.heading = Math.atan2(dz, dx); dr.pos.x += (dx / d) * Math.min(d, speed * dt); dr.pos.z += (dz / d) * Math.min(d, speed * dt); }
+    } else dr.heading = Math.atan2(p.z - dr.pos.z, p.x - dr.pos.x); // they look at you
+    dr.pos.y = Afterlife.SKY_Y + Math.sin(dr.t * 1.4) * 0.03;
+    dr.model.root.position.copy(dr.pos);
+    dr.model.root.rotation.y = -dr.heading;
+    dr.model.speed = speed;
+    dr.model.pose = speed > 0 ? 'walk' : 'sit';
+    dr.model.update(dt);
+    this.refreshT -= dt;
+    if (this.refreshT <= 0) { this.refreshT = 1; ghostify(g.player.model, this.tintColor, 0.5); }
+  }
+
+  /** Wake out of the dream and go back to StarClan (or the Dark Forest). */
+  leaveDream() {
+    const g = this.game;
+    const dr = this.dreaming;
+    if (!dr) return;
+    g.scene.remove(dr.group);
+    g.scene.remove(dr.model.root);
+    dr.model.dispose();
+    this.dreaming = null;
+    g.player.placeAt(dr.back.x, dr.back.z);
+    g.ui.toast(this.realm === 'dark' ? '🔥 You slip back into the shadows of the Dark Forest.' : '🌟 You drift back up among the stars.', 'info');
+  }
+
+  /** Talking with a cat inside their dream. */
+  private dreamTalk(a: NpcAgent) {
     const g = this.game;
     const c = a.cat;
     const clan = g.clan;
@@ -408,6 +503,21 @@ export class Afterlife {
     const pending = g.pendingProphecy;
     const opts: { label: string; hint?: string; action: () => void }[] = [];
     const done = (text: string) => { g.ui.closeDialog(false); g.ui.toast(text, 'good'); };
+    const pc = clan.player;
+    opts.push({ label: '💬 How are you feeling?', action: () => {
+      const mate = clan.get(c.mate);
+      const line = c.poisoned !== undefined ? 'My belly burns… I ate something bad. Am I going to die?'
+        : c.sick > 30 ? '*coughs* I feel so weak. The medicine cat says it\'s greencough…'
+        : c.injury > 30 ? 'My wounds ache. I keep dreaming of the fight.'
+        : isExpecting(c) ? 'I\'m so heavy with kits! I can\'t wait to meet them.'
+        : c.hunger < 30 ? 'I\'m so hungry… the fresh-kill pile has been empty for days.'
+        : mate ? `I\'m happy. ${mate.given} makes every day warm.` : 'I\'m alright. Just… tired. And I miss the cats we\'ve lost.';
+      g.ui.dialog({ speaker: c, text: line, options: [{ label: 'Back', action: () => this.dreamTalk(a) }] });
+    } });
+    if ((c.relations[pc.id]?.opinion ?? 0) > 30 || c.parents.includes(pc.id) || c.mate === pc.id) opts.push({ label: `💕 Tell ${c.given} you miss them`, action: () => {
+      clan.remember(c, `${pc.given} visited me in a dream and said they miss me.`, 8, pc.id);
+      g.ui.dialog({ speaker: c, text: `*eyes filling with tears* ${pc.given}?! Is it really you? I miss you so much… Please come back to me in my dreams.`, options: [{ label: '*presses close*', action: () => this.dreamTalk(a) }] });
+    } });
     if (this.realm === 'starclan') {
       if (dangers.length || (pending && !pending.solved)) {
         const what = dangers[0]?.type ?? pending!.type;
@@ -429,10 +539,10 @@ export class Afterlife {
       opts.push({ label: `🐍 Whisper ambition to ${c.given}`, action: () => { if (!c.traits.includes('ambitious')) c.traits = [...c.traits.slice(-1), 'ambitious'] as Cat['traits']; const ld = clan.leader; if (ld) clan.adjust(c, ld, -20); done(`🐍 ${c.given} wakes hungry for power…`); } });
       opts.push({ label: `😈 Give ${c.given} a nightmare`, action: () => { c.health = Math.max(5, c.health - 15); a.mood = 'afraid'; done(`😈 ${c.given} thrashes in their nest, haunted by red eyes.`); } });
     }
-    opts.push({ label: 'Leave the dream', action: () => g.ui.closeDialog(false) });
+    opts.push({ label: 'Goodbye', action: () => {} });
     g.ui.dialog({ speaker: c, text: this.realm === 'starclan'
-      ? `*${c.given} stirs in their sleep* You step into their dream like starlight. "Who… who's there? Are you from StarClan?"`
-      : `*${c.given} twitches in their sleep* You slip into their dream like a shadow. "Where… where am I? Why is it so dark?"`, options: opts });
+      ? simRng.pick(['*blinks at you in wonder* You glow like the stars… are you from StarClan?', 'Is this a dream? It feels so real…', `*whispers* I've heard of this… StarClan visiting in dreams.`])
+      : simRng.pick(['*shivers* Your eyes… why are they so red?', 'What do you want from me? This place is so cold.', '*backs away* Who are you?']), options: opts });
   }
 
   // ------------------------------------------------------------ judging the newly dead
