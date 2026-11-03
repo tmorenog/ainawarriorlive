@@ -1153,7 +1153,7 @@ export class Interactions {
     g.ui.dialog({ speaker: a.cat, text: simRng.pick(['Mm?', 'Yes?', 'What else?', '...']), options: this.talkOptions(a, done), onClose: done, input: (t) => this.freeTalk(a, t, done) });
   }
 
-  private chatLine(c: Cat): string {
+  chatLine(c: Cat): string {
     const g = this.game;
     const clan = g.clan;
     const pc = clan.player;

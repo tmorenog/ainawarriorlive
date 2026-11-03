@@ -11,6 +11,7 @@ import { Cat, displayName, isExpecting } from '../cats/types';
 import { createCat } from '../cats/generate';
 import { simRng } from '../core/rng';
 import { clamp } from '../core/math';
+import { smartReply } from './chatbrain';
 
 export type Realm = 'starclan' | 'dark';
 
@@ -22,6 +23,7 @@ interface Ghost {
   target: THREE.Vector3 | null;
   wait: number;
   kit: boolean;
+  hold?: { pose: Pose; until: number };
 }
 
 /** Make a cat model look like a spirit: see-through and softly glowing. */
@@ -295,7 +297,8 @@ export class Afterlife {
       gh.model.root.position.copy(gh.pos);
       gh.model.root.rotation.y = -gh.heading;
       gh.model.speed = speed;
-      const pose: Pose = speed > 0 ? 'walk' : gh.kit ? (Math.sin(g.clock * 2 + gh.heading) > 0.3 ? 'pounce' : 'sit') : 'sit';
+      const held = gh.hold && gh.hold.until > g.clock ? gh.hold.pose : null;
+      const pose: Pose = held ?? (speed > 0 ? 'walk' : gh.kit ? (Math.sin(g.clock * 2 + gh.heading) > 0.3 ? 'pounce' : 'sit') : 'sit');
       gh.model.pose = pose;
       gh.model.update(dt);
       if (gh.kit && this.kitPlayT <= 0 && simRng.chance(dt * 0.15)) {
@@ -556,22 +559,69 @@ export class Afterlife {
   private dreamColor = new THREE.Color(0x231a5c);
   private nightmareColor = new THREE.Color(0x1c0306);
 
-  private talkGhost(gh: Ghost) {
+  /** Talk with a spirit the way you'd talk with any clanmate — chat, share tongues, play, love. */
+  private talkGhost(gh: Ghost, opening?: string) {
     const g = this.game;
+    const clan = g.clan;
     const c = gh.cat;
-    const pc = g.clan.player;
+    const pc = clan.player;
+    const dark = this.realm === 'dark';
+    const again = (text: string) => this.talkGhost(gh, text);
+    const op = clan.opinion(c, pc);
     const good = c.memories.filter((m) => m.weight > 0).slice(-2).map((m) => m.text);
     const own = this.ancientLines.get(c.id);
-    if (own) { g.ui.dialog({ speaker: c, text: `*fur glittering with countless stars* ${own}`, options: [{ label: '*bows head respectfully*', action: () => {} }, { label: 'Tell me about the old days', action: () => g.ui.dialog({ speaker: c, text: simRng.pick(['When I was young the forest had no borders — just cats, and the stars above them.', 'We met at Fourtrees under the full moon, even then. Some things never change.', 'The first warrior code was only a few words. Protect the kits. Feed the elders. Never forget StarClan.']), options: [{ label: '*listens, wide-eyed*', action: () => {} }] }) }] }); return; }
-    const lines = this.realm === 'dark'
-      ? [`*eyes glinting red* So you've come to the Dark Forest too, ${pc.given}.`, 'The living are weak. Visit their dreams… make them strong. Make them ours.', 'StarClan won\'t have us. So we make our own path.']
-      : [`*purrs, fur shimmering with stars* Welcome, ${pc.given}. You're home now.`, `I watch over ${g.territories.homeName} every night. ${good[0] ? `I still remember: ${good[0]}` : ''}`, 'When the living sleep, go to them. Warn them. They need us.'];
-    const opts: { label: string; action: () => void }[] = [
-      { label: 'Tell me about your life', action: () => g.ui.dialog({ speaker: c, text: `I lived ${Math.floor(c.age)} moons as ${c.stage === 'kit' ? 'a kit' : c.role === 'leader' ? 'leader' : c.role === 'medicine' ? 'a medicine cat' : c.stage === 'elder' ? 'an elder' : 'a warrior'} of ${g.territories.homeName}. I died of ${c.deathCause ?? 'something I don\'t like to remember'}.${good[0] ? ` I still think about it: ${good[0]}` : ''}${c.kits.length ? ` I had ${c.kits.length} kit${c.kits.length > 1 ? 's' : ''} — I watch them from here.` : ''}`, options: [{ label: '*purrs*', action: () => {} }] }) },
-      { label: 'Will you watch over the clan with me?', action: () => g.ui.dialog({ speaker: c, text: this.realm === 'dark' ? '*laughs coldly* Watch over them? I watch them… and I wait.' : 'Always. Every star you see from the camp is one of us, keeping watch.', options: [{ label: '*touches noses*', action: () => {} }] }) },
-      { label: 'Goodbye', action: () => {} },
-    ];
-    g.ui.dialog({ speaker: c, text: simRng.pick(lines), options: opts });
+    const greeting = opening ?? (own ? `*fur glittering with countless stars* ${own}`
+      : dark ? simRng.pick([`*eyes glinting red* So you've come to the Dark Forest too, ${pc.given}.`, 'The living are weak. Visit their dreams… make them strong. Make them ours.'])
+      : simRng.pick([`*purrs, fur shimmering with stars* Welcome, ${pc.given}. You're home now.`, `I watch over ${g.territories.homeName} every night.`, g.interactions.chatLine(c)]));
+    const pose = (p: Pose, secs: number) => { gh.hold = { pose: p, until: g.clock + secs }; gh.target = null; gh.wait = secs; gh.heading = Math.atan2(g.player.pos.z - gh.pos.z, g.player.pos.x - gh.pos.x); };
+    const opts: { label: string; hint?: string; action: () => void }[] = [];
+    opts.push({ label: 'Chat', action: () => { clan.adjust(c, pc, 2); again(g.interactions.chatLine(c)); } });
+    opts.push({ label: 'Share tongues', hint: 'groom each other', action: () => {
+      clan.adjust(c, pc, 4); clan.adjust(pc, c, 2); pose('groomOther', 6); g.player.posePick = 'groomOther'; g.audio.purr();
+      again(simRng.pick(['*purrs* Even up here, a good grooming feels wonderful.', '*rumbles* You missed a spot behind my ear.', '*leans into you* Thank you, friend.']));
+    } });
+    opts.push({ label: 'Play-fight', hint: 'pounce and tumble on the clouds', action: () => {
+      g.player.startPounce(0.4, false); pose('pounce', 3); clan.adjust(c, pc, 3);
+      again(simRng.pick(['*rolls over on the clouds, laughing* You got me!', 'Ha! I haven\'t played like this in moons!', '*bats your ear with a velvet paw* Gotcha!']));
+    } });
+    opts.push({ label: 'Tell me about your life', action: () => again(own
+      ? simRng.pick(['When I was young the forest had no borders — just cats, and the stars above them.', 'We met at Fourtrees under the full moon, even then. Some things never change.', 'The first warrior code was only a few words. Protect the kits. Feed the elders. Never forget StarClan.'])
+      : `I lived ${Math.floor(c.age)} moons as ${c.stage === 'kit' ? 'a kit' : c.role === 'leader' ? 'leader' : c.role === 'medicine' ? 'a medicine cat' : c.stage === 'elder' ? 'an elder' : 'a warrior'} of ${g.territories.homeName}. I died of ${c.deathCause ?? 'something I don\'t like to remember'}.${good[0] ? ` I still think about it: ${good[0]}` : ''}${c.kits.length ? ` I had ${c.kits.length} kit${c.kits.length > 1 ? 's' : ''} — I watch them from here.` : ''}`) });
+    opts.push({ label: 'Ask for a story', action: () => again(simRng.pick([
+      'Long ago a kit climbed the tallest pine to touch the moon. She didn\'t reach it — but she saw the whole forest, and became the wisest leader we ever had.',
+      'Once, a fox chased three apprentices into the river. They held on to a floating branch and sang the whole way down. That\'s why we sing when we\'re afraid.',
+      'Every star up here was once a cat who loved their clan. When a new star appears, the elders say a hero has come home.',
+    ])) });
+    opts.push({ label: dark ? 'Will you haunt the living with me?' : 'Will you watch over the clan with me?', action: () => again(dark ? '*laughs coldly* I watch them… and I wait.' : 'Always. Every star you see from the camp is one of us, keeping watch.') });
+    // love, even among the stars
+    const grown = (x: Cat) => x.stage !== 'kit' && x.stage !== 'apprentice';
+    if (pc.mate === c.id) {
+      opts.push({ label: '💕 Curl up together', action: () => { pose('sleep', 8); g.player.posePick = 'lie'; g.audio.purr(); again('*presses close* We\'ll never be apart again. Not even the stars could separate us.'); } });
+      opts.push({ label: '💔 Unmate', hint: 'just removes the mate label', action: () => { pc.mate = null; if (c.mate === pc.id) c.mate = null; again('*blinks* Alright. I\'ll always care for you, though.'); } });
+    } else if (grown(pc) && grown(c) && c.sex !== undefined) {
+      opts.push({ label: 'Ask to become mates', action: () => {
+        const livingMate = clan.get(pc.mate);
+        if (livingMate && livingMate.alive && !livingMate.ghost) { again(`You still have a mate below — ${displayName(livingMate)}. Your heart belongs to them.`); return; }
+        if (c.mate && c.mate !== pc.id) { const m = clan.get(c.mate); again(`I'm sorry… my heart still belongs to ${m ? displayName(m) : 'another'}.`); return; }
+        const yes = simRng.chance(clamp((clan.rel(c, pc).romance + op) / 120 + 0.3, 0.15, 0.95));
+        if (yes) {
+          pc.mate = c.id; c.mate = pc.id;
+          clan.rel(c, pc).romance = 90; clan.rel(pc, c).romance = 90;
+          clan.remember(pc, `${displayName(c)} and I became mates among the stars.`, 10, c.id);
+          g.audio.purr();
+          g.ui.toast(`💕 You and ${displayName(c)} are mates in ${dark ? 'the Dark Forest' : 'StarClan'}.`, 'good');
+          again('*purrs so loudly the stars tremble* Yes! A thousand times yes!');
+        } else { clan.adjust(c, pc, -2); again(simRng.pick(['I… think of you as a friend. I\'m sorry.', 'Not yet. Let\'s walk among the stars together a while first.'])); }
+      } });
+    } else if (!grown(pc) && !grown(c) && pc.crush !== c.id) {
+      opts.push({ label: '💕 Tell them you have a crush', action: () => { pc.crush = c.id; again(simRng.pick(['*squeaks and hides behind their tail* Really?! I like you too!', '*giggles* Ew! …Okay, maybe a little.'])); } });
+    }
+    opts.push({ label: 'Goodbye', action: () => {} });
+    g.ui.dialog({ speaker: c, text: greeting, options: opts, input: (t) => {
+      const r = smartReply(g, c, t);
+      if (r) { clan.adjust(c, pc, r.opinion); if (r.romance) clan.rel(c, pc).romance = clamp(clan.rel(c, pc).romance + r.romance, 0, 100); }
+      again(r?.reply ?? simRng.pick(['*tilts head, stars drifting from their whiskers* Tell me more.', 'Up here, every word feels like it echoes forever.', '*purrs* I\'m listening.']));
+    } });
   }
 
   private playWithKit(gh: Ghost) {
