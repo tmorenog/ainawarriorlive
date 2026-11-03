@@ -19,17 +19,24 @@ export class TouchControls {
     // look zone
     const look = h('div', 'lookzone', '', this.el);
     let lastLook: { id: number; x: number; y: number } | null = null;
-    look.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; lastLook = { id: t.identifier, x: t.clientX, y: t.clientY }; e.preventDefault(); }, { passive: false });
+    let worldHold = false;
+    let worldStart = { x: 0, y: 0 };
+    look.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; lastLook = { id: t.identifier, x: t.clientX, y: t.clientY }; worldStart = { x: t.clientX, y: t.clientY }; worldHold = game.ui.holdWorld(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
     look.addEventListener('touchmove', (e) => {
       for (const t of Array.from(e.changedTouches)) {
         if (lastLook && t.identifier === lastLook.id) {
           input.addLook((t.clientX - lastLook.x) * 1.6, (t.clientY - lastLook.y) * 1.6);
           lastLook.x = t.clientX; lastLook.y = t.clientY;
+          // dragging to look around cancels a press-and-hold on the world
+          if (worldHold && Math.hypot(t.clientX - worldStart.x, t.clientY - worldStart.y) > 25) { worldHold = false; game.ui.releaseWorld(); }
         }
       }
       e.preventDefault();
     }, { passive: false });
-    look.addEventListener('touchend', () => (lastLook = null));
+    // press and hold on the cat / plant / rock with a prompt = use it (let go = stop)
+    const endLook = () => { lastLook = null; if (worldHold) { worldHold = false; game.ui.releaseWorld(); } };
+    look.addEventListener('touchend', endLook);
+    look.addEventListener('touchcancel', endLook);
     // joystick
     const joy = h('div', 'joy', '', this.el);
     const knob = h('i', '', '', joy);

@@ -482,11 +482,21 @@ export class Interactions {
 
   /** How long you must hold for a prompt (strength jobs: stronger cats are quicker). */
   holdDuration(p: Prompt): number {
-    const base = p.hold ?? 0;
-    if (base <= 0) return 0;
+    // everything is press-and-hold (nothing happens on a quick tap); bigger jobs take longer
+    const base = Math.max(p.text === 'Pounce!' ? 0.3 : 0.45, p.hold ?? 0);
     if (!p.strength) return base;
     const str = this.game.clan.player?.strength ?? 50;
     return base * clamp(1.7 - str / 70, 0.5, 1.8);
+  }
+
+  /** Debounce, like a Roblox button script: one use, then a short cooldown before the next. */
+  static readonly COOLDOWN = 1; // seconds between uses
+  private cooldownUntil = 0;
+  get coolingDown() { return performance.now() < this.cooldownUntil; }
+  private fire(p: Prompt) {
+    if (this.coolingDown) return;
+    this.cooldownUntil = performance.now() + Interactions.COOLDOWN * 1000;
+    p.action();
   }
 
   tickHold(dt: number, held: boolean, tapped: boolean) {
@@ -495,10 +505,10 @@ export class Interactions {
     const key = cur.text.replace(/\(.*\)/, '');
     if (key !== this.holdKey) { this.holdKey = key; this.holdT = 0; this.waitRelease = held && !tapped; }
     const dur = this.holdDuration(cur);
-    if (dur <= 0) { this.holdProgress = 0; if (tapped) cur.action(); return; }
-    if (held && !this.waitRelease) {
+    if (dur <= 0) { this.holdProgress = 0; if (tapped) this.fire(cur); return; }
+    if (held && !this.waitRelease && !this.coolingDown) {
       this.holdT += dt;
-      if (this.holdT >= dur) { this.holdT = 0; this.waitRelease = true; this.holdProgress = 1; cur.action(); return; }
+      if (this.holdT >= dur) { this.holdT = 0; this.waitRelease = true; this.holdProgress = 1; this.fire(cur); return; }
     } else if (!held) { this.holdT = Math.max(0, this.holdT - dt * 3); this.waitRelease = false; }
     this.holdProgress = this.holdT / dur;
   }

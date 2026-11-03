@@ -429,6 +429,18 @@ export class UI {
   private promptV = new THREE.Vector3();
   takePromptTap() { const t = this.promptTap; this.promptTap = false; return t; }
 
+  /** Pressing and holding on the thing itself in the 3D world counts too (like a ClickDetector). */
+  holdWorld(x: number, y: number) {
+    if (this.prompt.classList.contains('hidden')) return false;
+    const r = this.prompt.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (Math.hypot(x - cx, (y - cy) * 1.2) > Math.max(110, r.width * 0.75)) return false;
+    this.promptHeld = true;
+    this.prompt.classList.add('on');
+    return true;
+  }
+  releaseWorld() { this.promptHeld = false; this.prompt.classList.remove('on'); }
+
   private buildPrompt() {
     this.touchPrompt = 'ontouchstart' in window || (navigator.maxTouchPoints ?? 0) > 0;
     this.prompt.innerHTML = `<div class="pp-key"><svg viewBox="0 0 48 48"><circle class="pp-bg" cx="24" cy="24" r="21"/><circle class="pp-fill" cx="24" cy="24" r="21"/></svg><b>E</b></div><div class="pp-txt"><div class="pp-main"></div><div class="pp-tip"></div></div>`;
@@ -453,12 +465,13 @@ export class UI {
     if (this.promptText.textContent !== cur.text) this.promptText.textContent = cur.text;
     const dur = ia.holdDuration(cur);
     const holdWord = this.touchPrompt ? 'Touch and hold' : 'Hold E';
-    const tip = dur > 0 ? (cur.strength ? `${holdWord} · takes strength (${dur.toFixed(1)}s)` : holdWord) : (this.touchPrompt ? 'Tap' : '');
+    const tip = cur.strength ? `${holdWord} · takes strength (${dur.toFixed(1)}s)` : holdWord;
     if (this.promptTip.textContent !== tip) this.promptTip.textContent = tip;
     const C = 2 * Math.PI * 21;
     this.promptRing.style.strokeDasharray = `${C}`;
     this.promptRing.style.strokeDashoffset = `${C * (1 - ia.holdProgress)}`;
     this.prompt.classList.toggle('holding', ia.holdProgress > 0);
+    this.prompt.classList.toggle('cooling', ia.coolingDown);
     // float over the thing you can interact with (or near the middle of the screen)
     let x = innerWidth / 2, y = innerHeight * 0.7;
     if (cur.at) {
