@@ -421,6 +421,7 @@ export class UI {
 
   // ---- the floating "E" prompt (hold E, or touch and hold it on a phone)
   promptHeld = false;
+  private touchPrompt = false;
   private promptTap = false;
   private promptText!: HTMLElement;
   private promptRing!: SVGCircleElement;
@@ -429,8 +430,8 @@ export class UI {
   takePromptTap() { const t = this.promptTap; this.promptTap = false; return t; }
 
   private buildPrompt() {
-    const touch = 'ontouchstart' in window || (navigator.maxTouchPoints ?? 0) > 0;
-    this.prompt.innerHTML = `<div class="pp-key"><svg viewBox="0 0 48 48"><circle class="pp-bg" cx="24" cy="24" r="21"/><circle class="pp-fill" cx="24" cy="24" r="21"/></svg><b>${touch ? '👆' : 'E'}</b></div><div class="pp-txt"><div class="pp-main"></div><div class="pp-tip"></div></div>`;
+    this.touchPrompt = 'ontouchstart' in window || (navigator.maxTouchPoints ?? 0) > 0;
+    this.prompt.innerHTML = `<div class="pp-key"><svg viewBox="0 0 48 48"><circle class="pp-bg" cx="24" cy="24" r="21"/><circle class="pp-fill" cx="24" cy="24" r="21"/></svg><b>E</b></div><div class="pp-txt"><div class="pp-main"></div><div class="pp-tip"></div></div>`;
     this.promptText = this.prompt.querySelector('.pp-main') as HTMLElement;
     this.promptTip = this.prompt.querySelector('.pp-tip') as HTMLElement;
     this.promptRing = this.prompt.querySelector('.pp-fill') as SVGCircleElement;
@@ -451,7 +452,8 @@ export class UI {
     this.prompt.classList.remove('hidden');
     if (this.promptText.textContent !== cur.text) this.promptText.textContent = cur.text;
     const dur = ia.holdDuration(cur);
-    const tip = dur > 0 ? (cur.strength ? `Hold · takes strength (${dur.toFixed(1)}s)` : 'Hold') : '';
+    const holdWord = this.touchPrompt ? 'Touch and hold' : 'Hold E';
+    const tip = dur > 0 ? (cur.strength ? `${holdWord} · takes strength (${dur.toFixed(1)}s)` : holdWord) : (this.touchPrompt ? 'Tap' : '');
     if (this.promptTip.textContent !== tip) this.promptTip.textContent = tip;
     const C = 2 * Math.PI * 21;
     this.promptRing.style.strokeDasharray = `${C}`;

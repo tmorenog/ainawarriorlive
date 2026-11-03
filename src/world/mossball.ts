@@ -91,7 +91,7 @@ export class MossBalls {
     partner.moveSpeed = 3;
     partner.setTarget(p.x + f.x * 4, p.z + f.z * 4);
     this.catchGame = { partner, ball, phase: 'playerHas', t: 0, catches: 0, land: { x: 0, z: 0 } };
-    g.ui.toast(`Catch! Toss the moss ball to ${partner.name} (E / ✋). When it comes back, press E to catch it. Whoever drops it loses!`, 'objective');
+    g.ui.toast(`Catch! Toss the moss ball to ${partner.name} (hold E on the prompt). When it comes back, tap the E prompt to catch it. Whoever drops it loses!`, 'objective');
   }
 
   /** The player tries to catch the incoming ball. */

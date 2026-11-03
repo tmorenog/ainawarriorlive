@@ -387,7 +387,7 @@ export class Interactions {
     }
     const mb = g.mossBalls?.nearest(p.x, p.z, 0.9 * Math.max(0.7, pl.scale) + 0.2);
     if (mb && !pl.prey.length) {
-      this.current = { text: 'Pick up the moss ball', action: () => { g.mossBalls.pickUp(mb); g.audio.pick(); g.ui.toast('You carry the moss ball in your jaws. Press E / ✋ to toss it, or walk into another to bat it.', 'info'); } };
+      this.current = { text: 'Pick up the moss ball', action: () => { g.mossBalls.pickUp(mb); g.audio.pick(); g.ui.toast('You carry the moss ball in your jaws. Tap the E prompt to toss it, or walk into another to bat it.', 'info'); } };
       return;
     }
     if (mb) {
