@@ -777,6 +777,19 @@ export class NpcManager {
     }, lines.length * 3600);
   }
 
+  /** The queen is giving birth: her mate rushes to her side and stays until the kits are born. */
+  stayForBirth(mate: Cat) {
+    const a = this.agents.get(mate.id);
+    if (!a) return;
+    this.endConvo(a);
+    if (a.patrol) { for (const p of this.game.clan.patrols) p.members = p.members.filter((id) => id !== mate.id); a.patrol = null; }
+    a.activity = 'visitMate';
+    a.actTimer = 150;
+    a.moveSpeed = 3.5;
+    a.target = null;
+    a.say('The kits are coming?! I\'m on my way!', 3);
+  }
+
   /** A tom visiting his mate in the nursery: sits by her, grooms her, chats, then leaves. */
   private visitMateThink(a: NpcAgent) {
     const game = this.game;

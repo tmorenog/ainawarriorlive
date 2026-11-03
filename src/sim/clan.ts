@@ -554,6 +554,58 @@ export class ClanSim {
     return mothers;
   }
 
+  /** A queen who won't survive her birth says goodbye to her mate. */
+  private lastWords(mother: Cat, helper: Cat | null) {
+    const g = this.game;
+    if (!mother.alive) return;
+    const mate = this.get(mother.mate);
+    const mateHere = mate && mate.alive ? mate : null;
+    const banner = (who: Cat, text: string) => { g.npcs.agents.get(who.id)?.say(text.replace(/\*[^*]*\*\s*/g, '').trim() || text, 5); g.ui.showBanner(`${displayName(who)}: ${text}`, 5); };
+    const die = () => {
+      this.kill(mother, 'complications after giving birth');
+      const healer = helper && helper.alive && !helper.isPlayer ? helper : this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null;
+      if (healer && !healer.isPlayer) setTimeout(() => banner(healer, '…I\'m sorry…'), 2500);
+      if (mateHere) this.remember(mateHere, `${displayName(mother)} died giving birth to our kits. I'll never forget her last words.`, -10, mother.id);
+    };
+    const reply = () => {
+      if (!mateHere) { setTimeout(die, 3000); return; }
+      setTimeout(() => {
+        banner(mateHere, '*presses close* No… please don\'t!');
+        const ma = g.npcs.agents.get(mateHere.id);
+        if (ma) { ma.mood = 'sad'; ma.forcedPose = 'lie'; }
+        setTimeout(die, 3800);
+      }, 3500);
+    };
+    const preset = 'Goodbye… I will join the stars, waiting for you.';
+    if (mother.isPlayer) {
+      // your last words to your mate
+      const to = mateHere ? displayName(mateHere) : 'your clan';
+      const say = (w: string) => { g.ui.closeDialog(false); banner(mother, w); reply(); };
+      g.ui.choice('💫 Your last words', `You feel yourself slipping away toward StarClan… What do you say to ${to}?`, [
+        { label: `"${preset}"`, action: () => say(preset) },
+        { label: '"Take care of our kits… tell them I loved them."', action: () => say('Take care of our kits… tell them I loved them.') },
+        { label: '"Don\'t be sad. I\'ll always be watching over you."', action: () => say('Don\'t be sad. I\'ll always be watching over you.') },
+      ]);
+      return;
+    }
+    banner(mother, `*breathes softly* ${preset}`);
+    reply();
+  }
+
+  /** When labour starts, the queen's mate hurries to her side and stays for the birth. */
+  private callMate(mother: Cat) {
+    const g = this.game;
+    const mate = this.get(mother.mate);
+    if (!mate || !mate.alive || mate.exiled) return;
+    if (mate.isPlayer) {
+      const n = g.camp.dens.nursery;
+      g.ui.toast(`🍼 ${displayName(mother)}'s kits are coming! Hurry to the nursery to be by her side!`, 'objective');
+      g.objectives.add({ id: `mate-birth-${mother.id}`, kind: 'visit', title: `🍼 Be with ${displayName(mother)}`, desc: `Your mate is having your kits. Go to the nursery and stay by her side.`, target: { x: n.x, z: n.z }, radius: 3.5, need: 1 });
+      return;
+    }
+    g.npcs.stayForBirth(mate);
+  }
+
   /** Childhood crushes grow into mates once both cats are grown up. */
   crushesToMates() {
     for (const a of Object.values(this.cats)) {
@@ -1007,6 +1059,7 @@ export class ClanSim {
     if (mother.labour) { this.birth(mother, med); return; } // already waited a whole day
     mother.labour = true;
     mother.litterSize = this.rollLitter();
+    this.callMate(mother);
     if (mother.litterSize >= 5) setTimeout(() => this.game.ui.toast(`🌿 ${displayName(mother)} is having a BIG litter — ${mother.litterSize === 6 ? 'six' : 'five'} kits! The birth will take ${this.herbsForLitter(5)} herbs. Medicine cats, bring plenty!`, 'objective'), 1500);
     this.game.npcs.agents.get(mother.id)?.say('Oh… I think the kits are coming!', 6);
     if (mother.isPlayer) this.game.ui.showBanner(`${displayName(mother)}: Oh… I think the kits are coming!`, 5);
@@ -1174,17 +1227,7 @@ export class ClanSim {
     // the queen licks her newborns until they're warm and dry, then they snuggle up to nurse
     if (kits.length) this.game.npcs.newbornCare(mother, kits);
     const roundsTime = this.medicineRounds(mother, kits, helper, lost);
-    if (queenDies) setTimeout(() => {
-      if (!mother.alive) return;
-      const ag = this.game.npcs.agents.get(mother.id);
-      ag?.say('*breathes softly* Take care of them… for me…', 5);
-      this.game.ui.showBanner(`${displayName(mother)}: *breathes softly* Take care of them… for me…`, 5);
-      setTimeout(() => {
-        this.kill(mother, 'complications after giving birth');
-        const healer = helper && helper.alive && !helper.isPlayer ? helper : this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null;
-        if (healer && !healer.isPlayer) { this.game.npcs.agents.get(healer.id)?.say('…I\'m sorry…', 5); this.game.ui.showBanner(`${displayName(healer)}: …I'm sorry…`, 5); }
-      }, 3500);
-    }, roundsTime + 3000);
+    if (queenDies) setTimeout(() => this.lastWords(mother, helper), roundsTime + 3000);
   }
 
   /** After a birth the medicine cat treats the queen and each kit in turn: "Hold still, eat this poultice…" */
