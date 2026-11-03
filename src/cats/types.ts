@@ -164,6 +164,8 @@ export interface Cat {
   poisoned?: number;
   /** This cat already asked you to be mates because of an old crush. */
   crushAsked?: boolean;
+  /** Won't survive the birth she just had (dies after her last words). */
+  fatalBirth?: boolean;
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;

@@ -569,6 +569,7 @@ export class ClanSim {
     const mateHere = mate && mate.alive ? mate : null;
     const banner = (who: Cat, text: string) => { g.npcs.agents.get(who.id)?.say(text.replace(/\*[^*]*\*\s*/g, '').trim() || text, 5); g.ui.showBanner(`${displayName(who)}: ${text}`, 5); };
     const die = () => {
+      mother.fatalBirth = false;
       this.kill(mother, 'complications after giving birth');
       const healer = helper && helper.alive && !helper.isPlayer ? helper : this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : null;
       if (healer && !healer.isPlayer) setTimeout(() => banner(healer, '…I\'m sorry…'), 2500);
@@ -651,6 +652,8 @@ export class ClanSim {
 
   tickDay() {
     this.crushTick();
+    // a queen who was dying after her birth never pulls through
+    for (const c of Object.values(this.cats)) if (c.fatalBirth && c.alive) { c.fatalBirth = false; this.kill(c, 'complications after giving birth'); }
     // the nursery never sits empty for long
     if (this.player && !this.player.exiled && this.home().filter((c) => c.stage === 'kit').length < 5) {
       const mums = this.fillNursery(8);
@@ -1156,7 +1159,9 @@ export class ClanSim {
     const n = born - lost;
     const queenRisk = clamp((0.03 + 0.05 * herbShort + (healed ? 0 : 0.08) - (playerHelped ? 0.02 : 0)) * (mother.isPlayer ? 0.5 : 1), 0.01, 0.3);
     // a weak queen (under half health) almost never survives giving birth
-    const queenDies = simRng.chance(mother.health < 50 ? 0.9 : queenRisk);
+    // under 30 health: no chance at all; under 50: almost certain
+    const queenDies = mother.health < 30 || simRng.chance(mother.health < 50 ? 0.9 : queenRisk);
+    if (queenDies) mother.fatalBirth = true;
     const kits: Cat[] = [];
     for (let i = 0; i < n; i++) {
       const k = createCat({ age: 0, parents: father ? [mother, father] : [mother, mother], day: this.game.time.day, usedNames: this.usedNames });
