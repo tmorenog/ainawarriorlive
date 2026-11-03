@@ -8,7 +8,7 @@ import type { NpcAgent } from '../ai/npc';
 import type { Prompt } from './interactions';
 import { CatModel, Pose } from '../cats/model';
 import { Cat, displayName, isExpecting } from '../cats/types';
-import { createCat } from '../cats/generate';
+import { createCat, GIVEN_NAMES } from '../cats/generate';
 import { simRng } from '../core/rng';
 import { clamp } from '../core/math';
 import { smartReply } from './chatbrain';
@@ -526,13 +526,16 @@ export class Afterlife {
   /** Look down through the Star Pool and choose a sleeping cat to visit. */
   private starPool() {
     const g = this.game;
-    const sleepers = [...g.npcs.agents.values()].filter((a) => a.cat.clan === 'home' && a.cat.alive && (a.activity === 'sleep' || a.model.pose === 'sleep'));
+    const pc = g.clan.player;
+    const mine = (a: NpcAgent) => a.cat.widowOf === pc.id || pc.mate === a.cat.id;
+    const sleepers = [...g.npcs.agents.values()].filter((a) => a.cat.clan === 'home' && a.cat.alive && (a.activity === 'sleep' || a.model.pose === 'sleep'))
+      .sort((x, y) => Number(mine(y)) - Number(mine(x)));
     if (!sleepers.length) {
       g.ui.dialog({ text: 'The Star Pool shimmers. Far below, your clan is busy and awake… Come back when they sleep — at night, or when a cat naps in the day.', options: [{ label: 'Step back from the pool', action: () => {} }] });
       return;
     }
     g.ui.choice('🌙 The Star Pool', 'Ripples of starlight show your clan asleep far below. Whose dream will you visit?', [
-      ...sleepers.slice(0, 8).map((a) => ({ label: `💭 ${a.name}${a.cat.sick > 20 || a.cat.injury > 20 ? ' (hurt or sick)' : ''}`, action: () => this.dream(a) })),
+      ...sleepers.slice(0, 8).map((a) => ({ label: `💭 ${a.name}${mine(a) ? ' — your mate 💕' : ''}${a.cat.sick > 20 || a.cat.injury > 20 ? ' (hurt or sick)' : ''}`, action: () => this.dream(a) })),
       { label: 'Not now', action: () => {} },
     ]);
   }
@@ -596,6 +599,20 @@ export class Afterlife {
     // love, even among the stars
     const grown = (x: Cat) => x.stage !== 'kit' && x.stage !== 'apprentice';
     if (pc.mate === c.id) {
+      if (g.time.day !== pc.starLitterDay && (c.sex !== pc.sex || pc.sex === 'she')) opts.push({ label: '🍼 Have kits together', hint: 'star-kits to raise among the clouds', action: () => {
+        pc.starLitterDay = g.time.day;
+        const n = simRng.int(1, 4);
+        const names = Array.from({ length: n }, () => simRng.pick(GIVEN_NAMES));
+        pc.starKits = [...(pc.starKits ?? []), ...names];
+        for (const name of names) {
+          const k = createCat({ age: 0.2, parents: [pc, c], day: g.time.day, usedNames: new Set() });
+          k.given = name; k.alive = false; k.id = `star-${name}-${pc.id}-${pc.starKits.length}-${Math.random().toString(36).slice(2, 6)}`;
+          this.addGhost(k, true);
+        }
+        g.audio.purr();
+        g.ui.toast(`🍼✨ ${n === 1 ? 'A tiny star-kit appears' : `${n} tiny star-kits appear`} between you and ${displayName(c)}, glowing like new stars: ${names.map((x) => x + 'kit').join(', ')}!`, 'good');
+        again('*purrs, nuzzling the tiny glowing kits* Look at them… our very own little stars.');
+      } });
       opts.push({ label: '💕 Curl up together', action: () => { pose('sleep', 8); g.player.posePick = 'lie'; g.audio.purr(); again('*presses close* We\'ll never be apart again. Not even the stars could separate us.'); } });
       opts.push({ label: '💔 Unmate', hint: 'just removes the mate label', action: () => { pc.mate = null; if (c.mate === pc.id) c.mate = null; again('*blinks* Alright. I\'ll always care for you, though.'); } });
     } else if (grown(pc) && grown(c) && c.sex !== undefined) {
@@ -721,6 +738,22 @@ export class Afterlife {
     const opts: { label: string; hint?: string; action: () => void }[] = [];
     const done = (text: string) => { g.ui.closeDialog(false); g.ui.toast(text, 'good'); };
     const pc = clan.player;
+    const myMate = c.widowOf === pc.id || pc.mate === c.id;
+    if (myMate) {
+      opts.push({ label: '💕 How are you, my love?', action: () => {
+        const kits = c.kits.map((k) => clan.get(k)).filter((k) => k && k.alive) as Cat[];
+        g.ui.dialog({ speaker: c, text: `*eyes wide, voice shaking* ${pc.given}?! Is it really you? …I miss you every single day. The den feels so cold without you.${kits.length ? ` ${kits.map((k) => k.given).slice(0, 3).join(' and ')} ask about you all the time. I tell them you're the brightest star.` : ''}`, options: [{ label: '*presses your nose to theirs*', action: () => this.dreamTalk(a) }] });
+      } });
+      if (!c.freeToLove) opts.push({ label: '💞 Tell them it\'s okay to find a new mate', action: () => {
+        c.freeToLove = true;
+        c.griefDark = false;
+        clan.remember(c, `${pc.given} came to me in a dream and told me it's okay to love again.`, 10, pc.id);
+        // their heart can open to someone new
+        const next = clan.home(false).filter((o) => o.id !== c.id && !o.mate && clan.grownUp(o) && o.sex !== c.sex && !o.isPlayer).sort((x, y) => clan.rel(c, y).opinion - clan.rel(c, x).opinion)[0];
+        if (next) clan.rel(c, next).romance = clamp(clan.rel(c, next).romance + 30, 0, 100);
+        g.ui.dialog({ speaker: c, text: `*tears glittering like starlight* You… you want me to be happy? …I'll never forget you, ${pc.given}. Never. But… thank you. I'll try.`, options: [{ label: '*licks their ear one last time*', action: () => this.dreamTalk(a) }] });
+      } });
+    }
     opts.push({ label: '💬 How are you feeling?', action: () => {
       const mate = clan.get(c.mate);
       const line = c.poisoned !== undefined ? 'My belly burns… I ate something bad. Am I going to die?'

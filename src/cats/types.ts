@@ -178,6 +178,12 @@ export interface Cat {
   vetKits?: boolean;
   /** The warrior name StarClan chose for this apprentice. */
   starName?: string;
+  /** This cat's mate died (they're grieving them). */
+  widowOf?: string;
+  /** Their lost mate told them in a dream it's okay to love again. */
+  freeToLove?: boolean;
+  /** Moon of the last litter you had in StarClan. */
+  starLitterDay?: number;
   /** Kittypet: how many times your Tallfolk were cruel to you. */
   badOwner?: number;
   /** You walk the afterlife as a spirit. */

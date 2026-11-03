@@ -1380,7 +1380,7 @@ export class ClanSim {
         const op = o.relations[c.id]?.opinion ?? 0;
         if (op > 40 || isFamily(o, c) || o.mate === c.id) this.remember(o, `${name} died of ${cause}. I miss ${pronoun(c, 'obj')}.`, -6, c.id);
       }
-      if (c.mate) { const m = this.get(c.mate); if (m && m.mate === c.id) m.mate = null; }
+      if (c.mate) { const m = this.get(c.mate); if (m && m.mate === c.id) { m.mate = null; m.widowOf = c.id; } }
       if (c.apprentice) {
         const ap = this.get(c.apprentice);
         c.apprentice = null;
@@ -1411,7 +1411,7 @@ export class ClanSim {
     const adults = this.home().filter((c) => c.stage === 'warrior' && c.age >= 14);
     // off-screen courtship: each single adult warms to a favourite single clanmate
     for (const a of adults) {
-      if (a.mate || a.isPlayer) continue;
+      if (a.mate || a.isPlayer || (a.widowOf && !a.freeToLove)) continue;
       let best: Cat | null = null, bs = -1e9;
       for (const b of adults) {
         if (b === a || b.mate || b.isPlayer || isFamily(a, b)) continue;
@@ -1429,6 +1429,7 @@ export class ClanSim {
       if (a.mate) continue;
       for (const b of adults) {
         if (a === b || b.mate || a.isPlayer || b.isPlayer || isFamily(a, b)) continue;
+        if ((a.widowOf && !a.freeToLove) || (b.widowOf && !b.freeToLove)) continue; // still grieving their lost mate
         const ra = this.rel(a, b), rb = this.rel(b, a);
         if (ra.romance > 38 && rb.romance > 32 && ra.opinion > 30 && rb.opinion > 25) {
           a.mate = b.id;
