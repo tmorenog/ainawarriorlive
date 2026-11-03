@@ -650,6 +650,15 @@ export class Afterlife {
   }
 
   // ------------------------------------------------------------ dreams
+  /** From the journal: walk into any living clanmate's dream. */
+  walkInDream(c: Cat): boolean {
+    if (!this.realm || this.dreaming) return false;
+    const a = this.game.npcs.agents.get(c.id);
+    if (!a) return false;
+    this.dream(a);
+    return true;
+  }
+
   /** Step into a sleeping cat's dream: a misty, starry place where you can walk and talk with them. */
   private dream(a: NpcAgent) {
     const g = this.game;

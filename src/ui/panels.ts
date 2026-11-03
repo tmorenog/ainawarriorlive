@@ -357,6 +357,14 @@ export class Panels {
       ${c.apprentice ? `<b>Apprentice</b><span>${esc(displayName(clan.get(c.apprentice)!))}</span>` : ''}
       <b>Family</b><span>${fam.length ? esc(fam.join('; ')) : '—'}</span>
       ${!c.alive ? `<b>Died</b><span>Moon ${(c.deathDay ?? 0) + 1}, of ${esc(c.deathCause ?? '?')}</span>` : ''}`, d);
+    // as a spirit, you can step into any living clanmate's dream
+    if (pc.ghost && c !== pc && c.alive && !c.ghost && c.clan === 'home') {
+      const db = h('button', 'btn', `💭 Walk in ${esc(c.given)}'s dream`, d);
+      db.onclick = () => {
+        this.close();
+        if (!g.afterlife.walkInDream(c)) g.ui.toast(`You can't reach ${displayName(c)}'s dream right now.`, 'info');
+      };
+    }
     if (c.alive && (c.clan === 'home' || c === pc)) {
       const ab = h('button', 'btn', `🎂 Set ${c === pc ? 'your' : esc(c.given) + '\'s'} age`, d);
       ab.onclick = () => g.ui.numberInput(`🎂 How old is ${displayName(c)}?`, 'Pick an age in moons. Kits are under 6, apprentices 6–12, warriors 13–79, elders 80+. They move to that stage (with the right ceremony).', c.age, 0, 150, (n) => {
