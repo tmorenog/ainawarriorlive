@@ -214,10 +214,10 @@ export class ClanSim {
     // elders' den
     let elders = home().filter((c) => c.stage === 'elder').length;
     while (elders < 3) { add(rng.range(82, 96)); elders++; }
-    // nursery: at least two queens with young kits
+    // nursery: a busy nursery — at least four queens with young kits
     const queens = () => home().filter((c) => c.sex === 'she' && c.kits.some((k) => this.get(k)?.stage === 'kit' && this.get(k)?.alive));
     let guard = 0;
-    while (queens().length < 2 && guard++ < 4) {
+    while (queens().length < 4 && guard++ < 8) {
       const mother = home().find((c) => c.sex === 'she' && c.stage === 'warrior' && c.role === 'none' && !c.isPlayer && c.age < 45 && !c.kits.some((k) => this.get(k)?.stage === 'kit'));
       if (!mother) break;
       let father = this.get(mother.mate);
@@ -225,7 +225,7 @@ export class ClanSim {
         father = home().find((c) => c.sex === 'tom' && c.stage === 'warrior' && !c.mate && !c.isPlayer && !isFamily(c, mother)) ?? undefined;
         if (father) { mother.mate = father.id; father.mate = mother.id; this.rel(mother, father).opinion = 80; this.rel(father, mother).opinion = 80; }
       }
-      const n = rng.int(2, 3);
+      const n = rng.int(3, 5);
       for (let i = 0; i < n; i++) {
         const k = createCat({ age: rng.range(0.5, 4), parents: father ? [mother, father] : [mother, mother], day, usedNames: this.usedNames, rng });
         k.parents = father ? [mother.id, father.id] : [mother.id];
@@ -1225,6 +1225,9 @@ export class ClanSim {
       if (young) continue;
       let p = 0.22 * (this.game.time.season === 'winter' ? 0.6 : 1) * (size > 40 ? 0.2 : size > 34 ? 0.45 : size > 29 ? 0.75 : size < 18 ? 2 : 1.2) * (this.food < size * 0.5 ? 0.5 : 1);
       if (c.isPlayer || m.isPlayer) p *= 1.5;
+      // a quiet nursery: couples are much more likely to start a litter
+      const kitsNow = this.home().filter((k) => k.stage === 'kit').length;
+      if (kitsNow < 8) p *= 2.2;
       if (simRng.chance(p)) {
         c.expectingUntil = this.game.time.day + 2;
         this.log(`${displayName(c)} is expecting ${displayName(m)}'s kits.`, 'clan');

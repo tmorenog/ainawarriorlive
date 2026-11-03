@@ -129,6 +129,7 @@ export function randomAppearance(rng: RNG): Appearance {
   if (pattern === 'colorpoint' || pattern === 'lynxpoint') base = rng.pick(['#e6cfa2', '#f1eee7', '#c9a583']);
   if (pattern === 'tuxedo') base = rng.pick(['#2b2725', '#7c7f86', '#553827']);
   return {
+    ...markings(rng),
     base,
     second: secondFor(base, pattern, rng),
     white: pattern === 'bicolor' ? rng.range(0.3, 0.75) : pattern === 'calico' ? rng.range(0.35, 0.6) : pattern === 'tuxedo' ? 0.3 : rng.chance(0.25) ? rng.range(0.05, 0.25) : 0,
@@ -142,18 +143,44 @@ export function randomAppearance(rng: RNG): Appearance {
   };
 }
 
+/** A patterned coat (never plain solid): tabbies, spots, torties, calicos, points… */
+export function fancyPattern(rng: RNG): Pattern {
+  return rng.weighted<Pattern>([
+    ['tabby', 3], ['mackerel', 2], ['spotted', 2], ['classic', 2], ['marbled', 1.2], ['rosette', 1], ['ticked', 1], ['smoke', 1],
+    ['bicolor', 2], ['tuxedo', 1.2], ['van', 0.8], ['harlequin', 1], ['tortie', 1.5], ['torbie', 1.2], ['calico', 1.5], ['colorpoint', 0.8], ['lynxpoint', 0.8],
+  ]);
+}
+
+/** Little extra markings: a white blaze, a chest locket, an eye patch, white socks or tail tip. */
+function markings(rng: RNG, a?: Appearance, b?: Appearance): Partial<Appearance> {
+  const either = <K extends keyof Appearance>(k: K) => (a?.[k] ?? b?.[k]);
+  const m: Partial<Appearance> = {};
+  if ((either('blaze') && rng.chance(0.6)) || rng.chance(0.14)) m.blaze = true;
+  if ((either('locket') && rng.chance(0.6)) || rng.chance(0.16)) m.locket = true;
+  if ((either('eyePatch') && rng.chance(0.5)) || rng.chance(0.07)) m.eyePatch = true;
+  if ((either('paws') && rng.chance(0.5)) || rng.chance(0.16)) m.paws = either('paws') ?? '#f4f1ea';
+  if ((either('tailTip') && rng.chance(0.5)) || rng.chance(0.14)) m.tailTip = either('tailTip') ?? '#f4f1ea';
+  if (rng.chance(0.04)) m.eye2 = rng.pick(EYE_COLORS).hex;
+  return m;
+}
+
 export function inheritAppearance(a: Appearance, b: Appearance, rng: RNG): Appearance {
   const from = <K extends keyof Appearance>(k: K): Appearance[K] => (rng.chance(0.5) ? a[k] : b[k]);
-  const mutate = rng.chance(0.15);
+  const mutate = rng.chance(0.3);
   const r = randomAppearance(rng);
-  const pattern = mutate ? r.pattern : from('pattern');
-  const base = rng.chance(0.1) ? r.base : from('base');
+  let pattern = mutate ? r.pattern : from('pattern');
+  // kits are usually patterned — a plain solid coat is the rare one
+  if (pattern === 'solid' && rng.chance(0.8)) pattern = fancyPattern(rng);
+  let base = rng.chance(0.1) ? r.base : from('base');
+  if (pattern === 'colorpoint' || pattern === 'lynxpoint') base = rng.pick(['#e6cfa2', '#f1eee7', '#c9a583']);
+  if (pattern === 'tuxedo' && !['#2b2725', '#7c7f86', '#553827'].includes(base)) base = rng.pick(['#2b2725', '#7c7f86', '#553827']);
   return {
+    ...markings(rng, a, b),
     base,
     second: secondFor(base, pattern, rng),
-    white: pattern === 'bicolor' || pattern === 'calico' ? Math.max(0.3, (a.white + b.white) / 2 + rng.range(-0.15, 0.15)) : rng.chance(0.3) ? (a.white + b.white) / 2 : 0,
+    white: pattern === 'bicolor' || pattern === 'calico' || pattern === 'van' || pattern === 'harlequin' ? Math.max(0.35, (a.white + b.white) / 2 + rng.range(-0.15, 0.15)) : pattern === 'tuxedo' ? 0.3 : rng.chance(0.3) ? (a.white + b.white) / 2 : 0,
     pattern,
-    eye: rng.chance(0.1) ? r.eye : from('eye'),
+    eye: pattern === 'colorpoint' || pattern === 'lynxpoint' ? '#5aa2e6' : rng.chance(0.1) ? r.eye : from('eye'),
     fur: rng.chance(0.1) ? r.fur : from('fur'),
     body: from('body'),
     ears: rng.chance(0.1) ? r.ears : from('ears'),

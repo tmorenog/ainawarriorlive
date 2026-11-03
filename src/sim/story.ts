@@ -135,6 +135,16 @@ export class Story {
       [19500, () => {
         if (B) { B.forcedPose = null; B.mood = 'angry'; B.jumpTo(hr.x, hr.z + 0.9, g.camp.highRockSurface(hr.x, hr.z + 0.9) ?? hr.top - 0.32, true); B.heading = Math.PI / 2; }
         g.audio.jump();
+        // Fireheart leaves Tigerclaw pinned under the warriors and leaps up beside his leader
+        setTimeout(() => {
+          if (!F) return;
+          F.forcedPose = null;
+          const fx = hr.x + 0.75, fz = hr.z + 0.95;
+          F.jumpTo(fx, fz, g.camp.highRockSurface(fx, fz) ?? hr.top - 0.4, true);
+          F.heading = Math.PI / 2;
+          g.audio.jump();
+          if (T) T.forcedPose = 'lie';
+        }, 900);
       }],
       [21000, () => { line(blue, '*leaps onto the Highrock* TIGERCLAW, YOU ARE EXILED FROM OUR CLAN! FIREHEART — EXPLAIN.', 6); g.audio.chime(); }],
       [27000, () => { line(fire, 'So… well, uh… remember when Redtail died?'); if (F) F.forcedPose = null; }],
@@ -150,6 +160,7 @@ export class Story {
       [46500, () => { line(blue, 'I will name my new deputy tomorrow. Until then — clan dismissed.', 6); }],
       [50500, () => {
         if (B) { B.forcedPose = null; B.jumpTo(hr.x + 1.8, hr.z + 2.6, null, false); }
+        if (F) setTimeout(() => { F.forcedPose = null; F.jumpTo(hr.x + 2.6, hr.z + 2.9, null, false); g.audio.jump(); }, 700);
         g.audio.jump();
         g.ui.toast('*Bluestar leaps down from the Highrock*', 'info');
         this.exileTiger(tiger, blue);
