@@ -520,6 +520,11 @@ export class Game {
       if (grew) this.player.refreshStage();
       this.npcs.refreshModels();
       c.nurseryTick();
+      // older saves: liven up a quiet nursery with a few new litters
+      if (c.home().filter((x) => x.stage === 'kit').length < 10 && !c.player.exiled && c.player.lifestyle !== 'kittypet' && c.player.lifestyle !== 'loner' && c.player.lifestyle !== 'rogue') {
+        const mums = c.fillNursery(10);
+        if (mums.length) setTimeout(() => this.ui.toast(`🍼 The nursery is bustling! ${mums.map((m) => displayName(m)).join(', ')} ${mums.length === 1 ? 'has' : 'have'} new kits.`, 'good'), 2500);
+      }
       if (this.twolegs.inFacility(this.player.pos.x, this.player.pos.z)) setTimeout(() => this.twolegs.resumePound(), 400);
       // saves from before the age reset existed get it once
       if (!d.agesReset) this.youngAgain();

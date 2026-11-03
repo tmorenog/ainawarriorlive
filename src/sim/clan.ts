@@ -518,6 +518,42 @@ export class ClanSim {
     }
   }
 
+  /** Make sure the nursery is lively: queens with litters until there are about `target` kits. Returns the new mothers. */
+  fillNursery(target = 10): Cat[] {
+    const day = this.game.time.day;
+    const kitsNow = () => this.home().filter((c) => c.stage === 'kit').length;
+    const mothers: Cat[] = [];
+    let guard = 0;
+    while (kitsNow() < target && guard++ < 6) {
+      const pc = this.player;
+      const mother = this.home().find((c) => c.sex === 'she' && c.stage === 'warrior' && c.role === 'none' && !c.isPlayer && c.age < 60 && c.expectingUntil === null && !c.labour
+        && !c.kits.some((k) => (this.get(k)?.age ?? 99) < 6) && !mothers.includes(c) && !(pc && pc.mate === c.id));
+      if (!mother) break;
+      let father = this.get(mother.mate);
+      if (!father || !father.alive || father.isPlayer) {
+        father = this.home().find((c) => c.sex === 'tom' && c.stage === 'warrior' && !c.mate && !c.isPlayer && !isFamily(c, mother)) ?? undefined;
+        if (father) { mother.mate = father.id; father.mate = mother.id; this.rel(mother, father).romance = 80; this.rel(father, mother).romance = 80; }
+      }
+      const n = Math.min(simRng.int(3, 5), target - kitsNow() + 2);
+      for (let i = 0; i < n; i++) {
+        const k = createCat({ age: simRng.range(0.3, 3), parents: father ? [mother, father] : [mother, mother], day, usedNames: this.usedNames });
+        k.parents = father ? [mother.id, father.id] : [mother.id];
+        k.bornDay = day - Math.floor(k.age);
+        this.cats[k.id] = k;
+        this.usedNames.add(k.given);
+        mother.kits.push(k.id);
+        if (father) father.kits.push(k.id);
+        this.rel(mother, k).opinion = 90; this.rel(k, mother).opinion = 80;
+        if (father) { this.rel(father, k).opinion = 80; this.rel(k, father).opinion = 70; }
+      }
+      mother.lastLitterDay = day - 1;
+      this.log(`${displayName(mother)}'s litter of ${n} joined the nursery.`, 'birth');
+      mothers.push(mother);
+    }
+    if (mothers.length) { this.game.npcs.syncRoster(); this.game.npcs.refreshModels(); }
+    return mothers;
+  }
+
   /** Childhood crushes grow into mates once both cats are grown up. */
   crushesToMates() {
     for (const a of Object.values(this.cats)) {
@@ -556,6 +592,11 @@ export class ClanSim {
 
   tickDay() {
     this.crushTick();
+    // the nursery never sits empty for long
+    if (this.player && !this.player.exiled && this.home().filter((c) => c.stage === 'kit').length < 5) {
+      const mums = this.fillNursery(8);
+      if (mums.length) this.game.notify(`🍼 New kits in the nursery! ${mums.map((m) => displayName(m)).join(', ')} ${mums.length === 1 ? 'had' : 'had'} a litter.`);
+    }
     this.crushesToMates();
     const day = this.game.time.day;
     const rng = simRng;
