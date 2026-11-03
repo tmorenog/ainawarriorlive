@@ -56,8 +56,11 @@ export class FireSystem {
     game.scene.add(this.light);
   }
 
+  /** Fires are fierce: they spread fast and grow big — you have to evacuate. */
+  static readonly HARSH = 1.8;
+
   start(x: number, z: number, maxR: number) {
-    this.fires.push({ x, z, r: 2, maxR, burnHours: 0, dying: 0 });
+    this.fires.push({ x, z, r: 2, maxR: maxR * FireSystem.HARSH, burnHours: 0, dying: 0 });
   }
 
   get active() { return this.fires.length > 0; }
@@ -69,14 +72,25 @@ export class FireSystem {
     return best;
   }
 
+  private campWarned = false;
+
   tickHour() {
     const w = this.game.weather;
+    // the flames are heading for camp: the clan has to get out
+    if (this.fires.length && this.distanceTo(0, 0) < 35 && !this.game.npcs.evacuate && !this.campWarned) {
+      this.campWarned = true;
+      const f = this.fires.reduce((a, b) => (Math.hypot(a.x, a.z) - a.r < Math.hypot(b.x, b.z) - b.r ? a : b));
+      this.game.ui.toast('🔥 The fire is racing toward camp! EVACUATE — get the kits and elders out!', 'danger');
+      this.game.audio.alarm();
+      this.game.decisions.fireResponse(f.x, f.z);
+    }
+    if (!this.fires.length) this.campWarned = false;
     for (const f of [...this.fires]) {
-      const growth = (7 + w.p.wind * 9) * (1 - w.p.rain);
+      const growth = (7 + w.p.wind * 9) * (1 - w.p.rain * 0.7) * FireSystem.HARSH;
       if (f.r < f.maxR && f.dying === 0) f.r = Math.min(f.maxR, f.r + growth);
       else f.burnHours++;
       // embers blow ahead on the wind and start new fires
-      if (f.dying === 0 && f.r > 8 && this.fires.length < 4 && Math.random() < 0.35 + w.p.wind * 0.3) {
+      if (f.dying === 0 && f.r > 8 && this.fires.length < 7 && Math.random() < (0.35 + w.p.wind * 0.3) * FireSystem.HARSH) {
         const d = f.r + 8 + Math.random() * 14;
         const wx = this.game.windDir.x, wz = this.game.windDir.y;
         const a = Math.atan2(wz, wx) + (Math.random() - 0.5) * 1.2;
@@ -91,7 +105,7 @@ export class FireSystem {
       if (this.game.mods.burned.length > 80) this.game.mods.burned.splice(0, this.game.mods.burned.length - 80);
       this.game.chunks.invalidateArea(f.x, f.z, f.r + 4);
       if (w.p.rain > 0.4) f.dying += w.p.rain * 0.5;
-      if (f.burnHours > 3) f.dying += 0.35;
+      if (f.burnHours > 5) f.dying += 0.25;
       if (f.dying >= 1) this.extinguish(f);
     }
   }
@@ -140,7 +154,7 @@ export class FireSystem {
       // hurt cats inside
       for (const a of game.npcs.agents.values()) {
         if (Math.hypot(a.pos.x - f.x, a.pos.z - f.z) < f.r * 0.9) {
-          a.cat.health -= dt * 4;
+          a.cat.health -= dt * 4 * FireSystem.HARSH;
           if (a.activity !== 'flee') { a.activity = 'flee'; a.mood = 'afraid'; a.setTarget(a.pos.x + (a.pos.x - f.x) * 3, a.pos.z + (a.pos.z - f.z) * 3); }
           if (a.cat.health <= 0) game.clan.kill(a.cat, 'the fire');
         }
@@ -157,13 +171,13 @@ export class FireSystem {
     } else this.light.intensity = 0;
     this.nearestDist = nearest;
     // thick smoke near the flames chokes you and wears you out
-    if (nearest < 14 && game.player.alive) {
-      game.player.stamina = Math.max(0, game.player.stamina - dt * (14 - Math.max(0, nearest)) * 1.2);
+    if (nearest < 22 && game.player.alive && !game.clan.player?.ghost) {
+      game.player.stamina = Math.max(0, game.player.stamina - dt * (22 - Math.max(0, nearest)) * 1.2);
       if (simRng.chance(dt * 0.3)) game.ui.toast('*cough* The smoke stings your eyes and lungs — find the way out!', 'danger');
     }
-    if (nearest < -0.5 && game.player.alive) {
+    if (nearest < -0.5 && game.player.alive && !game.clan.player?.ghost) {
       const c = game.clan.player;
-      c.health -= dt * 14;
+      c.health -= dt * 14 * FireSystem.HARSH;
       game.player.shake = Math.max(game.player.shake, 0.4);
       if (simRng.chance(dt * 1.5)) game.ui.toast('The flames scorch your fur — get out!', 'danger');
       if (c.health <= 0) game.clan.kill(c, 'the fire');

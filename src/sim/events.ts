@@ -119,7 +119,7 @@ export class EventSystem {
     switch (type) {
       case 'fire': {
         const ang = simRng.range(0, Math.PI * 2);
-        const d = simRng.range(45, 170);
+        const d = simRng.range(35, 120); // fires break out closer to camp now
         const x = Math.cos(ang) * d, z = Math.sin(ang) * d;
         if (g.terrain.sample(x, z).river > 0 || g.chunks.waterDepthAt(x, z) > 0) return false;
         g.fire.start(x, z, simRng.range(26, 46));
@@ -129,7 +129,7 @@ export class EventSystem {
         clan.log('A forest fire broke out in the territory.', 'event');
         clan.setRecent('There\'s a fire in the forest!');
         g.audio.alarm();
-        if (d < 90) g.decisions.fireResponse(x, z);
+        if (d < 120) g.decisions.fireResponse(x, z);
         return true;
       }
       case 'flood': {

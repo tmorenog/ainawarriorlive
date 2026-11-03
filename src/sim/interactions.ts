@@ -365,6 +365,10 @@ export class Interactions {
       const a = best;
       const at = { x: a.pos.x, y: a.pos.y + a.model.shoulderY * a.model.scale * 0.9, z: a.pos.z }; // on their torso
       if (a.activity === 'stranded') { this.current = { text: `Help ${a.name} — "Follow me!"`, action: () => this.rescue(a), hold: 1.2, strength: true, at }; return; }
+      // a clanmate caught in the flames: you can give your life to save them
+      if (g.fire.active && a.cat.clan === 'home' && g.fire.distanceTo(a.pos.x, a.pos.z) < 4) {
+        this.current = { text: `🕊 Carry ${a.name} out of the flames (sacrifice yourself)`, action: () => this.fireSacrifice(a), hold: 0.8, at }; return;
+      }
       // a hurt or sick cat and you can heal: treat them right here
       const c = a.cat;
       const healer = pc.role === 'medicine' || pc.role === 'medicineApprentice' || Object.values(pc.poultices ?? {}).some((v) => v > 0);
@@ -472,6 +476,35 @@ export class Interactions {
 
   interact() {
     this.current?.action();
+  }
+
+  /** You push a clanmate out of the fire — and the flames close around you. */
+  private fireSacrifice(a: NpcAgent) {
+    const g = this.game;
+    const pc = g.clan.player;
+    const c = a.cat;
+    // carry them clear of the nearest flames
+    let fx = 0, fz = 0, best = Infinity;
+    for (const f of g.fire.fires) { const d = Math.hypot(a.pos.x - f.x, a.pos.z - f.z) - f.r; if (d < best) { best = d; fx = f.x; fz = f.z; } }
+    const dx = a.pos.x - fx, dz = a.pos.z - fz, dl = Math.hypot(dx, dz) || 1;
+    const safe = g.npcs.evacuate ?? { x: a.pos.x + (dx / dl) * 30, z: a.pos.z + (dz / dl) * 30 };
+    a.pos.set(safe.x, g.groundAt(safe.x, safe.z), safe.z);
+    a.target = null; a.activity = 'idle';
+    c.health = Math.max(c.health, 60);
+    pc.reputation = clamp(pc.reputation + 30, -100, 100);
+    pc.deeds = (pc.deeds ?? 0) + 1;
+    clan_remember(g, c, `${pc.given} gave their life to carry me out of the fire.`);
+    g.player.busy = true; g.player.frozen = true;
+    g.ui.showBanner(`You shove ${displayName(c)} out of the flames… but the fire roars up and closes around you.`, 5);
+    g.audio.alarm();
+    setTimeout(() => {
+      g.ui.fade(true, '');
+      setTimeout(() => g.ui.starSparkles(`${displayName(c)} lives because of you.`, 4500, () => {
+        g.player.busy = false; g.player.frozen = false;
+        g.cinematicDeath = true;
+        g.clan.kill(pc, `the fire, saving ${displayName(c)}`);
+      }), 1500);
+    }, 3500);
   }
 
   // ---------------------------------------------------------------- hold-to-interact (E / touch and hold)
@@ -2040,3 +2073,5 @@ export function relSummary(g: Game, c: Cat): string {
   const r = c.relations[pc.id];
   return relLabel(r, isFamily(c, pc), c.mate === pc.id) + ' · ' + roleLabel(c);
 }
+
+function clan_remember(g: Game, c: Cat, text: string) { g.clan.remember(c, text, 12, g.clan.playerId); }

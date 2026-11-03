@@ -1254,9 +1254,20 @@ export class TwolegSystem {
     this.vetCheckT = 2;
     const pc = this.pc;
     if (this.cutscene || this.ac || this.leash || g.player.busy || g.time.totalHours - this.lastVet < 30) return;
+    const pp = g.player.pos;
+    // an expecting kittypet gets taken for a check-up
+    if (this.isKittypet && pc.expectingUntil !== null && !pc.vetKits) {
+      const o = this.owners.find((x) => !x.away && x.task !== 'sleep' && Math.hypot(x.pos.x - pp.x, x.pos.z - pp.z) < 12);
+      if (o) {
+        pc.vetKits = true;
+        this.say(o, `${pc.given}, you're getting so round! Let's take you to the vet to check on you.`, 4);
+        this.lastVet = g.time.totalHours;
+        setTimeout(() => this.vetTrip(true, true), 1800);
+        return;
+      }
+    }
     const hurt = pc.health < pc.maxHealth * 0.45 || pc.injury > 55 || pc.sick > 55;
     if (!hurt) return;
-    const pp = g.player.pos;
     // your own family, or a kind stranger on the street
     const owner = this.isKittypet ? this.owners.find((o) => !o.away && o.task !== 'sleep' && Math.hypot(o.pos.x - pp.x, o.pos.z - pp.z) < 12) : null;
     const stranger = !owner && g.time.hour > 7 && g.time.hour < 20 ? this.walkers.find((w) => !w.kid && Math.hypot(w.pos.x - pp.x, w.pos.z - pp.z) < 10) : null;
@@ -1268,7 +1279,7 @@ export class TwolegSystem {
   }
 
   /** A trip to the Twoleg healer (the vet): all patched up, smelling strange. */
-  private vetTrip(family: boolean) {
+  private vetTrip(family: boolean, kits = false) {
     const g = this.game;
     const pc = this.pc;
     if (this.cutscene || this.ac) return;
@@ -1285,8 +1296,13 @@ export class TwolegSystem {
     const lines = [
       family ? 'Your Tallfolk lift you gently into a carrier. "It\'s okay, it\'s okay…"' : 'A kind Tallfolk scoops you up in a soft towel and carries you to a monster.',
       'You arrive at a bright, white Tallfolk den. It smells of strange herbs and other scared animals.',
-      'A Tallfolk healer in a blue coat checks your ears, your teeth and your wounds. A tiny sting in your scruff — ouch!',
-      'They clean your wounds, wrap a bandage around you and give you a bitter-tasting medicine. You feel much better.',
+      ...(kits ? [
+        'A Tallfolk healer in a blue coat gently feels your round belly. Their eyes light up.',
+        '"Kittens!" they say. "She\'s going to have kittens!" Your Tallfolk squeal with joy and stroke your head.',
+      ] : [
+        'A Tallfolk healer in a blue coat checks your ears, your teeth and your wounds. A tiny sting in your scruff — ouch!',
+        'They clean your wounds, wrap a bandage around you and give you a bitter-tasting medicine. You feel much better.',
+      ]),
     ];
     lines.forEach((l, i) => setTimeout(() => { cap.textContent = this.twoleg(l); cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in'); g.audio.meow(1.1, 0.4, 0.03); }, i * 2600));
     setTimeout(() => {
@@ -1304,6 +1320,63 @@ export class TwolegSystem {
       if (family) { pc.hunger = Math.min(100, pc.hunger + 30); this.bowlFull = true; }
       if (!family && pc.lifestyle === 'clan') g.clan.remember(pc, 'Twolegs took me to their healer when I was hurt. They were… kind.', 3);
     }, lines.length * 2600 + 500);
+  }
+
+  // ------------------------------------------------------------------ not all Tallfolk are kind
+  private ownerMood() {
+    const g = this.game;
+    const pc = this.pc;
+    const o = this.owners.find((x) => !x.away);
+    const r = simRng.next();
+    const meanness = Math.min(0.12, 0.04 + (pc.badOwner ?? 0) * 0.02);
+    if (r < meanness) {
+      pc.badOwner = (pc.badOwner ?? 0) + 1;
+      pc.health = Math.max(5, pc.health - 12);
+      if (o) this.say(o, simRng.pick([`Get OFF the counter, you stupid cat!`, `Ugh, you scratched the sofa AGAIN! Out!`, `Stop meowing! I'm sick of you!`]), 4);
+      g.ui.toast(this.twoleg('😿 Your Tallfolk yells and shoves you away roughly. It hurts… (−12 health)'), 'danger');
+    } else if (r < meanness + 0.025) {
+      g.player.poison = Math.max(g.player.poison, 1);
+      if (o) this.say(o, 'Here, eat this. I don\'t care what\'s in it.', 3);
+      g.ui.toast(this.twoleg('🍲 Your Tallfolk puts down a strange new food… it tastes bitter and wrong. Your tummy starts to cramp. Poison!'), 'danger');
+    } else if (r < meanness + 0.025 + 0.012 + (pc.badOwner ?? 0) * 0.01) {
+      this.abandon();
+    }
+  }
+
+  /** Your Tallfolk drive you far away and leave you behind. You're a loner now. */
+  private abandon() {
+    const g = this.game;
+    const pc = this.pc;
+    if (this.cutscene) return;
+    this.cutscene = true;
+    g.player.busy = true; g.player.frozen = true; g.input.unlock();
+    if (this.leash) this.endLeash();
+    const ov = document.createElement('div');
+    ov.className = 'vet-scene';
+    ov.innerHTML = '<div class="vet-room"><div class="vet-emoji">💔</div><div class="caption"></div></div>';
+    document.body.appendChild(ov);
+    const cap = ov.querySelector('.caption') as HTMLElement;
+    const lines = [
+      'Your Tallfolk lift you into the carrier without a word. "Time to go."',
+      'The monster rumbles for a long, long time. Where are they taking you?',
+      'It stops by the edge of a dark, unfamiliar forest. The carrier door swings open…',
+      'They tip you out onto the cold ground — and drive away. You run after the monster until your paws ache. It doesn\'t stop.',
+    ];
+    lines.forEach((l, i) => setTimeout(() => { cap.textContent = this.twoleg(l); cap.classList.remove('in'); void cap.offsetWidth; cap.classList.add('in'); }, i * 2800));
+    setTimeout(() => {
+      ov.classList.add('out');
+      setTimeout(() => ov.remove(), 700);
+      this.cutscene = false;
+      g.player.busy = false; g.player.frozen = false;
+      pc.lifestyle = 'loner';
+      pc.app = { ...pc.app, accessory: 'none', accessories: (pc.app.accessories ?? []).filter((a) => a !== 'collar' && a !== 'bellCollar') };
+      g.player.model.setAppearance({ ...pc.app });
+      const nest = this.L.nest.loner;
+      g.player.placeAt(nest.x + 6, nest.z + 6);
+      g.input.lock();
+      g.clan.remember(pc, 'My Tallfolk abandoned me at the edge of the forest. I\'m on my own now.', -10);
+      g.ui.toast(this.twoleg('💔 You\'ve been abandoned. Your collar is gone. You\'re a loner now — find food, water and a safe place to sleep.'), 'danger');
+    }, lines.length * 2800 + 500);
   }
 
   // ------------------------------------------------------------------ slipping the leash
@@ -1344,6 +1417,7 @@ export class TwolegSystem {
     const g = this.game;
     if (!this.L || !g.clan.player?.alive) return;
     const pc = this.pc;
+    if (this.isKittypet && hour === 9 && !this.cutscene && !this.ac && !pc.ghost) this.ownerMood();
     const pp = g.player.pos;
     const near = this.nearTown(pp.x, pp.z, 60) && !this.inHome(pp.x, pp.z);
     const vanUp = this.cars.some((c) => c.van);
@@ -1432,10 +1506,27 @@ export class TwolegSystem {
 
   // ------------------------------------------------------------------ capture & cutscene
   /** You've been grabbed (or you climbed in as a stowaway): ride to the pound. */
-  captured(friends: Cat[], stowaway: boolean) {
+  captured(friends: Cat[], stowaway: boolean, decided = false) {
     if (this.game.clan.player?.ghost) return; // spirits can't be caught
     const g = this.game;
     if (this.cutscene) return;
+    // you can give yourself up so your clanmates get away
+    if (!decided && !stowaway && friends.length) {
+      g.player.busy = true;
+      g.ui.choice('🐾 The Twolegs have you!', `${friends.map((f) => displayName(f)).join(' and ')} ${friends.length > 1 ? 'are' : 'is'} about to be caught too…`, [
+        { label: '🕊 Sacrifice yourself — fight and yowl so your clanmates can run!', hint: 'they escape; you are taken alone', action: () => {
+          for (const f of friends) { f.caged = false; const a = g.npcs.agents.get(f.id); if (a) { a.activity = 'flee'; a.moveSpeed = 4; a.setTarget(0, 6); } }
+          const pc = this.pc;
+          pc.reputation = clamp(pc.reputation + 20, -100, 100);
+          pc.deeds = (pc.deeds ?? 0) + 1;
+          for (const f of friends) g.clan.remember(f, `${pc.given} let the Twolegs take them so I could escape.`, 10, pc.id);
+          g.ui.showBanner(`${displayName(friends[0])}: ${simRng.pick([`No! ${pc.given}!`, `We'll come back for you, ${pc.given}! I promise!`])}`, 4);
+          setTimeout(() => this.captured([], false, true), 2200);
+        } },
+        { label: 'Stay together', action: () => this.captured(friends, false, true) },
+      ]);
+      return;
+    }
     this.cutscene = true;
     if (this.leash) this.endLeash();
     g.player.busy = true;
@@ -2194,6 +2285,16 @@ export class TwolegSystem {
     const opts = [
       { label: 'Chat', action: () => g.ui.dialog({ speaker: c, sub: lifestyleLabel(c.lifestyle ?? 'loner'), text: simRng.pick(lines), options: [{ label: 'Goodbye', action: () => {} }] }) },
     ];
+    if (!clanCat && !pc.mate && !c.mate && g.clan.grownUp(pc) && c.age >= 12) opts.push({ label: '💕 Ask to be mates', action: () => {
+      const yes = simRng.chance(0.55 + (g.clan.opinion(c, pc) / 200));
+      if (yes) {
+        g.clan.cats[c.id] = c;
+        g.clan.makeMates(pc, c);
+        g.audio.purr();
+        g.ui.dialog({ speaker: c, sub: lifestyleLabel(c.lifestyle ?? 'loner'), text: `*purrs and presses close* I've been hoping you'd ask. Yes!`, options: [{ label: '💕', action: () => {} }] });
+        g.ui.toast(`💕 You and ${c.given} are mates now!`, 'good');
+      } else g.ui.dialog({ speaker: c, sub: lifestyleLabel(c.lifestyle ?? 'loner'), text: `*blinks* Oh… I like you, but not like that. Sorry.`, options: [{ label: 'Oh…', action: () => {} }] });
+    } });
     if (!kp && clanCat && !pc.exiled && g.clan.leader && !g.clan.leader.isPlayer) opts.push({ label: 'Invite them to join the clan', action: () => {
       if (simRng.chance(0.5 + pc.reputation / 200)) {
         t.gone = true; t.model.root.visible = false;

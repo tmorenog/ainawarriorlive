@@ -5,6 +5,7 @@ import { MossBalls } from './world/mossball';
 import { TwolegSystem } from './sim/twolegs';
 import { Story } from './sim/story';
 import { Afterlife } from './sim/afterlife';
+import { SnakeManager } from './wildlife/snakes';
 import { lifestyleLabel } from './lore';
 import { tickWaterfalls } from './world/chunks';
 import { BOOK_CATS } from './lore';
@@ -128,6 +129,7 @@ export class Game {
     this.npcs = new NpcManager(this);
     this.player = new Player(this);
     this.prey = new PreyManager(this);
+    this.snakes = new SnakeManager(this);
     this.creatures = new CreatureManager(this);
     this.combat = new CombatSystem(this);
     this.events = new EventSystem(this);
@@ -919,6 +921,7 @@ export class Game {
 
   mossBalls!: MossBalls;
   afterlife!: Afterlife;
+  snakes!: SnakeManager;
   pendingProphecy: { type: EventType; day: number; omen?: string; solved?: boolean; by?: string } | null = null;
 
   /** A dream visit from a starry-furred cat of the Long Meadow (StarClan). */
@@ -1016,7 +1019,7 @@ export class Game {
       if (this.player.poison > 0) {
         c.health -= 7 * this.player.poison;
         this.player.poison = Math.max(0, this.player.poison - 0.07);
-        if (c.health <= 0) { this.clan.kill(c, 'deathberries'); return; }
+        if (c.health <= 0) { this.clan.kill(c, 'poison'); return; }
       } // no healing on your own: only a medicine cat, a poultice, herbs or the vet heal you
       if (c.health <= 0) this.clan.kill(c, 'hunger');
     }
@@ -1151,6 +1154,7 @@ export class Game {
     // simulation
     this.npcs.update(dt);
     this.prey.update(dt);
+    this.snakes.update(dt);
     this.creatures.update(dt);
     this.combat.update(dt);
     this.bestFriendHelp(dt);

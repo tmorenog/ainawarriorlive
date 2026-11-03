@@ -174,6 +174,10 @@ export interface Cat {
   foster?: string;
   /** Grief has darkened this cat's heart. */
   griefDark?: boolean;
+  /** Kittypet: the vet already checked on your kits. */
+  vetKits?: boolean;
+  /** Kittypet: how many times your Tallfolk were cruel to you. */
+  badOwner?: number;
   /** You walk the afterlife as a spirit. */
   ghost?: 'starclan' | 'dark';
   /** Where this cat's spirit went when they died. */
