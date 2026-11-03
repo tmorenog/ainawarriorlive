@@ -22,7 +22,7 @@ export class Story {
   update(dt: number) {
     const g = this.game;
     const pc = g.clan.player;
-    if (!pc || !pc.alive) return;
+    if (!pc || !pc.alive || pc.ghost) return;
     pc.playSeconds = (pc.playSeconds ?? 0) + dt;
     this.checkT -= dt;
     if (this.checkT > 0 || this.running) return;

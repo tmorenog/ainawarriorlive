@@ -602,6 +602,7 @@ export class Player implements Fighter {
   }
 
   onHit(dmg: number, by: Fighter) {
+    if (this.cat.ghost) return; // spirits can't be hurt
     this.shake = Math.min(1, this.shake + dmg / 20);
     this.cat.injury = clamp(this.cat.injury + dmg * 0.25, 0, 100);
     this.game.ui.hurtFlash();

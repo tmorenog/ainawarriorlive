@@ -304,6 +304,7 @@ export class Interactions {
     const g = this.game;
     const pl = g.player;
     if (pl.busy || pl.sleeping || !pl.alive || pl.drinkT > 0) { this.current = null; return; }
+    if (g.afterlife?.realm) { this.current = g.afterlife.prompt(); return; }
     const p = pl.pos;
     const f = pl.forward();
     const pc = g.clan.player;

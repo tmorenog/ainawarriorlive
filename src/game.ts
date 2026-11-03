@@ -4,6 +4,7 @@ import type { EventType } from './sim/events';
 import { MossBalls } from './world/mossball';
 import { TwolegSystem } from './sim/twolegs';
 import { Story } from './sim/story';
+import { Afterlife } from './sim/afterlife';
 import { lifestyleLabel } from './lore';
 import { tickWaterfalls } from './world/chunks';
 import { BOOK_CATS } from './lore';
@@ -142,6 +143,7 @@ export class Game {
     this.discoveries = new Discoveries(this);
     this.twolegs = new TwolegSystem(this);
     this.story = new Story(this);
+    this.afterlife = new Afterlife(this);
     this.fire = new FireSystem(this);
     this.scent = new ScentSystem(this);
     this.ui = new UI(this);
@@ -520,6 +522,7 @@ export class Game {
       if (grew) this.player.refreshStage();
       this.npcs.refreshModels();
       c.nurseryTick();
+      if (c.player.ghost) this.afterlife.enter(c.player.ghost, true);
       // older saves: liven up a quiet nursery with a few new litters
       if (c.home().filter((x) => x.stage === 'kit').length < 10 && !c.player.exiled && c.player.lifestyle !== 'kittypet' && c.player.lifestyle !== 'loner' && c.player.lifestyle !== 'rogue') {
         const mums = c.fillNursery(10);
@@ -625,7 +628,7 @@ export class Game {
     this.chunks?.setWaterLevel(0);
   }
 
-  private startPlaying() {
+  startPlaying() {
     this.menus.clear();
     this.state = 'playing';
     this.ui.showHud(true);
@@ -784,6 +787,8 @@ export class Game {
 
   continueAs(cat: Cat) {
     const old = this.clan.player;
+    if (old?.ghost) { old.ghost = undefined; old.alive = false; }
+    this.afterlife?.leave();
     if (old) {
       old.isPlayer = false;
       this.clan.lineage.push(old.id);
@@ -913,6 +918,7 @@ export class Game {
   }
 
   mossBalls!: MossBalls;
+  afterlife!: Afterlife;
   pendingProphecy: { type: EventType; day: number; omen?: string; solved?: boolean; by?: string } | null = null;
 
   /** A dream visit from a starry-furred cat of the Long Meadow (StarClan). */
@@ -988,7 +994,7 @@ export class Game {
     this.events.tickHour();
     this.twolegs.hourTick(hour);
     const c = this.clan.player;
-    if (c && c.alive) {
+    if (c && c.alive && !c.ghost) {
       if (c.exiled) {
         c.hunger = clamp(c.hunger - 1.35, 0, 100);
         if (c.hunger < 8) c.health -= 1.2;
@@ -1132,12 +1138,14 @@ export class Game {
     sharedUniforms.uWet.value = w.wetness;
     sharedUniforms.uPlayer.value.copy(this.player.pos);
     this.sky.update(this.time.hour, this.clock, this.camera.position, { ...w.p }, this.player.inCave);
+    this.afterlife?.applyAtmosphere();
     const biome = this.chunks.biomeAt(this.player.pos.x, this.player.pos.z);
     this.ambient.update(this.clock, this.camera.position, this.player.pos.y, { night: this.time.darkness, season: this.time.season, rain: w.p.rain, wind: w.p.wind, day: this.time.day, inForest: biome === 'forest' || biome === 'pine' });
     this.chunks.setNightLights(this.time.darkness * 1.5);
     this.chunks.update(this.player.pos.x, this.player.pos.z, 1);
     this.twolegs.update(dt);
     this.story.update(dt);
+    this.afterlife.update(dt);
     this.mateCheckT -= dt;
     if (this.mateCheckT <= 0) { this.mateCheckT = 10; this.clan.playerMateNursery(); this.objectives.excuseQueen(); }
     // simulation

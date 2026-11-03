@@ -174,6 +174,10 @@ export interface Cat {
   foster?: string;
   /** Grief has darkened this cat's heart. */
   griefDark?: boolean;
+  /** You walk the afterlife as a spirit. */
+  ghost?: 'starclan' | 'dark';
+  /** Where this cat's spirit went when they died. */
+  afterlife?: 'starclan' | 'dark';
   /** A kit allowed outside camp until this game hour (and who said yes). */
   outsideUntil?: number;
   outsideBy?: string;
@@ -219,6 +223,7 @@ export function displayName(c: Cat): string {
 }
 
 export function roleLabel(c: Cat): string {
+  if (c.ghost) return c.ghost === 'dark' ? 'Spirit of the Dark Forest' : 'Spirit of StarClan';
   if (!c.alive) return 'Walks the Long Meadow';
   if (c.lifestyle && c.lifestyle !== 'clan') return lifestyleLabel(c.lifestyle);
   if (c.exiled) return 'Exile';

@@ -54,6 +54,7 @@ export class Objectives {
     // kits outside camp are never handed orders (except their own punishments)
     const pl = this.game.clan.player;
     if (pl && pl.stage === 'kit' && o.order && !o.id.startsWith('punish') && o.id !== 'meeting' && Math.hypot(this.game.player.pos.x, this.game.player.pos.z) > 17.5) return;
+    if (pl?.ghost) return; // spirits have no duties
     // queens rest: no duties, patrols, hunts or lessons until their kits are born and grown
     if (pl && this.isQueenTask(o)) return;
     if (this.has(o.id)) this.list = this.list.filter((x) => x.id !== o.id);

@@ -1433,6 +1433,7 @@ export class TwolegSystem {
   // ------------------------------------------------------------------ capture & cutscene
   /** You've been grabbed (or you climbed in as a stowaway): ride to the pound. */
   captured(friends: Cat[], stowaway: boolean) {
+    if (this.game.clan.player?.ghost) return; // spirits can't be caught
     const g = this.game;
     if (this.cutscene) return;
     this.cutscene = true;

@@ -84,7 +84,7 @@ export class ClanSim {
   get medicine() { return this.get(this.medicineId); }
 
   home(includePlayer = true): Cat[] {
-    return Object.values(this.cats).filter((c) => c.alive && c.clan === 'home' && !c.exiled && !c.caged && (includePlayer || !c.isPlayer));
+    return Object.values(this.cats).filter((c) => c.alive && !c.ghost && c.clan === 'home' && !c.exiled && !c.caged && (includePlayer || !c.isPlayer));
   }
   rivalCats(index: number): Cat[] {
     return Object.values(this.cats).filter((c) => c.alive && c.clan === index);
@@ -1346,7 +1346,7 @@ export class ClanSim {
   }
 
   kill(c: Cat, cause: string) {
-    if (!c.alive) return;
+    if (!c.alive || c.ghost) return;
     c.alive = false;
     c.deathDay = this.game.time.day;
     c.deathCause = cause;
@@ -1393,6 +1393,7 @@ export class ClanSim {
       if (!c.isPlayer) this.game.notify(`${name} has died (${cause}).`, 'death');
     }
     this.game.npcs.onCatDied(c);
+    this.game.afterlife?.onCatDied(c);
     if (!c.isPlayer) this.game.vigils?.onDeath(c, cause);
     if (c.isPlayer) this.game.onPlayerDeath(cause);
   }

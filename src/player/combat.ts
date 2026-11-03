@@ -113,6 +113,7 @@ export class CombatSystem {
   /** a starts fighting b. Nearby clanmates rally if a home cat or the player is attacked. */
   engage(a: Fighter, b: Fighter, spar = false) {
     if (!a.alive || !b.alive) return;
+    if ((a.kind === 'player' || b.kind === 'player') && this.game.clan.player?.ghost) return;
     if (b.kind === 'player' && !spar && this.yieldUntil > this.game.clock) return;
     a.fightTarget = b;
     this.active.add(a);

@@ -1,6 +1,7 @@
 // Title screen, character creation, pause menu, settings, and the memorial
 // / successor screen that continues the story after a cat dies.
 import type { Game } from '../game';
+import { Afterlife } from '../sim/afterlife';
 import { clanTitle } from '../lore';
 import { h, esc } from './ui';
 import { ACCESSORY_LABEL, ACCESSORY_PRICE, Accessory, Appearance, Trait, BodyType, Cat, EarShape, FurLength, Lifestyle, Pattern, Sex, TailShape, displayName, roleLabel } from '../cats/types';
@@ -374,6 +375,7 @@ export class Menus {
     const menu = h('div', 'menu', '', s);
     const add = (label: string, fn: () => void) => { const b = h('button', '', label, menu); b.onclick = fn; };
     add('Resume', () => g.resume());
+    if (g.clan.player?.ghost) add('🌱 Return to the living (continue as a clanmate)', () => g.menus.memorial(g.clan.player, 'walking among the stars'));
     add('⏪ Go back 1 moon', () => this.confirm('Go back in time?', 'Go back to the dawn of the previous moon? Everything that happened since then will be undone.', () => g.backOneMoon()));
     const mate = g.clan.get(g.clan.player?.mate ?? null);
     if (mate) add(`💔 Unmate ${displayName(mate)}`, () => this.confirm('Unmate?', `Stop being mates with ${displayName(mate)}? Only the label changes — they won't be sad and nothing else changes.`, () => { g.clan.unmate(g.clan.player, mate); g.ui.toast(`You and ${displayName(mate)} are no longer mates.`, 'info'); this.pause(); }));
@@ -499,6 +501,17 @@ export class Menus {
     const mourners = clan.home().filter((c) => (c.relations[dead.id]?.opinion ?? 0) > 40).slice(0, 5).map((c) => displayName(c));
     if (mourners.length) h('div', 'epitaph', `Mourned by ${esc(mourners.join(', '))}.`, s);
     this.lifeCard(dead, s);
+    // walk on as a spirit: StarClan if you lived well enough, the Dark Forest if not
+    if (!dead.ghost) {
+      const realm = Afterlife.realmFor(dead);
+      const ab = h('div', 'succ modal', '', s);
+      h('h2', '', realm === 'starclan' ? '🌟 StarClan is waiting' : '🔥 The Dark Forest calls', ab);
+      h('p', '', realm === 'starclan'
+        ? 'Walk among the stars as a spirit. Watch over your clan, visit their dreams, warn them of danger and judge the cats who join you.'
+        : 'Your deeds were too dark for StarClan. Wander the shadowed forest, creep into dreams and tempt the living.', ab);
+      const go = h('button', 'btn', realm === 'starclan' ? '🌟 Walk among StarClan' : '🔥 Enter the Dark Forest', ab);
+      go.onclick = () => { const p = g.clan.player; if (p && p.id === dead.id) { this.clear(); g.afterlife.enter(realm); } };
+    }
     const cands = this.successors(dead);
     const box = h('div', 'succ modal', '', s);
     if (!cands.length) {

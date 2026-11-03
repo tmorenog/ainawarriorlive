@@ -1419,7 +1419,7 @@ export class NpcManager {
     const c = a.cat;
     const p = game.clan.player;
     if (!p || !p.alive) return null;
-    if (p.exiled) return null;
+    if (p.exiled || p.ghost) return null;
     const op = game.clan.opinion(c, p);
     const t = game.time;
     if (t.isNight) return null;
