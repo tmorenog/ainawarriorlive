@@ -1095,7 +1095,8 @@ export class ClanSim {
     for (let i = 0; i < born; i++) if (simRng.chance(kitRisk)) lost++;
     const n = born - lost;
     const queenRisk = clamp((0.03 + 0.05 * herbShort + (healed ? 0 : 0.08) - (playerHelped ? 0.02 : 0)) * (mother.isPlayer ? 0.5 : 1), 0.01, 0.3);
-    const queenDies = simRng.chance(queenRisk);
+    // a weak queen (under half health) almost never survives giving birth
+    const queenDies = simRng.chance(mother.health < 50 ? 0.9 : queenRisk);
     const kits: Cat[] = [];
     for (let i = 0; i < n; i++) {
       const k = createCat({ age: 0, parents: father ? [mother, father] : [mother, mother], day: this.game.time.day, usedNames: this.usedNames });
