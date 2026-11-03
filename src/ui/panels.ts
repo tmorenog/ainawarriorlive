@@ -1,6 +1,7 @@
 // Full-screen panels: journal (duties, events, relationships, clan, code,
 // memories, discoveries, controls), territory map and the leader's council.
 import type { Game } from '../game';
+import { writeSave } from '../save/save';
 import { clanTitle } from '../lore';
 import type { UI } from './ui';
 import { h, esc } from './ui';
@@ -360,7 +361,8 @@ export class Panels {
       const ab = h('button', 'btn', `🎂 Set ${c === pc ? 'your' : esc(c.given) + '\'s'} age`, d);
       ab.onclick = () => g.ui.numberInput(`🎂 How old is ${displayName(c)}?`, 'Pick an age in moons. Kits are under 6, apprentices 6–12, warriors 13–79, elders 80+. They move to that stage (with the right ceremony).', c.age, 0, 150, (n) => {
         g.clan.setAge(c, n);
-        g.ui.toast(`🎂 ${displayName(c)} is now ${Math.floor(c.age)} moons old.`, 'good');
+        const saved = writeSave(g);
+        g.ui.toast(saved ? `🎂 ${displayName(c)} is now ${Math.floor(c.age)} moons old. (Saved)` : `🎂 ${displayName(c)} is now ${Math.floor(c.age)} moons old — but the game couldn't save! Your browser storage may be full.`, saved ? 'good' : 'danger');
         this.render();
       });
     }

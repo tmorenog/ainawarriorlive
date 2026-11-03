@@ -674,8 +674,11 @@ export class Game {
   save() {
     if (!this.clan.playerId || !this.clan.player) return;
     if (this.state !== 'playing' && this.state !== 'paused') return;
-    writeSave(this);
+    const ok = writeSave(this);
+    if (!ok && !this.saveWarned) { this.saveWarned = true; this.ui.toast('⚠ The game could not save — your browser storage is full. Try deleting an old save slot.', 'danger'); }
+    if (ok) this.saveWarned = false;
   }
+  private saveWarned = false;
 
   // ------------------------------------------------------------ creation preview
   showPreview(app: Appearance, stage: LifeStage) {

@@ -105,9 +105,16 @@ export function pushMoonSnapshot(g: Game) {
   list.push(JSON.stringify(d));
   while (list.length > 3) list.shift();
   // storage is limited: drop the oldest snapshots until it fits
+  // never let the snapshots crowd out the real save: keep room for at least one more full save
   while (list.length) {
-    try { localStorage.setItem(MOONS(), JSON.stringify(list)); return; } catch { list.shift(); }
+    try {
+      localStorage.setItem(MOONS(), JSON.stringify(list));
+      const probe = 'mistwood-space-probe';
+      localStorage.setItem(probe, JSON.stringify(d)); localStorage.removeItem(probe);
+      return;
+    } catch { list.shift(); try { localStorage.removeItem('mistwood-space-probe'); } catch { /* ignore */ } }
   }
+  try { localStorage.removeItem(MOONS()); } catch { /* ignore */ }
 }
 export function moonSnapshots(): SaveData[] {
   try { return (JSON.parse(localStorage.getItem(MOONS()) ?? '[]') as string[]).map((x) => JSON.parse(x) as SaveData); } catch { return []; }
@@ -120,14 +127,21 @@ export function keepMoonSnapshots(n: number) {
 }
 
 export function writeSave(g: Game): boolean {
-  const data = buildSave(g);
-  try {
-    localStorage.setItem(KEY_NOW(), JSON.stringify(data));
-    return true;
-  } catch (e) {
-    console.warn('save failed', e);
-    return false;
+  const json = JSON.stringify(buildSave(g));
+  // your real save always comes first: if storage is full, make room by dropping the oldest "go back" moons
+  for (let tries = 0; tries < 5; tries++) {
+    try {
+      localStorage.setItem(KEY_NOW(), json);
+      return true;
+    } catch (e) {
+      let list: string[] = [];
+      try { list = JSON.parse(localStorage.getItem(MOONS()) ?? '[]'); } catch { list = []; }
+      if (!list.length) { console.warn('save failed', e); return false; }
+      list.shift();
+      try { if (list.length) localStorage.setItem(MOONS(), JSON.stringify(list)); else localStorage.removeItem(MOONS()); } catch { localStorage.removeItem(MOONS()); }
+    }
   }
+  return false;
 }
 
 function buildSave(g: Game): SaveData {
