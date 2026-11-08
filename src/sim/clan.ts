@@ -698,7 +698,7 @@ export class ClanSim {
         if (yes) {
           say(q, simRng.pick(['*gasps* On the Thunderpath?! Poor little things… of course I\'ll take them.', 'Give them here — they\'re freezing! I\'ll raise them as my own.']));
           q.fosterKits = [...(q.fosterKits ?? []), ...alive.map((k) => k.id)];
-          for (const k of alive) { k.foster = q.id; this.rel(q, k).opinion = Math.max(this.rel(q, k).opinion, 75); }
+          for (const k of alive) { k.foster = q.id; k.secretKit = true; this.rel(q, k).opinion = Math.max(this.rel(q, k).opinion, 75); }
           this.log(`${displayName(q)} took in kits "found on the Thunderpath": ${names}.`, 'clan');
           g.ui.toast(`🍼 ${displayName(q)} will raise the kits. Nobody knows they're ${mother.given}'s… yet.`, 'good');
         } else {
@@ -719,21 +719,74 @@ export class ClanSim {
   }
 
   /** The secret of a medicine cat's mate comes out. */
-  private revealMedSecret(med: Cat) {
+  private revealMedSecret(med: Cat, reporter?: Cat) {
+    if (med.medRevealed) { this.strikeMed(med, reporter); return; }
     const mate = this.get(med.mate);
     med.medRevealed = true; if (mate) mate.medRevealed = true;
     for (const c of [med, mate]) if (c) c.reputation = clamp(c.reputation - 20, -100, 100);
     this.log(`The clan found out that ${displayName(med)}${mate ? ` and ${displayName(mate)}` : ''} broke the code: a medicine cat with a mate!`, 'politics');
     this.game.notify(`😱 The clan found out! ${displayName(med)}${mate ? ` and ${displayName(mate)} are mates` : ' has a mate'} — and ${med.given} is a medicine cat!`, 'danger');
-    // the medicine cat gets a strike — no second chances for this one
+    this.strikeMed(med, reporter);
+  }
+
+  /** The medicine cat gets a strike — no second chances for this one. */
+  private strikeMed(med: Cat, reporter?: Cat) {
+    const by = reporter ? ` ${displayName(reporter)} told the leader.` : '';
     if (med.isPlayer) {
-      this.infraction('medicineMate', this.home(false).slice(0, 4).map((c) => c.id), 'a medicine cat with a mate', true);
-      this.game.ui.toast(`⚠ Strike! You broke the code: medicine cats must not take mates. (${med.infractions} strike${med.infractions === 1 ? '' : 's'})`, 'danger');
+      this.infraction('medicineMate', reporter ? [reporter.id] : this.home(false).slice(0, 4).map((c) => c.id), 'a medicine cat with a mate', true);
+      this.game.ui.toast(`⚠ Strike! You broke the code: medicine cats must not take mates.${by} (${med.infractions} strike${med.infractions === 1 ? '' : 's'})`, 'danger');
     } else {
       med.infractions = (med.infractions ?? 0) + 1;
-      this.log(`${displayName(med)} was given a strike for taking a mate as a medicine cat.`, 'rule');
-      this.game.notify(`⚠ ${displayName(med)} gets a strike for breaking the code — medicine cats must not take mates. (${med.infractions} strike${med.infractions === 1 ? '' : 's'})`, 'danger');
+      this.log(`${displayName(med)} was given a strike for taking a mate as a medicine cat.${by}`, 'rule');
+      this.game.notify(`⚠ ${displayName(med)} gets a strike for breaking the code — medicine cats must not take mates.${by} (${med.infractions} strike${med.infractions === 1 ? '' : 's'})`, 'danger');
     }
+  }
+
+  /** The medicine-cat parent of a secret kit (if any). */
+  secretParent(k: Cat): Cat | undefined {
+    if (!k.secretKit) return undefined;
+    return k.parents.map((id) => this.get(id)).find((p): p is Cat => !!p && isMedCat(p));
+  }
+
+  /** A secret kit finds out their real mother (or father) is the medicine cat. */
+  private kitLearnsTruth(k: Cat, med: Cat) {
+    const g = this.game;
+    k.knowsTruth = true;
+    const other = k.parents.map((id) => this.get(id)).find((p) => p && p.id !== med.id);
+    const parent = med.sex === 'she' ? 'mother' : 'father';
+    const report = () => {
+      this.adjust(k, med, -30, { text: `${displayName(med)} lied to me my whole life.`, weight: -8 });
+      this.log(`${displayName(k)} found out ${displayName(med)} is their real ${parent} — and reported it to the leader.`, 'politics');
+      const lead = this.leader;
+      if (lead) g.npcs.agents.get(lead.id)?.say(`${med.given}… is this true? A medicine cat with kits?!`, 5);
+      this.revealMedSecret(med, k);
+    };
+    const upset = () => {
+      this.adjust(k, med, -25, { text: `${displayName(med)} is my real ${parent}, and never told me.`, weight: -6 });
+      this.log(`${displayName(k)} found out ${displayName(med)} is their real ${parent}. They're furious, but kept the secret.`, 'clan');
+    };
+    const forgive = () => {
+      this.adjust(k, med, 10, { text: `${displayName(med)} is my real ${parent}. I forgave them.`, weight: 5 });
+      this.log(`${displayName(k)} found out ${displayName(med)} is their real ${parent} — and forgave them.`, 'clan');
+    };
+    if (k.isPlayer) {
+      g.ui.choice('😢 The truth', `You overhear ${displayName(med)}${other ? ` and ${displayName(other)}` : ''} whispering… You weren't found on the Thunderpath. ${displayName(med)} — the medicine cat — is your real ${parent}! What will you do?`, [
+        { label: '📢 Tell the leader', action: report },
+        { label: '😠 Stay angry, but keep the secret', action: () => { upset(); g.ui.toast(`You can't even look at ${med.given}…`, 'info'); } },
+        { label: '💗 Forgive them', action: () => { forgive(); g.ui.toast(`*${med.given} presses close* "I'm so sorry… I loved you every day."`, 'good'); } },
+      ]);
+      return;
+    }
+    // they'll be upset — forgiving is rare
+    const roll = simRng.next();
+    const choice = roll < 0.2 ? 'forgive' : roll < 0.6 ? 'report' : 'upset';
+    const say = (who: Cat, text: string) => { g.npcs.agents.get(who.id)?.say(text, 5); };
+    say(k, choice === 'forgive' ? `You're my ${parent}?… *sniffs* I'm angry… but I still love you.` : `You're my ${parent}?! You LIED to me! The Thunderpath story was all lies!`);
+    const near = (med.isPlayer || other?.isPlayer);
+    if (near) g.ui.showBanner(`${displayName(k)}: ${choice === 'forgive' ? `You're my ${parent}?… I'm angry… but I forgive you.` : `You're my real ${parent}?! You LIED to me!`}`, 6);
+    if (choice === 'forgive') { forgive(); if (near) g.ui.toast(`💗 ${displayName(k)} found out the truth — and forgave you.`, 'good'); }
+    else if (choice === 'upset') { upset(); if (near) g.ui.toast(`😠 ${displayName(k)} found out you're their real ${med.isPlayer ? parent : 'parent'}. They're furious… but they kept the secret. For now.`, 'danger'); }
+    else { if (near) g.ui.toast(`📢 ${displayName(k)} found out the truth and is going to tell the leader!`, 'danger'); setTimeout(report, 3000); }
   }
 
   /** Childhood crushes grow into mates once both cats are grown up. */
@@ -775,6 +828,12 @@ export class ClanSim {
   tickDay() {
     this.crushTick();
     for (const c of this.home()) if (isMedCat(c) && c.medSecret && c.medFound && !c.medRevealed && c.mate && (c.expectingUntil !== null || simRng.chance(0.15))) this.revealMedSecret(c);
+    // secret kits might find out who their real parent is
+    for (const k of this.home()) {
+      if (!k.secretKit || k.knowsTruth || k.age < 3) continue;
+      const med = this.secretParent(k);
+      if (med && med.alive && simRng.chance(0.05)) { this.kitLearnsTruth(k, med); break; }
+    }
     // a heart darkened by grief may turn its back on the clan
     for (const c of this.home()) if (c.griefDark && !c.isPlayer && simRng.chance(0.12)) {
       c.exiled = true; c.griefDark = false;

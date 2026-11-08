@@ -182,6 +182,10 @@ export interface Cat {
   medSecret?: boolean;
   medFound?: boolean;
   medRevealed?: boolean;
+  /** A medicine cat's secret kit, raised by another queen. */
+  secretKit?: boolean;
+  /** This secret kit found out who their real parent is. */
+  knowsTruth?: boolean;
   /** This cat's mate died (they're grieving them). */
   widowOf?: string;
   /** Their lost mate told them in a dream it's okay to love again. */

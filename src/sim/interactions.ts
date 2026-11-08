@@ -1164,6 +1164,12 @@ export class Interactions {
     // gossip: a medicine cat getting round…
     const plumpMed = clan.home(false).find((m) => isMedCat(m) && isExpecting(m) && !m.medRevealed && m.id !== c.id);
     if (plumpMed && simRng.chance(0.5)) return simRng.pick([`Have you noticed ${displayName(plumpMed)} is getting plump?`, `*whispers* ${displayName(plumpMed)} is getting awfully round for a medicine cat…`, `Is it just me, or is ${plumpMed.given} eating a lot of mice lately?`]);
+    // gossip: a "Thunderpath" kit looks an awful lot like someone…
+    const twin = clan.home(false).find((k) => k.secretKit && k.alive && k.id !== c.id && !clan.secretParent(k)?.medRevealed);
+    if (twin && simRng.chance(0.3)) {
+      const look = twin.parents.map((id) => clan.get(id)).filter((p): p is NonNullable<typeof p> => !!p && p.id !== c.id);
+      if (look.length) { const p = simRng.pick(look); return simRng.pick([`Is it just me, or does ${displayName(twin)} look just like ${displayName(p)}?`, `*whispers* ${twin.given} has ${p.given}'s eyes… funny, for a kit found on the Thunderpath.`, `Have you seen ${displayName(twin)}? Same pelt as ${displayName(p)}. Strange, isn't it?`]); }
+    }
     if (isExpecting(c) && simRng.chance(0.8)) {
       const m = clan.get(c.mate);
       const left = c.expectingUntil !== null ? c.expectingUntil - g.time.day : 0;
