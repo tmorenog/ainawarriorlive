@@ -12,6 +12,7 @@ import { createCat, GIVEN_NAMES } from '../cats/generate';
 import { simRng } from '../core/rng';
 import { clamp } from '../core/math';
 import { smartReply } from './chatbrain';
+import { isFamily } from './social';
 
 export type Realm = 'starclan' | 'dark';
 
@@ -600,17 +601,7 @@ export class Afterlife {
     const grown = (x: Cat) => x.stage !== 'kit' && x.stage !== 'apprentice';
     if (pc.mate === c.id) {
       if (g.time.day !== pc.starLitterDay && (c.sex !== pc.sex || pc.sex === 'she')) opts.push({ label: '🍼 Have kits together', hint: 'star-kits to raise among the clouds', action: () => {
-        pc.starLitterDay = g.time.day;
-        const n = simRng.int(1, 4);
-        const names = Array.from({ length: n }, () => simRng.pick(GIVEN_NAMES));
-        pc.starKits = [...(pc.starKits ?? []), ...names];
-        for (const name of names) {
-          const k = createCat({ age: 0.2, parents: [pc, c], day: g.time.day, usedNames: new Set() });
-          k.given = name; k.alive = false; k.id = `star-${name}-${pc.id}-${pc.starKits.length}-${Math.random().toString(36).slice(2, 6)}`;
-          this.addGhost(k, true);
-        }
-        g.audio.purr();
-        g.ui.toast(`🍼✨ ${n === 1 ? 'A tiny star-kit appears' : `${n} tiny star-kits appear`} between you and ${displayName(c)}, glowing like new stars: ${names.map((x) => x + 'kit').join(', ')}!`, 'good');
+        this.makeStarKits(c);
         again('*purrs, nuzzling the tiny glowing kits* Look at them… our very own little stars.');
       } });
       opts.push({ label: '💕 Curl up together', action: () => { pose('sleep', 8); g.player.posePick = 'lie'; g.audio.purr(); again('*presses close* We\'ll never be apart again. Not even the stars could separate us.'); } });
@@ -740,6 +731,25 @@ export class Afterlife {
   }
 
   /** Talking with a cat inside their dream. */
+  /** You and your mate (a spirit, or a living cat met in dreams) have kits among the stars. */
+  private makeStarKits(c: Cat) {
+    const g = this.game;
+    const pc = g.clan.player;
+    pc.starLitterDay = g.time.day;
+    const n = simRng.int(1, 4);
+    const names = Array.from({ length: n }, () => simRng.pick(GIVEN_NAMES));
+    pc.starKits = [...(pc.starKits ?? []), ...names];
+    for (const name of names) {
+      const k = createCat({ age: 0.2, parents: pc.sex === 'she' ? [pc, c] : [c, pc], day: g.time.day, usedNames: new Set() });
+      k.given = name; k.alive = false; k.id = `star-${name}-${pc.id}-${pc.starKits.length}-${Math.random().toString(36).slice(2, 6)}`;
+      this.addGhost(k, true);
+      if (c.alive) c.kits = [...c.kits, k.id];
+    }
+    g.audio.purr();
+    g.ui.toast(`🍼✨ ${n === 1 ? 'A tiny star-kit appears' : `${n} tiny star-kits appear`} in StarClan — yours and ${displayName(c)}'s, glowing like new stars: ${names.map((x) => x + 'kit').join(', ')}!${c.alive ? ` They'll wait for ${c.given} among the clouds.` : ''}`, 'good');
+    return names;
+  }
+
   private dreamTalk(a: NpcAgent, opening?: string) {
     const g = this.game;
     const c = a.cat;
@@ -767,6 +777,25 @@ export class Afterlife {
         g.ui.dialog({ speaker: c, text: `*tears glittering like starlight* You… you want me to be happy? …I'll never forget you, ${pc.given}. Never. But… thank you. I'll try.`, options: [{ label: '*licks their ear one last time*', action: () => this.dreamTalk(a) }] });
       } });
     }
+    const grownBoth = clan.grownUp(c) && pc.stage !== 'kit' && pc.stage !== 'apprentice';
+    if (this.realm === 'starclan' && myMate && grownBoth && g.time.day !== pc.starLitterDay && (c.sex !== pc.sex || pc.sex === 'she')) opts.push({ label: '🍼 Have kits together in StarClan', hint: 'they\'ll live among the stars', action: () => {
+      if (pc.mate !== c.id) { pc.mate = c.id; c.mate = pc.id; }
+      const names = this.makeStarKits(c);
+      clan.remember(c, `In a dream, ${pc.given} and I had kits in StarClan: ${names.join(', ')}.`, 10, pc.id);
+      g.ui.dialog({ speaker: c, text: `*gasps as tiny glowing kits curl between you* Our kits… ${names.join(' and ')}… they're so beautiful. Wait for me among the stars, little ones. I'll come to you one day.`, options: [{ label: '*purrs*', action: () => this.dreamTalk(a) }] });
+    } });
+    if (!myMate && grownBoth && (!c.mate || c.widowOf) && !isFamily(c, pc) && (!pc.mate || !clan.get(pc.mate)?.alive || clan.get(pc.mate)?.ghost)) opts.push({ label: '💕 Ask to become mates across the stars', action: () => {
+      const yes = simRng.chance(clamp((clan.rel(c, pc).romance + (c.relations[pc.id]?.opinion ?? 0)) / 120 + 0.3, 0.15, 0.95));
+      if (yes) {
+        pc.mate = c.id; c.mate = pc.id; c.freeToLove = false;
+        clan.rel(c, pc).romance = 90; clan.rel(pc, c).romance = 90;
+        clan.remember(c, `${pc.given} came to me from StarClan, and we became mates.`, 10, pc.id);
+        clan.remember(pc, `${displayName(c)} and I became mates across the stars.`, 10, c.id);
+        g.audio.purr();
+        g.ui.toast(`💕 You and ${displayName(c)} are mates — you in StarClan, ${c.given} still alive. Your kits will be born among the stars.`, 'good');
+        again('*whispers* A mate in StarClan… I\'ll dream of you every night. Yes!');
+      } else { clan.adjust(c, pc, -2); again(simRng.pick(['*backs away gently* You\'re a spirit… I can\'t. I\'m sorry.', 'I… need to love someone who can walk beside me. Forgive me.'])); }
+    } });
     opts.push({ label: '💬 How are you feeling?', action: () => {
       const mate = clan.get(c.mate);
       const line = c.poisoned !== undefined ? 'My belly burns… I ate something bad. Am I going to die?'
