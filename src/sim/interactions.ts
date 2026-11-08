@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { Game } from '../game';
 import { clanTitle } from '../lore';
 import type { NpcAgent, ApproachIntent } from '../ai/npc';
+import { isMedCat } from './clan';
 import type { PreyKind } from '../wildlife/models';
 import { PREY } from '../wildlife/prey';
 import { Cat, displayName, isExpecting, isQueen, pronoun, queenComplaint, roleLabel } from '../cats/types';
@@ -1160,6 +1161,9 @@ export class Interactions {
     const lines: string[] = [];
     const mem = c.memories.filter((m) => m.about === pc.id).slice(-1)[0];
     if (mem && simRng.chance(0.5)) lines.push(mem.weight > 0 ? `I haven't forgotten: ${mem.text.replace(pc.given, 'you')}` : `I remember what happened. ${mem.text.replace(pc.given, 'You')}`);
+    // gossip: a medicine cat getting round…
+    const plumpMed = clan.home(false).find((m) => isMedCat(m) && isExpecting(m) && !m.medRevealed && m.id !== c.id);
+    if (plumpMed && simRng.chance(0.5)) return simRng.pick([`Have you noticed ${displayName(plumpMed)} is getting plump?`, `*whispers* ${displayName(plumpMed)} is getting awfully round for a medicine cat…`, `Is it just me, or is ${plumpMed.given} eating a lot of mice lately?`]);
     if (isExpecting(c) && simRng.chance(0.8)) {
       const m = clan.get(c.mate);
       const left = c.expectingUntil !== null ? c.expectingUntil - g.time.day : 0;

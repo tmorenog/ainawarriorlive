@@ -178,6 +178,10 @@ export interface Cat {
   vetKits?: boolean;
   /** The warrior name StarClan chose for this apprentice. */
   starName?: string;
+  /** A medicine cat's forbidden mate: kept secret (medFound = the secret will slip out). */
+  medSecret?: boolean;
+  medFound?: boolean;
+  medRevealed?: boolean;
   /** This cat's mate died (they're grieving them). */
   widowOf?: string;
   /** Their lost mate told them in a dream it's okay to love again. */
@@ -315,8 +319,11 @@ export function queenComplaint(c: Cat, pick: <T>(a: T[]) => T, mate?: Cat | null
 /** A queen: a she-cat expecting, or nursing young kits she gave birth to herself (not her mate's). */
 export function isQueen(c: Cat, get: (id: string) => Cat | undefined): boolean {
   if (c.sex !== 'she') return false;
+  // a medicine cat hiding her kits keeps working as if nothing's different
+  if ((c.role === 'medicine' || c.role === 'medicineApprentice') && c.medSecret && !c.medRevealed) return false;
   if (c.expectingUntil !== null || c.labour) return true;
-  const young = (k: string) => { const kc = get(k); return !!kc && kc.alive && kc.age < 6; };
+  // (kits handed to another queen to raise don't keep their real mother in the nursery)
+  const young = (k: string) => { const kc = get(k); return !!kc && kc.alive && kc.age < 6 && (!kc.foster || kc.foster === c.id); };
   if ((c.fosterKits ?? []).some(young)) return true;
   return c.kits.some((k) => young(k) && (get(k)!.parents?.[0] ?? c.id) === c.id);
 }

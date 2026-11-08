@@ -35,9 +35,12 @@ export interface PendingDecision {
   expiresDay: number;
 }
 
-export type RuleId = 'kitLeaveCamp' | 'crossBorder' | 'feedClanFirst' | 'obeyOrders' | 'helpOutsiders' | 'dangerZones' | 'confinement';
+export type RuleId = 'kitLeaveCamp' | 'crossBorder' | 'feedClanFirst' | 'obeyOrders' | 'helpOutsiders' | 'dangerZones' | 'confinement' | 'medicineMate';
+export function isMedCat(c: Cat) { return c.role === 'medicine' || c.role === 'medicineApprentice'; }
+
 export const RULES: Record<RuleId, { text: string; severity: number }> = {
   kitLeaveCamp: { text: 'Kits must not leave the camp.', severity: 4 },
+  medicineMate: { text: 'Medicine cats must not take mates or have kits.', severity: 8 },
   crossBorder: { text: "Do not hunt or trespass on another clan's land.", severity: 7 },
   feedClanFirst: { text: 'Feed the kits, elders and queens before yourself.', severity: 5 },
   obeyOrders: { text: 'Obey the Warden, the Second and your mentor.', severity: 6 },
@@ -676,6 +679,55 @@ export class ClanSim {
     g.npcs.stayForBirth(mate);
   }
 
+  /** A medicine cat's secret kits: carried to a queen with a story about the Thunderpath. */
+  hideSecretKits(mother: Cat, kits: Cat[]) {
+    const g = this.game;
+    const alive = kits.filter((k) => k.alive);
+    if (!alive.length || mother.medRevealed) return;
+    const father = this.get(mother.mate);
+    const carrier = father && father.alive ? father : mother;
+    const queens = this.home(false).filter((q) => q.sex === 'she' && q.id !== mother.id && q.stage === 'warrior' && q.role === 'none' && !q.isPlayer)
+      .sort((a, b) => Number(isQueen(b, (id) => this.get(id))) - Number(isQueen(a, (id) => this.get(id)))).slice(0, 5);
+    const names = alive.map((k) => displayName(k)).join(', ');
+    const ask = (q: Cat) => {
+      const kind = q.traits.includes('kind') || q.traits.includes('friendly') || q.traits.includes('loyal');
+      const yes = simRng.chance(clamp(0.55 + (kind ? 0.15 : 0) + (isQueen(q, (id) => this.get(id)) ? 0.1 : 0) + this.opinion(q, carrier) / 250, 0.15, 0.92));
+      const say = (who: Cat, text: string) => { g.npcs.agents.get(who.id)?.say(text, 5); g.ui.showBanner(`${displayName(who)}: ${text}`, 5); };
+      say(carrier, `${q.given}… I found these kits on the Thunderpath, all alone. Can you take care of them?`);
+      setTimeout(() => {
+        if (yes) {
+          say(q, simRng.pick(['*gasps* On the Thunderpath?! Poor little things… of course I\'ll take them.', 'Give them here — they\'re freezing! I\'ll raise them as my own.']));
+          q.fosterKits = [...(q.fosterKits ?? []), ...alive.map((k) => k.id)];
+          for (const k of alive) { k.foster = q.id; this.rel(q, k).opinion = Math.max(this.rel(q, k).opinion, 75); }
+          this.log(`${displayName(q)} took in kits "found on the Thunderpath": ${names}.`, 'clan');
+          g.ui.toast(`🍼 ${displayName(q)} will raise the kits. Nobody knows they're ${mother.given}'s… yet.`, 'good');
+        } else {
+          say(q, simRng.pick(['I can barely feed myself… I\'m sorry. I can\'t.', '*backs away* Thunderpath kits? No. Take them somewhere else.']));
+          setTimeout(() => {
+            for (const k of alive) this.kill(k, 'cold and hunger');
+            g.ui.toast(`🕯 With no queen to feed them, the tiny kits fade away in the night… ${names}.`, 'danger');
+            this.remember(mother, 'My secret kits did not survive. No queen would take them.', -12);
+          }, 4000);
+        }
+      }, 4500);
+    };
+    if ((carrier.isPlayer || mother.isPlayer) && queens.length) {
+      g.ui.choice('🤫 Your secret kits', `${names} — no one can know they're a medicine cat's kits. ${carrier.isPlayer ? 'Which queen will you take them to?' : `${carrier.given} will carry them. Which queen should they go to?`}`,
+        queens.map((q) => ({ label: `${displayName(q)}${isQueen(q, (id) => this.get(id)) ? ' (nursing)' : ''}`, action: () => ask(q) })));
+    } else if (queens.length) ask(queens[0]);
+    else ask(mother); // nobody else: it can't work
+  }
+
+  /** The secret of a medicine cat's mate comes out. */
+  private revealMedSecret(med: Cat) {
+    const mate = this.get(med.mate);
+    med.medRevealed = true; if (mate) mate.medRevealed = true;
+    for (const c of [med, mate]) if (c) c.reputation = clamp(c.reputation - 20, -100, 100);
+    this.log(`The clan found out that ${displayName(med)}${mate ? ` and ${displayName(mate)}` : ''} broke the code: a medicine cat with a mate!`, 'politics');
+    this.game.notify(`😱 The clan found out! ${displayName(med)}${mate ? ` and ${displayName(mate)} are mates` : ' has a mate'} — and ${med.given} is a medicine cat!`, 'danger');
+    if (med.isPlayer || mate?.isPlayer) this.infraction('medicineMate', this.home(false).slice(0, 4).map((c) => c.id), 'a medicine cat with a mate');
+  }
+
   /** Childhood crushes grow into mates once both cats are grown up. */
   crushesToMates() {
     for (const a of Object.values(this.cats)) {
@@ -714,6 +766,7 @@ export class ClanSim {
 
   tickDay() {
     this.crushTick();
+    for (const c of this.home()) if (isMedCat(c) && c.medSecret && c.medFound && !c.medRevealed && c.mate && (c.expectingUntil !== null || simRng.chance(0.15))) this.revealMedSecret(c);
     // a heart darkened by grief may turn its back on the clan
     for (const c of this.home()) if (c.griefDark && !c.isPlayer && simRng.chance(0.12)) {
       c.exiled = true; c.griefDark = false;
@@ -822,6 +875,12 @@ export class ClanSim {
   }
 
   matesFormed(a: Cat, b: Cat) {
+    // a medicine cat taking a mate breaks the code: it has to stay secret (60% it never comes out)
+    if (isMedCat(a) || isMedCat(b)) {
+      const found = simRng.chance(0.4);
+      a.medSecret = b.medSecret = true; a.medFound = b.medFound = found; a.medRevealed = b.medRevealed = false;
+      if (a.isPlayer || b.isPlayer) this.game.ui.toast('🤫 A medicine cat taking a mate breaks the warrior code! Keep it secret — if the clan finds out, there will be trouble.', 'danger');
+    }
     // your own mate: expecting kits right away, straight to the nursery (two she-cats: you carry them)
     if (a.isPlayer || b.isPlayer) { this.playerMateNursery(true); return; }
     if (a.sex === b.sex) return;
@@ -871,6 +930,10 @@ export class ClanSim {
     if (day - last < gap) { if (announce) this.game.ui.toast(`🍼 ${who} had kits not long ago. New kits can come in ${gap - (day - last)} more moon${gap - (day - last) === 1 ? '' : 's'}.`, 'info'); return; }
     she.nurseryDay = undefined;
     she.expectingUntil = day + 2;
+    if (isMedCat(she) && she.medSecret && !she.medRevealed) {
+      this.game.ui.toast(she.isPlayer ? '🤫 You\'re expecting kits… but medicine cats can\'t have kits! Hide it, keep working, and don\'t let anyone notice.' : `🤫 ${displayName(she)} is secretly expecting your kits. Medicine cats can't have kits — no one must find out!`, 'danger');
+      return;
+    }
     this.log(`${displayName(she)} moved into the nursery — she is expecting kits.`, 'clan');
     if (she.isPlayer) {
       this.game.notify(`🍼 You are expecting ${displayName(mate)}'s kits! Go rest in the nursery — they'll arrive in two moons.`);
@@ -1136,8 +1199,11 @@ export class ClanSim {
   /** Labour begins: the medicine cat hurries to the nursery to help. */
   startLabour(mother: Cat) {
     const g = this.game;
-    const med = this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : this.home().find((x) => x.role === 'medicineApprentice' && x.id !== mother.id) ?? null;
+    const secret = isMedCat(mother) && !mother.medRevealed;
+    // a medicine cat hiding her kits can't ask another medicine cat for help
+    const med = secret ? null : this.medicine && this.medicine.alive && this.medicine.id !== mother.id ? this.medicine : this.home().find((x) => x.role === 'medicineApprentice' && x.id !== mother.id) ?? null;
     if (mother.labour) { this.birth(mother, med); return; } // already waited a whole day
+    if (secret && mother.isPlayer) g.ui.toast('🤫 You slip away to a hidden hollow. No one can help you — not even another medicine cat.', 'danger');
     mother.labour = true;
     mother.litterSize = this.rollLitter();
     this.callMate(mother);
@@ -1224,11 +1290,13 @@ export class ClanSim {
     const herbShort = this.useBirthHerbs(born, playerHelped);
     // not every kit survives being born, and not every queen does either
     const healed = !!helper;
-    const kitRisk = clamp(0.06 + 0.07 * herbShort + (healed ? 0 : 0.1) - (playerHelped ? 0.03 : 0), 0.02, 0.4);
+    const secretBirth = isMedCat(mother) && !mother.medRevealed;
+    const riskK = secretBirth ? 1.4 : 1; // no other medicine cat to help: 40% more dangerous
+    const kitRisk = clamp((0.06 + 0.07 * herbShort + (healed ? 0 : 0.1) - (playerHelped ? 0.03 : 0)) * riskK, 0.02, 0.55);
     let lost = 0;
     for (let i = 0; i < born; i++) if (simRng.chance(kitRisk)) lost++;
     let n = born - lost;
-    const queenRisk = clamp((0.03 + 0.05 * herbShort + (healed ? 0 : 0.08) - (playerHelped ? 0.02 : 0)) * (mother.isPlayer ? 0.5 : 1), 0.01, 0.3);
+    const queenRisk = clamp((0.03 + 0.05 * herbShort + (healed ? 0 : 0.08) - (playerHelped ? 0.02 : 0)) * (mother.isPlayer ? 0.5 : 1) * riskK, 0.01, 0.42);
     // a weak queen (under half health) almost never survives giving birth
     // under 30 health: no chance at all; under 50: almost certain
     const queenDies = mother.health < 30 || simRng.chance(mother.health < 50 ? 0.9 : queenRisk);
@@ -1315,6 +1383,7 @@ export class ClanSim {
     this.game.npcs.syncRoster();
     // the queen licks her newborns until they're warm and dry, then they snuggle up to nurse
     if (kits.length) this.game.npcs.newbornCare(mother, kits);
+    if (secretBirth && kits.length) setTimeout(() => this.hideSecretKits(mother, kits), 9000);
     const roundsTime = this.medicineRounds(mother, kits, helper, lost);
     if (queenDies) setTimeout(() => this.lastWords(mother, helper), roundsTime + 3000);
   }
