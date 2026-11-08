@@ -725,7 +725,15 @@ export class ClanSim {
     for (const c of [med, mate]) if (c) c.reputation = clamp(c.reputation - 20, -100, 100);
     this.log(`The clan found out that ${displayName(med)}${mate ? ` and ${displayName(mate)}` : ''} broke the code: a medicine cat with a mate!`, 'politics');
     this.game.notify(`😱 The clan found out! ${displayName(med)}${mate ? ` and ${displayName(mate)} are mates` : ' has a mate'} — and ${med.given} is a medicine cat!`, 'danger');
-    if (med.isPlayer || mate?.isPlayer) this.infraction('medicineMate', this.home(false).slice(0, 4).map((c) => c.id), 'a medicine cat with a mate');
+    // the medicine cat gets a strike — no second chances for this one
+    if (med.isPlayer) {
+      this.infraction('medicineMate', this.home(false).slice(0, 4).map((c) => c.id), 'a medicine cat with a mate', true);
+      this.game.ui.toast(`⚠ Strike! You broke the code: medicine cats must not take mates. (${med.infractions} strike${med.infractions === 1 ? '' : 's'})`, 'danger');
+    } else {
+      med.infractions = (med.infractions ?? 0) + 1;
+      this.log(`${displayName(med)} was given a strike for taking a mate as a medicine cat.`, 'rule');
+      this.game.notify(`⚠ ${displayName(med)} gets a strike for breaking the code — medicine cats must not take mates. (${med.infractions} strike${med.infractions === 1 ? '' : 's'})`, 'danger');
+    }
   }
 
   /** Childhood crushes grow into mates once both cats are grown up. */
@@ -1742,7 +1750,7 @@ export class ClanSim {
 
   // ------------------------------------------------------------- rules
   /** Player broke a rule. Witnesses are cat ids that saw it. */
-  infraction(rule: RuleId, witnesses: string[], detail?: string) {
+  infraction(rule: RuleId, witnesses: string[], detail?: string, force = false) {
     const p = this.player;
     if (!p || p.exiled) return;
     const sev = RULES[rule].severity * 0.5;
@@ -1750,7 +1758,7 @@ export class ClanSim {
     // only what is actually seen counts — no surprise punishments
     if (!seen) return;
     // a cat in good standing gets the benefit of the doubt
-    if (p.reputation >= 10 && p.infractions === 0 && simRng.chance(0.7)) {
+    if (!force && p.reputation >= 10 && p.infractions === 0 && simRng.chance(0.7)) {
       const w = this.get(witnesses[0]);
       this.game.ui.toast(`${w ? displayName(w) : 'A clanmate'} saw that, but lets it go: "Just don't do it again, alright?" (${RULES[rule].text})`, 'info');
       p.reputation = clamp(p.reputation - 1, -100, 100);
