@@ -959,7 +959,7 @@ export class ClanSim {
   /** A grown cat (medicine cats count even if they were never given a warrior ceremony). */
   grownUp(c: Cat): boolean {
     if (c.stage === 'kit') return false;
-    if (c.stage === 'apprentice') return c.role === 'medicine' && c.age >= 12;
+    if (c.stage === 'apprentice') return (c.role === 'medicine' || c.role === 'medicineApprentice') && c.age >= 12;
     return true;
   }
 
